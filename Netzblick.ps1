@@ -17,7 +17,7 @@ try {
     $script:appRoot=$PSScriptRoot
     # Windows PowerShell 5.1 does not reference System.Xml automatically.
     $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll')
-    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'))
+    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'))
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
@@ -26,7 +26,7 @@ try {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -65,6 +65,7 @@ try {
     . (Join-Path $appRoot 'src\InspectionMode.ps1')
     . (Join-Path $appRoot 'src\UserModes.ps1')
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
+    . (Join-Path $appRoot 'src\AccessMode.ps1')
 
     function Show-Error([string]$message) {
         [void][Windows.MessageBox]::Show($window,$message,'Netzblick','OK','Error')
@@ -166,7 +167,8 @@ try {
         $ui.Connections.ItemsSource=$displayRows;Show-ConnectionDetails
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
         $ui.ProgramStatus.Text=Network-ModeLabel $mode
-        foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=(-not (Is-Protected $program.Path)) -and (-not $ruleError) -and $mode -ne 'Modified'}
+        if($script:accessActive){$decision=$accessQueue.Find($program.Key);$ui.ProgramStatus.Text+=' · Kontrollmodus: '+$(if($decision -and $decision.Decision -eq 'Allowed'){'Sitzungsfreigabe vorhanden'}else{'keine Sitzungsfreigabe'})}
+        foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=(-not (Is-Protected $program.Path)) -and (-not $ruleError) -and $mode -ne 'Modified' -and -not $script:accessActive}
         $sample=$trafficSamples[$program.Key]
         $ui.ProgramTraffic.Text=if($sample){'Seit Netzblick-Start (ETW):'+"`n↑ "+(Format-Bytes $sample.Sent)+' gesendet'+"`n↓ "+(Format-Bytes $sample.Received)+' empfangen'+"`n"+$(if($sample.RateReady){(Format-Rate $sample.SentRate)+' ↑ · '+(Format-Rate $sample.ReceivedRate)+' ↓'}else{'Rate wird ermittelt …'})}else{'Für diesen Programmpfad bisher keine Byte-Messung verfügbar.'}
         if($trafficProblem){$ui.ProgramTraffic.Text+="`nMessung eingeschränkt: "+$trafficProblem}
@@ -252,12 +254,18 @@ try {
     $ui.Search.Add_TextChanged({Refresh-Programs})
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
-        foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        $ui.MainShell.RowDefinitions[1].Height=if($name -eq 'AccessPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
+        $ui.SummaryMetrics.Visibility=if($name -eq 'AccessPanel'){'Collapsed'}else{'Visible'}
+        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab')){$ui[$tab].Background='#20364E'}
+        $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} default{'LiveTab'}}
+        $ui[$activeTab].Background='#24547B'
+        foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility=if($name -eq 'LivePanel'){'Visible'}else{'Collapsed'}
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
         if($name -eq 'OverviewPanel'){Refresh-Overview}
     }
+    $ui.AccessTab.Add_Click({Show-Panel 'AccessPanel'})
     $ui.OverviewTab.Add_Click({Show-Panel 'OverviewPanel'})
     foreach($key in @('BackFromRules','BackFromHistory','BackFromWorld','BackFromTerminal')){$ui[$key].Add_Click({Show-Panel 'LivePanel'})}
     $ui.LiveTab.Add_Click({Show-Panel 'LivePanel'})
@@ -265,7 +273,7 @@ try {
     $ui.Pause.Add_Click({
         $script:paused=-not $script:paused
         $ui.Pause.Content=if($paused){'▶ Ansicht fortsetzen'}else{'Ⅱ Ansicht pausieren'}
-        if($paused){$ui.Status.Text='Live-Ansicht pausiert · Hintergrundmessung und Firewall bleiben aktiv.'}
+        if($paused){$ui.Status.Text='Aktivitätsansicht pausiert · Kontrollmodus und Prüfansicht aktualisieren weiter.'}
         else{$script:previous=$null;$script:seen.Clear()}
     })
     $ui.Export.Add_Click({
@@ -297,6 +305,7 @@ try {
     Initialize-UserModes
     Initialize-EndpointNames
     Initialize-InspectionMode
+    Initialize-AccessMode
     $timer=New-Object Windows.Threading.DispatcherTimer
     $timer.Interval=[timespan]::FromMilliseconds(250)
     $script:nextSample=[datetime]::MinValue

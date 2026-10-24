@@ -1,6 +1,10 @@
-﻿# Netzblick 0.5.0
+﻿# Netzblick 0.6.0
 
-Neu: sichtbarer Prüfablauf mit Prozess-/Fensterstatus, optionalen Reverse-DNS-Namen und vorsichtig formulierten Diensthinweisen. Anleitung und aktueller Prüfstand: [Version 0.5.0](docs/Version-0.5.0.md). DNS-Abfragen sind beim Start ausgeschaltet.
+**Neu: Kontrollmodus als Testversion.** Neue Verbindungsaufbauten außerhalb dieses PCs zunächst blockieren, Programmanfragen verstehen und ausgehenden Zugriff bewusst nur für diese Sitzung freigeben oder weiter blockieren. Die tatsächliche Netzwerksperre wurde in der Entwicklungsumgebung noch nicht aktiviert oder auf einem Gerät validiert. Details, Grenzen und Testplan: [Version 0.6.0](docs/Version-0.6.0.md).
+
+Beim Schließen oder Absturz von Netzblick endet dieser Kontrollmodus; er ersetzt keinen dauerhaften Firewall-Dienst. Vorhandene Windows-Firewallregeln werden nicht umgeschrieben.
+
+Seit 0.5.0: sichtbarer Prüfablauf mit Prozess-/Fensterstatus, optionalen Reverse-DNS-Namen und vorsichtig formulierten Diensthinweisen. Anleitung und aktueller Prüfstand: [Version 0.5.0](docs/Version-0.5.0.md). DNS-Abfragen sind beim Start ausgeschaltet.
 
 Startkorrektur gegenüber 0.4.0: Die C#-Kompilierung bindet `System.Xml.dll` und `System.Core.dll` unter Windows PowerShell 5.1 ausdrücklich ein. Damit wird die gemeldete fehlende `System.Xml`-Referenz in `InspectionCore.cs` behoben.
 

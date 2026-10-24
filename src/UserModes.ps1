@@ -47,6 +47,7 @@ function Write-NetworkMode([string]$path,[string]$mode) {
     }
 }
 function Assert-NetworkChange([string]$path,[string]$mode) {
+    if($script:accessActive){throw 'Im Kontrollmodus die Sitzungsfreigabe unter Zugriff entscheiden verwalten. Für dauerhafte Programmregeln den Kontrollmodus zuerst beenden.'}
     if($mode -notin @('Default','Private','Blocked')){throw 'Unbekannter Netzwerkzustand.'}
     if(Is-Protected $path){throw 'System-Sammelprozesse sind von pauschalen Änderungen ausgenommen.'}
     if($script:inspectionActive -and $mode -ne 'Blocked' -and ($inspection.Path -eq $path -or @($inspectionNodes | Where-Object {$_.Path -eq $path}).Count)){throw 'Die zugehörige Prüfung zuerst beenden, bevor die Einschränkung gelockert wird.'}

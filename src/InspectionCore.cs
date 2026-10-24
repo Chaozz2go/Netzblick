@@ -7,7 +7,7 @@ using System.Xml;
 
 namespace Netzblick {
  public sealed class BlockEvent {
-  public long RecordId {get;set;} public DateTime TimeUtc {get;set;} public int Pid {get;set;}
+  public ulong FilterId {get;set;} public long RecordId {get;set;} public DateTime TimeUtc {get;set;} public int Pid {get;set;}
   public string Application {get;set;} public string Direction {get;set;} public string Protocol {get;set;}
   public string Source {get;set;} public string SourcePort {get;set;} public string Destination {get;set;} public string DestinationPort {get;set;}
   public string Kind {get;set;} public string Note {get;set;}
@@ -38,7 +38,8 @@ namespace Netzblick {
    protocol=protocol=="6"?"TCP":protocol=="17"?"UDP":protocol=="1"?"ICMP":protocol=="58"?"ICMPv6":protocol;
    string direction=values["Direction"]=="%%14593"?"Ausgehend":values["Direction"]=="%%14592"?"Eingehend":"Unbekannt";
    long recordId=0;var record=doc.SelectSingleNode("/e:Event/e:System/e:EventRecordID",ns);if(record!=null)Int64.TryParse(record.InnerText,out recordId);
-   return new BlockEvent{RecordId=recordId,TimeUtc=timestamp.ToUniversalTime(),Pid=(int)pid,Application=values["Application"],Direction=direction,Protocol=protocol,Source=values["SourceAddress"],SourcePort=values["SourcePort"],Destination=values["DestAddress"],DestinationPort=values["DestPort"],Kind="Blockierter Versuch",Note="WFP 5157 · keine Messung übertragener Bytes"};
+   ulong filterId=0;string rawFilter;if(values.TryGetValue("FilterRTID",out rawFilter))UInt64.TryParse(rawFilter,out filterId);
+   return new BlockEvent{FilterId=filterId,RecordId=recordId,TimeUtc=timestamp.ToUniversalTime(),Pid=(int)pid,Application=values["Application"],Direction=direction,Protocol=protocol,Source=values["SourceAddress"],SourcePort=values["SourcePort"],Destination=values["DestAddress"],DestinationPort=values["DestPort"],Kind="Blockierter Versuch",Note="WFP 5157 · keine Messung übertragener Bytes"};
   }
  }
  public sealed class ProcessNode {
