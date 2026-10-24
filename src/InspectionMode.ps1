@@ -1,5 +1,47 @@
-﻿# Inspection UI. The selected executable is never launched by this script.
+﻿function Add-InspectionActivity([string]$text) {
+    $script:inspectionActivity.Insert(0,[pscustomobject]@{TimeUtc=[datetime]::UtcNow;Text=((Get-Date -Format 'HH:mm:ss')+' · '+$text)})
+    while($inspectionActivity.Count -gt 100){$inspectionActivity.RemoveAt($inspectionActivity.Count-1)}
+    $ui.InspectionActivity.ItemsSource=$inspectionActivity.ToArray()
+}
+function Set-InspectionPhase([string]$title,[string]$next,[string]$color='#4EA5FF') {
+    $ui.InspectionPhase.Text=$title;$ui.InspectionPhase.Foreground=$color
+    $ui.InspectionNext.Text=$next
+}
+function Update-InspectionProgress {
+    if($null -eq $inspection){return}
+    $roots=@($inspectionNodes | Where-Object {$_.Root})
+    $running=@($roots | Where-Object {$null -eq $_.EndUtc})
+    $helpers=@($inspectionNodes | Where-Object {-not $_.Root -and $null -eq $_.EndUtc})
+    $visible=@($running | Where-Object {$_.WindowVisible -eq $true})
+    $ui.InspectionPulse.IsIndeterminate=$script:inspectionActive
+    $ui.InspectionPulse.Value=if($script:inspectionActive){0}else{1}
+    $elapsed=[int](([datetime]::UtcNow-$inspection.StartedUtc).TotalSeconds)
+    if($inspection.StoppedUtc){$elapsed=[int](($inspection.StoppedUtc-$inspection.StartedUtc).TotalSeconds)}
+    $ui.InspectionHeartbeat.Text=('Dauer {0}:{1:00} · Anzeige {2} · {3} blockierte Versuche' -f [Math]::Floor($elapsed/60),($elapsed%60),(Get-Date -Format 'HH:mm:ss'),($inspection.Outgoing+$inspection.Incoming))
+    if(-not $script:inspectionActive){
+        Set-InspectionPhase 'Prüfung beendet · Sperre bleibt aktiv' 'Den Ablauf und die Versuche kannst du weiter ansehen oder als Bericht speichern. Netzwerkzugriff bei Bedarf unter Programme ändern.' '#F5C477'
+    }elseif(-not $inspection.Healthy -or $inspectionGuardWarning){
+        Set-InspectionPhase 'Beobachtung eingeschränkt' ('Prozessstatus und leere Listen sind kein Nachweis für fehlenden Netzwerkverkehr. '+$inspection.Warning+' '+$inspectionGuardWarning) '#FF7E85'
+    }elseif($visible.Count){
+        Set-InspectionPhase 'Programm läuft · sichtbares Fenster erkannt' ('Windows meldet ein sichtbares Fenster. Nutze das Programm jetzt selbst; Verbindungsversuche erscheinen unten. Das Fenster kann verdeckt sein. '+$helpers.Count+' aktive Hilfsprozesse.') '#39DCC0'
+    }elseif($running.Count){
+        Set-InspectionPhase 'Programm läuft · kein sichtbares Fenster bestätigt' 'Der Prozess ist gestartet. Er kann im Hintergrund arbeiten, noch laden oder kein eigenes Fenster besitzen. Beobachte jetzt die Verbindungsversuche.' '#39DCC0'
+    }elseif($roots.Count){
+        Set-InspectionPhase 'Programm beendet / nicht mehr beobachtet' ($helpers.Count.ToString()+' Hilfsprozesse weiterhin aktiv. Du kannst das Programm erneut selbst starten oder die Prüfung beenden. Die Sperre bleibt aktiv.') '#F5C477'
+    }elseif($inspection.Outgoing+$inspection.Incoming -gt 0){
+        Set-InspectionPhase 'Verbindungsversuch erkannt · Prozessstatus offen' 'Ein zugeordnetes Blockereignis liegt vor. Der Prozess kann zwischen den Stichproben bereits wieder beendet worden sein. Details stehen in der Tabelle.' '#F5C477'
+    }else{
+        Set-InspectionPhase 'Wartet auf deinen Programmstart' '3 · Starte die ausgewählte EXE jetzt selbst wie gewohnt, ohne „Als Administrator“. Netzblick startet sie nicht. Danach wird der erkannte Prozessstatus hier sichtbar.'
+    }
+    if($script:inspectionActive -and $inspection.Healthy -and -not $inspectionGuardWarning){
+        $ui.InspectionStatus.Foreground='#F5C477'
+        $ui.InspectionStatus.Text='Beobachtung aktiv · Prozess-Stichproben alle 500 ms. Sehr kurze Prozesse und weitergeleitete Dienste können fehlen. Eine leere Liste bedeutet nicht „sicher“. Sperren bleiben nach Prüfende aktiv.'
+    }
+}
+# Inspection UI. The selected executable is never launched by this script.
 function Initialize-InspectionMode {
+    $script:inspectionActivity=New-Object 'System.Collections.Generic.List[object]'
+    $script:inspectionProcessStates=@{}
     $script:inspection=$null
     $script:inspectionActive=$false
     $script:inspectionPath=''
@@ -26,6 +68,14 @@ function Initialize-InspectionMode {
             if($path -notmatch '^[A-Za-z]:\\' -or -not [IO.File]::Exists($path)){throw 'Bitte eine vorhandene EXE auf einem lokalen Laufwerk auswählen.'}
             if(Is-Protected $path){throw 'Dieser Windows-Sammel-/Systemprozess ist vom pauschalen Sperren ausgenommen.'}
             $script:inspectionPath=$path;$script:inspectionMetadata=$null
+            $script:inspection=$null;$script:inspectionRows.Clear();$script:inspectionNodes=@();$script:inspectionActivity.Clear();$script:inspectionProcessStates=@{}
+            $ui.InspectionEvents.ItemsSource=@();$ui.InspectionProcesses.ItemsSource=@();$ui.SaveInspectionReport.IsEnabled=$false
+            $ui.InspectionOutgoing.Text='0';$ui.InspectionIncoming.Text='0';$ui.InspectionProcessCount.Text='0 / 0'
+            $ui.InspectionPulse.IsIndeterminate=$false;$ui.InspectionPulse.Value=0
+            $ui.InspectionHeartbeat.Text='Datei wird vorbereitet'
+            Set-InspectionPhase 'Datei ausgewählt · wird gelesen' 'Netzblick liest Dateiangaben und Prüfsumme. Es wird noch keine Firewallregel geändert.'
+            Add-InspectionActivity ('Ausgewählt: '+[IO.Path]::GetFileName($path))
+            Draw-InspectionGraphics
             $ui.InspectionPath.Text=$path;$ui.StartInspection.IsEnabled=$false
             $ui.InspectionMetadata.Text='Dateiinformationen und SHA-256 werden gelesen … Die Datei wird nicht ausgeführt.'
             $script:inspectionMetadataTask=[Netzblick.InspectionFile]::Start($path)
@@ -69,14 +119,20 @@ function Assert-InspectionFirewall {
 function Start-Inspection {
     if($script:inspectionActive -or -not $inspectionMetadata -or $inspectionMetadata.Error){return}
     try{
+        Set-InspectionPhase 'Sperre und Beobachtung werden vorbereitet' 'Windows-Firewall und laufende Prozesse werden geprüft. Starte das Programm erst, wenn Netzblick dazu auffordert.'
+        Add-InspectionActivity 'Prüfstart: Firewall wird überprüft'
         Assert-InspectionFirewall
         $running=@([Netzblick.WindowsProcesses]::Snapshot() | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq [Netzblick.ProcessLineage]::Normalize($inspectionPath)})
         if($running.Count){throw 'Das gewählte Programm läuft bereits. Bitte selbst schließen und die Prüfung danach erneut starten.'}
         Set-ProgramBlock $inspectionPath
         if(-not (Test-InspectionBlock $inspectionPath)){throw 'Vollständige ein-/ausgehende Programmsperre konnte nicht bestätigt werden.'}
+        Add-InspectionActivity 'Programmpfad in beide Richtungen gesperrt; Windows-Audit wird vorbereitet'
         $script:inspection=[Netzblick.InspectionSession]::Start($inspectionPath)
         $script:inspectionActive=$true;$script:inspectionSessionMetadata=$inspectionMetadata;$script:inspectionFinalStatus='';$script:inspectionRows.Clear();$script:inspectionNodes=@();$script:inspectionGuardWarning=''
         $script:inspectionLastProcess=[datetime]::MinValue
+        $script:inspectionProcessStates=@{}
+        Add-InspectionActivity 'Beobachtung aktiv. Bitte Programm selbst mit normalen Benutzerrechten starten.'
+        Update-InspectionProgress
         $ui.InspectionEvents.ItemsSource=@();$ui.InspectionProcesses.ItemsSource=@()
         $ui.ChooseInspection.IsEnabled=$false;$ui.StartInspection.IsEnabled=$false;$ui.StopInspection.IsEnabled=$true
         $ui.SaveInspectionReport.IsEnabled=$true
@@ -88,6 +144,9 @@ function Start-Inspection {
         Refresh-Rules
         $ui.InspectionStatus.Text='Prüfstart fehlgeschlagen: '+$_.Exception.GetBaseException().Message+' Eine bereits gesetzte Programmsperre bleibt bestehen; Aufheben unter Sperren.'
         $ui.InspectionStatus.Foreground='#FF7E85'
+        $ui.InspectionPulse.IsIndeterminate=$false
+        Set-InspectionPhase 'Prüfstart nicht abgeschlossen' $ui.InspectionStatus.Text '#FF7E85'
+        Add-InspectionActivity $ui.InspectionStatus.Text
         Show-Error $ui.InspectionStatus.Text
     }
 }
@@ -103,6 +162,7 @@ function Stop-Inspection {
     $summary='Prüfung beendet. Programmsperren bleiben aktiv. Vorherige Audit-Einstellung wurde wiederhergestellt beziehungsweise war bereits aktiv.'
     if($errorText){$summary='Prüfung beendet; Audit-Wiederherstellung benötigt Aufmerksamkeit: '+$errorText;$ui.InspectionStatus.Foreground='#FF7E85'}
     if(-not $inspection.Healthy -or $inspectionGuardWarning){$summary+=' Erfassung eingeschränkt: '+$inspection.Warning+' '+$inspectionGuardWarning}
+    Add-InspectionActivity $summary
     $script:inspectionFinalStatus=$summary
     $ui.InspectionStatus.Text=$summary
     Add-Event 'Prüfung beendet' ([IO.Path]::GetFileName($inspection.Path)) $summary
@@ -114,12 +174,21 @@ function Update-InspectionProcesses {
     $selectedKey=if($selected){$selected.Key}else{''}
     $script:inspectionNodes=@($inspection.Processes() | ForEach-Object {
         $guard=if(Test-InspectionBlock $_.Path){'Eigene Sperre gesetzt'}else{'Nicht durch eigene Sperre abgedeckt'}
-        [pscustomobject]@{Key=$_.Key;Caption=$_.Caption;Pid=$_.Pid;ParentPid=$_.ParentPid;Name=$_.Name;Path=$_.Path;StartUtc=$_.StartUtc;EndUtc=$_.EndUtc;Depth=$_.Depth;Root=$_.Root;State=$_.State;Guard=$guard}
+        [pscustomobject]@{Key=$_.Key;Caption=$_.Caption;Pid=$_.Pid;ParentPid=$_.ParentPid;Name=$_.Name;Path=$_.Path;StartUtc=$_.StartUtc;EndUtc=$_.EndUtc;Depth=$_.Depth;Root=$_.Root;State=$_.State;Guard=$guard;WindowVisible=$_.WindowVisible;WindowTitle=$_.WindowTitle;WindowState=$_.WindowState}
     })
     $ui.InspectionProcesses.ItemsSource=$inspectionNodes
     $match=$inspectionNodes | Where-Object {$_.Key -eq $selectedKey} | Select-Object -First 1
     if($match){$ui.InspectionProcesses.SelectedItem=$match}
-    $ui.InspectionProcessCount.Text=[string]$inspectionNodes.Count
+    $activeNodes=@($inspectionNodes | Where-Object {$null -eq $_.EndUtc})
+    $ui.InspectionProcessCount.Text=($activeNodes.Count.ToString()+' / '+$inspectionNodes.Count)
+    foreach($node in $inspectionNodes){
+        $state=$node.State+' · '+$node.WindowState
+        if($script:inspectionProcessStates[$node.Key] -ne $state){
+            Add-InspectionActivity ($node.Name+' · PID '+$node.Pid+' · '+$state)
+            $script:inspectionProcessStates[$node.Key]=$state
+        }
+    }
+    Update-InspectionProgress
 }
 function Update-Inspection {
     if($null -ne $inspectionMetadataTask -and $inspectionMetadataTask.IsCompleted){
@@ -130,21 +199,26 @@ function Update-Inspection {
             $ui.InspectionMetadata.Text="Herstellerangabe der Datei: $($meta.Company) · Version: $($meta.Version)`n$($meta.Signer)`nSHA-256 bei Auswahl: $($meta.Hash)"
             if($meta.Error){$ui.InspectionMetadata.Text+=' · Lesefehler: '+$meta.Error}
             $ui.StartInspection.IsEnabled=-not $script:inspectionActive -and -not $meta.Error
+            if($meta.Error){Set-InspectionPhase 'Datei konnte nicht vollständig gelesen werden' $meta.Error '#FF7E85'}
+            else{Set-InspectionPhase 'Datei bereit · noch nicht gesperrt' '2 · Klicke auf „Sperren und prüfen“. Schließe das Programm vorher, falls es schon läuft.';Add-InspectionActivity 'Dateiinformationen gelesen; bereit zum Sperren'}
         }catch{$ui.InspectionMetadata.Text=$_.Exception.GetBaseException().Message}
         $script:inspectionMetadataTask=$null
     }
     if($null -eq $inspection){return}
     $fresh=$inspection.Drain()
     foreach($entry in $fresh){
-        $location=if($entry.Direction -eq 'Ausgehend'){Geo-Location $entry.Destination}else{$null}
+        $peerAddress=if($entry.Direction -eq 'Ausgehend'){$entry.Destination}elseif($entry.Direction -eq 'Eingehend'){$entry.Source}else{''}
+        $peerPort=if($entry.Direction -eq 'Ausgehend'){$entry.DestinationPort}elseif($entry.Direction -eq 'Eingehend'){$entry.SourcePort}else{'0'}
+        $location=if($peerAddress){Geo-Location $peerAddress}else{$null}
         $country=if($location){$location.Country}else{'—'}
-        $script:inspectionRows.Insert(0,[pscustomobject]@{Time=$entry.Time;TimeUtc=$entry.TimeUtc;RecordId=$entry.RecordId;Subject=($entry.Program+' / '+$entry.Pid);Program=$entry.Program;Pid=$entry.Pid;Application=$entry.Application;Direction=$entry.Direction;Protocol=$entry.Protocol;Source=$entry.Source;SourcePort=$entry.SourcePort;Destination=$entry.Destination;DestinationPort=$entry.DestinationPort;Endpoint=$entry.Endpoint;Country=$country;Code=$(if($location){$location.Code}else{''});Location=$location;Kind=$entry.Kind;Note=$entry.Note})
+        $script:inspectionRows.Insert(0,[pscustomobject]@{Time=$entry.Time;TimeUtc=$entry.TimeUtc;RecordId=$entry.RecordId;Subject=($entry.Program+' / '+$entry.Pid);Program=$entry.Program;Pid=$entry.Pid;Application=$entry.Application;Direction=$entry.Direction;Protocol=$entry.Protocol;Source=$entry.Source;SourcePort=$entry.SourcePort;Destination=$entry.Destination;DestinationPort=$entry.DestinationPort;Endpoint=$entry.Endpoint;PeerAddress=$peerAddress;PeerName=([Netzblick.EndpointInfo]::Scope($peerAddress));ServiceHint=([Netzblick.EndpointInfo]::Service($entry.Protocol,[int]$peerPort));Country=$country;Code=$(if($location){$location.Code}else{''});Location=$location;Kind=$entry.Kind;Note=$entry.Note})
         while($inspectionRows.Count -gt 2000){$inspectionRows.RemoveAt($inspectionRows.Count-1)}
     }
     $ui.InspectionOutgoing.Text=[string]$inspection.Outgoing;$ui.InspectionIncoming.Text=[string]$inspection.Incoming
     if($fresh.Count){$ui.InspectionEvents.ItemsSource=$inspectionRows.ToArray();Draw-InspectionGraphics}
     if(((Get-Date)-$inspectionLastProcess).TotalSeconds -ge 1){
         Update-InspectionProcesses
+        Update-InspectionNames
         if($script:inspectionActive){
             try{Assert-InspectionFirewall;if(-not (Test-InspectionBlock $inspection.Path)){throw 'Die ausgewählte EXE ist nicht mehr durch die vollständige eigene Sperre abgedeckt.'}}catch{$script:inspectionGuardWarning=$_.Exception.GetBaseException().Message}
             if(-not $inspection.Healthy -or $inspectionGuardWarning){
@@ -152,6 +226,7 @@ function Update-Inspection {
                 $ui.InspectionStatus.Foreground='#FF7E85'
             }
         }
+        Update-InspectionProgress
         $script:inspectionLastProcess=Get-Date
         Draw-InspectionTimeline
     }
@@ -208,7 +283,7 @@ function Save-InspectionReport {
     if(-not $dialog.ShowDialog($window)){return}
     try{
         Update-Inspection
-        $report=[ordered]@{Version='0.4.1';ProgramPath=$inspection.Path;FileMetadata=$inspectionSessionMetadata;FinalStatus=$inspectionFinalStatus;StartedUtc=$inspection.StartedUtc;StoppedUtc=$inspection.StoppedUtc;Active=$inspectionActive;CapturedOutgoingBlocks=$inspection.Outgoing;CapturedIncomingBlocks=$inspection.Incoming;UnknownDirection=$inspection.UnknownDirection;Dropped=$inspection.Dropped;CaptureHealthy=$inspection.Healthy;CaptureWarning=$inspection.Warning;GuardWarning=$inspectionGuardWarning;SentBytes=$null;ReceivedBytes=$null;ByteMeasurement='Nicht vorhanden; blockierte Versuche sind keine gesendeten Nutzdaten.';EventRetentionLimit=2000;ProcessDetection='500-ms-Stichproben; kurzlebige Hilfsprozesse und delegierte Dienste können fehlen.';Processes=@($inspectionNodes);Events=@($inspectionRows.ToArray() | Select-Object -Property @('TimeUtc','RecordId','Program','Pid','Application','Direction','Protocol','Source','SourcePort','Destination','DestinationPort','Country','Code','Kind','Note'));GeoAttribution='IP Geolocation by DB-IP, db-ip.com, CC BY 4.0; Länderpunkte schematisch. Karte Natural Earth.'}
+        $report=[ordered]@{Version='0.5.0';ProgramPath=$inspection.Path;FileMetadata=$inspectionSessionMetadata;FinalStatus=$inspectionFinalStatus;StartedUtc=$inspection.StartedUtc;StoppedUtc=$inspection.StoppedUtc;Active=$inspectionActive;CapturedOutgoingBlocks=$inspection.Outgoing;CapturedIncomingBlocks=$inspection.Incoming;UnknownDirection=$inspection.UnknownDirection;Dropped=$inspection.Dropped;CaptureHealthy=$inspection.Healthy;CaptureWarning=$inspection.Warning;GuardWarning=$inspectionGuardWarning;SentBytes=$null;ReceivedBytes=$null;ByteMeasurement='Nicht vorhanden; blockierte Versuche sind keine gesendeten Nutzdaten.';EventRetentionLimit=2000;ProcessDetection='500-ms-Stichproben; kurzlebige Hilfsprozesse und delegierte Dienste können fehlen.';Activity=@($inspectionActivity.ToArray());DnsExplanation='Optionales Reverse-DNS; keine belegte Betreiber- oder Zweckzuordnung. Abfragen erfolgen durch Netzblick.';Processes=@($inspectionNodes);Events=@($inspectionRows.ToArray() | Select-Object -Property @('TimeUtc','RecordId','Program','Pid','Application','Direction','Protocol','Source','SourcePort','Destination','DestinationPort','PeerName','ServiceHint','Country','Code','Kind','Note'));GeoAttribution='IP Geolocation by DB-IP, db-ip.com, CC BY 4.0; Länderpunkte schematisch. Karte Natural Earth.'}
         $json=$report | ConvertTo-Json -Depth 7
         [IO.File]::WriteAllText($dialog.FileName,$json,[Text.UTF8Encoding]::new($false))
         $ui.Status.Text='Prüfbericht gespeichert: '+$dialog.FileName

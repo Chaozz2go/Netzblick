@@ -17,7 +17,7 @@ try {
     $script:appRoot=$PSScriptRoot
     # Windows PowerShell 5.1 does not reference System.Xml automatically.
     $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll')
-    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'))
+    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'))
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
@@ -64,6 +64,7 @@ try {
     . (Join-Path $appRoot 'src\VisualModes.ps1')
     . (Join-Path $appRoot 'src\InspectionMode.ps1')
     . (Join-Path $appRoot 'src\UserModes.ps1')
+    . (Join-Path $appRoot 'src\EndpointNames.ps1')
 
     function Show-Error([string]$message) {
         [void][Windows.MessageBox]::Show($window,$message,'Netzblick','OK','Error')
@@ -143,7 +144,9 @@ try {
             $line.Stroke='#4EA5FF'; $line.StrokeThickness=2
             $line.Data=[Windows.Media.Geometry]::Parse(('M 170,120 C 235,120 250,{0} 330,{0}' -f ($y+8)))
             [void]$ui.Map.Children.Add($line)
-            Map-Label $peers[$i].Name 342 $y 250 '#B8DAFA'
+            $label=$peers[$i].Group[0].PeerName
+            if(-not $label -or $label -notlike '*(Reverse-DNS)'){$label=$peers[$i].Name}
+            Map-Label $label 342 $y 250 '#B8DAFA'
         }
         if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 '#91ADC8' 11 }
     }
@@ -154,8 +157,13 @@ try {
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $displayRows=@($program.Rows)
-        foreach($peer in @($trafficPeers | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('ETW|'+$peer.Protocol+'|'+$peer.Address+'|'+$peer.Port);Pid='aggregiert';Protocol=$peer.Protocol;Local='— (ETW)';Remote=($peer.Address+':'+$peer.Port);Address=$peer.Address;State='ETW beobachtet'})}
-        $ui.Connections.ItemsSource=$displayRows;$ui.SocketDetails.Text='Eine Tabellenzeile auswählen.'
+        foreach($peer in @($trafficPeers | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('ETW|'+$peer.Protocol+'|'+$peer.Address+'|'+$peer.Port);Pid='aggregiert';Protocol=$peer.Protocol;Local='— (ETW)';Remote=($peer.Address+':'+$peer.Port);Address=$peer.Address;Port=$peer.Port;State='ETW beobachtet'})}
+        $endpointIndex=0
+        $displayRows=@($displayRows | ForEach-Object {
+            $endpointIndex++
+            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
+        })
+        $ui.Connections.ItemsSource=$displayRows;Show-ConnectionDetails
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
         $ui.ProgramStatus.Text=Network-ModeLabel $mode
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=(-not (Is-Protected $program.Path)) -and (-not $ruleError) -and $mode -ne 'Modified'}
@@ -242,10 +250,7 @@ try {
     })
     $ui.Programs.Add_SelectionChanged({if(-not $script:refreshing){Refresh-Detail}})
     $ui.Search.Add_TextChanged({Refresh-Programs})
-    $ui.Connections.Add_SelectionChanged({
-        $row=$ui.Connections.SelectedItem
-        if($row){$ui.SocketDetails.Text="Protokoll: $($row.Protocol)`nPID: $($row.Pid)`nLokal: $($row.Local)`nGegenstelle: $($row.Remote)`nStatus: $($row.State)`n`nInitiator / Datenrate: nicht erfasst"}
-    })
+    $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility=if($name -eq 'LivePanel'){'Visible'}else{'Collapsed'}
@@ -290,6 +295,7 @@ try {
     Initialize-VisualModes
     Refresh-Rules
     Initialize-UserModes
+    Initialize-EndpointNames
     Initialize-InspectionMode
     $timer=New-Object Windows.Threading.DispatcherTimer
     $timer.Interval=[timespan]::FromMilliseconds(250)

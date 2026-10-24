@@ -116,6 +116,11 @@ namespace Netzblick {
   [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool GetProcessTimes(IntPtr process,out FileTime creation,out FileTime exit,out FileTime kernel,out FileTime user);
   [DllImport("kernel32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool CloseHandle(IntPtr handle);
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern uint QueryDosDeviceW(string name,StringBuilder target,int size);
+  delegate bool WindowCallback(IntPtr handle,IntPtr data);
+  [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool EnumWindows(WindowCallback callback,IntPtr data);
+  [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr handle);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr handle,out uint pid);
+  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowTextW(IntPtr handle,StringBuilder text,int size);
   public static List<ProcessNode> Snapshot(){
    var result=new List<ProcessNode>();IntPtr snapshot=CreateToolhelp32Snapshot(2,0);
    if(snapshot==new IntPtr(-1))throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -133,6 +138,15 @@ namespace Netzblick {
     }
     int error=Marshal.GetLastWin32Error();if(error!=18)throw new Win32Exception(error);
    }finally{CloseHandle(snapshot);}
+   // Enumerate top-level windows once per sample; never activate or launch them.
+   var windows=new Dictionary<int,string>();
+   bool windowScan=EnumWindows((handle,data)=>{
+    if(IsWindowVisible(handle)){
+     uint pid;GetWindowThreadProcessId(handle,out pid);
+     if(!windows.ContainsKey((int)pid)){var title=new StringBuilder(256);GetWindowTextW(handle,title,title.Capacity);windows[(int)pid]=title.ToString();}
+    }return true;
+   },IntPtr.Zero);
+   foreach(var node in result){string title;bool visible=windows.TryGetValue(node.Pid,out title);node.WindowVisible=windowScan?(bool?)visible:null;node.WindowTitle=title??"";}
    return result;
   }
   public static Dictionary<string,string> DeviceMap(){

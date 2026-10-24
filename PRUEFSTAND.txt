@@ -1,4 +1,7 @@
-﻿Netzblick 0.4.1 – Prüfstand
+Netzblick 0.5.0: aktueller Prüfstand und Grenzen unter docs/Version-0.5.0.md.
+Die folgenden Angaben dokumentieren den vorherigen Stand.
+
+Netzblick 0.4.1 – Prüfstand
 
 Bestanden in der Entwicklungsumgebung:
 - 0.4.1: Fehlende System.Xml-Referenz aus dem Startskript korrigiert.

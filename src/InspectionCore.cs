@@ -45,9 +45,11 @@ namespace Netzblick {
   public int Pid {get;set;} public int ParentPid {get;set;} public string Name {get;set;} public string Path {get;set;}
   public DateTime StartUtc {get;set;} public DateTime SeenUtc {get;set;} public DateTime? EndUtc {get;set;}
   public int Depth {get;set;} public bool Root {get;set;}
+  public bool? WindowVisible {get;set;} public string WindowTitle {get;set;}
+  public string WindowState {get{return EndUtc.HasValue?"Fenster nicht mehr beobachtet":!WindowVisible.HasValue?"Fensterstatus nicht verfügbar":WindowVisible.Value?"Sichtbares Fenster erkannt"+(String.IsNullOrEmpty(WindowTitle)?"":": "+WindowTitle):"Kein sichtbares Fenster erkannt (Hintergrundbetrieb möglich)";}}
   public string Key {get{return Pid+"|"+StartUtc.Ticks;}}
   public string Caption {get{return new string(' ',Math.Min(Depth,8)*2)+(Root?"● ":"↳ ")+Name+" · PID "+Pid;}}
-  public string State {get{return EndUtc.HasValue?"Beendet / nicht mehr beobachtet":"Beobachtet";}}
+  public string State {get{return EndUtc.HasValue?"Beendet / nicht mehr beobachtet":"Prozess läuft";}}
  }
  public sealed class ProcessLineage {
   readonly Dictionary<string,ProcessNode> history=new Dictionary<string,ProcessNode>();
@@ -80,7 +82,7 @@ namespace Netzblick {
      }
      if(!changed)break;
     }
-    foreach(var node in snapshot){ProcessNode old;if(history.TryGetValue(node.Key,out old)){old.SeenUtc=time;old.EndUtc=null;}}
+    foreach(var node in snapshot){ProcessNode old;if(history.TryGetValue(node.Key,out old)){old.SeenUtc=time;old.EndUtc=null;old.WindowVisible=node.WindowVisible;old.WindowTitle=node.WindowTitle;}}
    }
   }
   void Track(ProcessNode node,DateTime time){if(history.ContainsKey(node.Key) || history.Count>=1024)return;node.SeenUtc=time;history[node.Key]=node;}
@@ -91,7 +93,7 @@ namespace Netzblick {
    lock(gate){foreach(var node in history.Values)if(node.Pid==e.Pid && Normalize(node.Path)==path && e.TimeUtc>=node.StartUtc && (!node.EndUtc.HasValue || e.TimeUtc<node.EndUtc.Value))return true;}
    return false;
   }
-  public List<ProcessNode> Snapshot(){lock(gate){var result=new List<ProcessNode>();foreach(var n in history.Values)result.Add(new ProcessNode{Pid=n.Pid,ParentPid=n.ParentPid,Name=n.Name,Path=n.Path,StartUtc=n.StartUtc,SeenUtc=n.SeenUtc,EndUtc=n.EndUtc,Depth=n.Depth,Root=n.Root});result.Sort((a,b)=>a.StartUtc.CompareTo(b.StartUtc));return result;}}
+  public List<ProcessNode> Snapshot(){lock(gate){var result=new List<ProcessNode>();foreach(var n in history.Values)result.Add(new ProcessNode{Pid=n.Pid,ParentPid=n.ParentPid,Name=n.Name,Path=n.Path,StartUtc=n.StartUtc,SeenUtc=n.SeenUtc,EndUtc=n.EndUtc,Depth=n.Depth,Root=n.Root,WindowVisible=n.WindowVisible,WindowTitle=n.WindowTitle});result.Sort((a,b)=>a.StartUtc.CompareTo(b.StartUtc));return result;}}
  }
  public static class InspectionAuditFlags {
   public static uint Canonical(uint flags){uint bits=flags&3;return bits==0?4:bits;}

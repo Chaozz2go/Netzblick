@@ -1,4 +1,6 @@
-﻿# Netzblick 0.4.1
+﻿# Netzblick 0.5.0
+
+Neu: sichtbarer Prüfablauf mit Prozess-/Fensterstatus, optionalen Reverse-DNS-Namen und vorsichtig formulierten Diensthinweisen. Anleitung und aktueller Prüfstand: [Version 0.5.0](docs/Version-0.5.0.md). DNS-Abfragen sind beim Start ausgeschaltet.
 
 Startkorrektur gegenüber 0.4.0: Die C#-Kompilierung bindet `System.Xml.dll` und `System.Core.dll` unter Windows PowerShell 5.1 ausdrücklich ein. Damit wird die gemeldete fehlende `System.Xml`-Referenz in `InspectionCore.cs` behoben.
 
@@ -64,7 +66,7 @@ Ein Blockereignis ist keine Byte-Messung. Die separate Prüfansicht weist deshal
 
 ## Git und Entwicklung
 
-Der Projektordner ist ein lokales Git-Repository auf Branch `main`. Der Ausgangsstand 0.3.0 und die Weiterentwicklung sind als Commits enthalten. Das ZIP enthält den Git-Verlauf; nach dem Entpacken sind beispielsweise `git status` und `git log --oneline` direkt im Ordner Netzblick nutzbar. Es ist kein externer Remote konfiguriert.
+Der Projektordner ist ein lokales Git-Repository auf Branch `main`. Der Ausgangsstand 0.3.0 und die Weiterentwicklung sind als Commits enthalten. Das ZIP enthält den Git-Verlauf; nach dem Entpacken sind beispielsweise `git status` und `git log --oneline` direkt im Ordner Netzblick nutzbar. GitHub: https://github.com/Chaozz2go/Netzblick. Der ursprüngliche Verlauf bis 0.4.1 liegt zusätzlich als Netzblick-history.bundle im GitHub-Repository; der neue GitHub-Verlauf wurde separat begonnen.
 
 Die Oberfläche und Windows-Dienstezugriffe liegen als PowerShell-/C#-Quellen vor. Das separat kompilierte ETW-Modul liegt unter `lib/Netzblick.Capture.dll`; Quellen `src/TrafficCore.cs` und `src/WindowsTraffic.cs`, Buildprojekt `tools/Capture.csproj`. Mit .NET-SDK: `dotnet build tools/Capture.csproj -c Release` (beim ersten Build wird das .NET-Framework-Referenzpaket benötigt). Die App selbst benötigt kein SDK.
 
@@ -72,4 +74,4 @@ Die Oberfläche und Windows-Dienstezugriffe liegen als PowerShell-/C#-Quellen vo
 
 ## Teststand
 
-7.219 Kernprüfungen, C#-Kompilierung gegen .NET Framework 4.8, nativer PowerShell-Syntaxparser und XML-/UI-Verweisprüfungen bestanden. Die Entwicklung erfolgte unter Linux. Ein vollständiger Windows-Gerätetest für WPF, ETW-Messwerte, COM-Regeländerung/Rückgängig und Audit-Wiederherstellung steht weiterhin aus. Bitte zuerst mit einem bekannten, entbehrlichen Programm auf einem Testrechner prüfen. Genauer Umfang: `PRUEFSTAND.txt`.
+7.219 Kernprüfungen, C#-Kompilierung gegen .NET Framework 4.8, nativer PowerShell-Syntaxparser und XML-/UI-Verweisprüfungen bestanden. Die Entwicklung erfolgte unter Linux. Für Version 0.5.0 bestehen 2.233 Kernprüfungen sowie die Windows-Kompilierung, das Laden der WPF-Panels und fünf mit Beispieldaten geprüfte UI-Zustände. Der vollständige Starttest ist in der eingeschränkten Ausführungsumgebung bei den Socket-Abfragen blockiert. Ein vollständiger Windows-Gerätetest für ETW-Messwerte, COM-Regeländerung/Rückgängig und Audit-Wiederherstellung steht weiterhin aus. Bitte zuerst mit einem bekannten, entbehrlichen Programm auf einem Testrechner prüfen. Genauer Umfang: `PRUEFSTAND.txt`.

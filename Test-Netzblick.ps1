@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-$files=@('Netzblick.ps1','src\VisualModes.ps1','src\InspectionMode.ps1','src\UserModes.ps1','Test-Netzblick.ps1')
+$files=@('Netzblick.ps1','src\VisualModes.ps1','src\InspectionMode.ps1','src\UserModes.ps1','src\EndpointNames.ps1','Test-Netzblick.ps1')
 foreach($file in $files){
     $tokens=$null;$errors=$null
     [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file),[ref]$tokens,[ref]$errors)
