@@ -1,0 +1,57 @@
+﻿Netzblick 0.4.1 - third-party data
+
+1. IP Geolocation by DB-IP
+   Creator: DB-IP.com / Eris Networks S.A.S.
+   Dataset: IP to Country Lite, October 2026
+   Source: https://db-ip.com/db/download/ip-to-country-lite
+   Download: https://download.db-ip.com/free/dbip-country-lite-2026-10.csv.gz
+   License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   License text: https://creativecommons.org/licenses/by/4.0/legalcode
+   Summary: https://creativecommons.org/licenses/by/4.0/
+   Changes: CSV ranges sorted and converted to a fixed-record binary index;
+   no editorial modification of country assignments. Country-only lookup,
+   not a city or exact location database. Attribution is also shown in the UI.
+   No endorsement by DB-IP is implied. Data provided without guarantees.
+
+2. Natural Earth
+   Dataset: 1:110m Admin 0 Countries (country outlines and label coordinates)
+   Source: https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/
+   Download: https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip
+   Terms: https://www.naturalearthdata.com/about/terms-of-use/
+   License/status: public domain. No permission is needed to use the data.
+   Changes: equirectangular projection into a 1000 x 500 local vector canvas;
+   coordinates rounded for the UI; country labels use source label points.
+   These label points do not locate servers. No endorsement is implied.
+
+Original-input hashes and record counts are in data/manifest.json.
+Development tooling (not required to run the app): Python 3 + pyshp.
+The development SDKs and test-time NuGet assemblies are not redistributed.
+
+3. ETW runtime
+   Microsoft.Diagnostics.Tracing.TraceEvent 3.1.21 and dependencies.
+   Source: https://github.com/microsoft/perfview
+   Exact package versions and target frameworks: lib/dependencies.json
+   Each package's included license is retained under lib/.
+   The TraceEvent package (including its native kernel control helpers)
+   is licensed under MIT. The source of the Netzblick wrapper is included.
+
+MIT License — Microsoft TraceEvent / PerfView
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

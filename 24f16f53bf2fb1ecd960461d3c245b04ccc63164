@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><TargetFramework>net48</TargetFramework><LangVersion>5</LangVersion><AssemblyName>Netzblick.Capture</AssemblyName><EnableDefaultCompileItems>false</EnableDefaultCompileItems><GenerateAssemblyInfo>false</GenerateAssemblyInfo><OutputPath>../lib/</OutputPath><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath></PropertyGroup>
+ <ItemGroup><Compile Include="../src/TrafficCore.cs"/><Compile Include="../src/WindowsTraffic.cs"/><Reference Include="Microsoft.Diagnostics.Tracing.TraceEvent"><HintPath>../lib/Microsoft.Diagnostics.Tracing.TraceEvent.dll</HintPath><Private>false</Private></Reference><Reference Include="Microsoft.Diagnostics.FastSerialization"><HintPath>../lib/Microsoft.Diagnostics.FastSerialization.dll</HintPath><Private>false</Private></Reference><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all"/></ItemGroup>
+</Project>

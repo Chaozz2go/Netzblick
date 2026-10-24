@@ -1,0 +1,47 @@
+﻿Netzblick 0.4.1 – Prüfstand
+
+Bestanden in der Entwicklungsumgebung:
+- 0.4.1: Fehlende System.Xml-Referenz aus dem Startskript korrigiert.
+  Fehler ohne XML-Referenz reproduziert; alle sechs Basis-C#-Dateien
+  mit ausschließlich den tatsächlichen Startreferenzen und mscorlib
+  gegen .NET Framework 4.8/C# 5 erfolgreich kompiliert. Die vorherige
+  Prüfung nutzte zu viele Referenzen und erkannte diesen Startfehler nicht.
+- Basis-C#-Quellen gegen .NET Framework 4.8/C# 5 kompiliert.
+- Separates ETW-Modul mit TraceEvent 3.1.21 gegen .NET Framework 4.8
+  kompiliert; Abhängigkeiten lokal mitgeliefert.
+- Fünf PowerShell-Dateien mit nativem PowerShell-Parser geprüft.
+- 7219 Kernprüfungen unter .NET 8 bestanden. Darunter:
+  53 Prüfungen der Inspektionslogik und 2075 neue Prüfungen für
+  IP-Komplementbereiche, CIDR-/Range-Normalisierung, IPv4/IPv6,
+  private Adressgrenzen, ETW-Zähler und verspätete PID-Ereignisse.
+- Fünf XAML-Dateien als XML geprüft; 86 benannte Steuerelemente,
+  81 Skriptverweise auf UI-Elemente vollständig aufgelöst.
+- Git-Arbeitsstand und mitgepackter Verlauf geprüft.
+- ZIP-Datei: CRC und Datenbankgröße geprüft; nach Übertragung zusätzlich
+  Größe und Hash mit der geprüften lokalen Kopie verglichen.
+
+Weiterhin offen – nicht als bestanden dargestellt:
+- WPF-Darstellung und tatsächliche Bedienung auf Windows.
+- ETW-Echtbetrieb, Byte-/PID-/Gegenstellenzuordnung auf Windows und
+  Verhalten neben anderen ETW-Sitzungen.
+- COM-Firewalländerungen, private Adressbereiche im echten Netzwerk,
+  Rückgängig und Wiederanlauf einschließlich fremder Regeländerungen.
+- Windows-Audit, Security-Ereignisabonnement und Crash-Wiederherstellung.
+- ICMP-Gerätetests unter Windows.
+
+Gerätetest:
+1. Mit bekanntem Browser/Download prüfen: ETW-Bytes und Richtung mit
+   einem unabhängigen Werkzeug vergleichen; erste Rate benötigt zwei Proben.
+2. Falls ETW nicht verfügbar ist, muss die UI unbekannte Werte anzeigen
+   und die Firewallbedienung weiter funktionieren.
+3. Windows-Standard → Nur private Netze → Netzwerk sperren → zweimal
+   rückgängig. Lokalen NAS-/Druckerzugriff und öffentliche Ziele separat
+   testen. Keine erfolgreiche Freigabe gegen andere Regeln behaupten.
+4. Nach einem Moduswechsel eine betroffene eigene Regel außerhalb der
+   App ändern. Rückgängig muss die fremde Änderung erhalten und ablehnen.
+5. Ausgangsbestand/gesammelte Meldungen, beendete Programme, UDP/IPv6,
+   Pausieren/Fortsetzen und Gegenstellen in Detailansicht/Karte prüfen.
+6. Prüfsitzung und Audit-Wiederherstellung entsprechend docs/Pruefmodus.md.
+
+Test-Netzblick.ps1 startet keine ETW-Sitzung und verändert keine Firewall-
+oder Audit-Einstellung. Die Kernprüfungen ersetzen keinen Gerätetest.

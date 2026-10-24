@@ -1,0 +1,244 @@
+[
+  {
+    "package": "microsoft.diagnostics.tracing.traceevent",
+    "version": "3.1.21",
+    "framework": "netstandard2.0",
+    "files": [
+      "Microsoft.Diagnostics.Tracing.TraceEvent.dll",
+      "Microsoft.Diagnostics.FastSerialization.dll",
+      "Dia2Lib.dll",
+      "TraceReloggerLib.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.win32.registry",
+    "version": "5.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Win32.Registry.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.collections.immutable",
+    "version": "8.0.0",
+    "framework": "net462",
+    "files": [
+      "System.Collections.Immutable.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.reflection.metadata",
+    "version": "8.0.0",
+    "framework": "net462",
+    "files": [
+      "System.Reflection.Metadata.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.reflection.typeextensions",
+    "version": "4.7.0",
+    "framework": "net461",
+    "files": [
+      "System.Reflection.TypeExtensions.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.runtime.compilerservices.unsafe",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "System.Runtime.CompilerServices.Unsafe.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.diagnostics.netcore.client",
+    "version": "0.2.510501",
+    "framework": "netstandard2.0",
+    "files": [
+      "Microsoft.Diagnostics.NETCore.Client.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.text.json",
+    "version": "8.0.5",
+    "framework": "net462",
+    "files": [
+      "System.Text.Json.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.security.accesscontrol",
+    "version": "5.0.0",
+    "framework": "net461",
+    "files": [
+      "System.Security.AccessControl.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.security.principal.windows",
+    "version": "5.0.0",
+    "framework": "net461",
+    "files": [
+      "System.Security.Principal.Windows.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.memory",
+    "version": "4.5.5",
+    "framework": "net461",
+    "files": [
+      "System.Memory.dll"
+    ],
+    "license": null
+  },
+  {
+    "package": "microsoft.bcl.asyncinterfaces",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Bcl.AsyncInterfaces.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.extensions.logging",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.Logging.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.buffers",
+    "version": "4.5.1",
+    "framework": "net461",
+    "files": [
+      "System.Buffers.dll"
+    ],
+    "license": null
+  },
+  {
+    "package": "microsoft.bcl.asyncinterfaces",
+    "version": "8.0.0",
+    "framework": "net462",
+    "files": [
+      "Microsoft.Bcl.AsyncInterfaces.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.text.encodings.web",
+    "version": "8.0.0",
+    "framework": "net462",
+    "files": [
+      "System.Text.Encodings.Web.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.threading.tasks.extensions",
+    "version": "4.5.4",
+    "framework": "net461",
+    "files": [
+      "System.Threading.Tasks.Extensions.dll"
+    ],
+    "license": null
+  },
+  {
+    "package": "system.valuetuple",
+    "version": "4.5.0",
+    "framework": "net461",
+    "files": [
+      "System.ValueTuple.dll"
+    ],
+    "license": null
+  },
+  {
+    "package": "system.numerics.vectors",
+    "version": "4.5.0",
+    "framework": "net46",
+    "files": [
+      "System.Numerics.Vectors.dll"
+    ],
+    "license": null
+  },
+  {
+    "package": "system.runtime.compilerservices.unsafe",
+    "version": "4.5.3",
+    "framework": "net461",
+    "files": [],
+    "license": null
+  },
+  {
+    "package": "microsoft.extensions.dependencyinjection.abstractions",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.DependencyInjection.Abstractions.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.extensions.dependencyinjection",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.DependencyInjection.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.extensions.logging.abstractions",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.Logging.Abstractions.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "microsoft.extensions.options",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.Options.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.diagnostics.diagnosticsource",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "System.Diagnostics.DiagnosticSource.dll"
+    ],
+    "license": "MIT"
+  },
+  {
+    "package": "system.memory",
+    "version": "4.5.4",
+    "framework": "net461",
+    "files": [],
+    "license": null
+  },
+  {
+    "package": "microsoft.extensions.primitives",
+    "version": "6.0.0",
+    "framework": "net461",
+    "files": [
+      "Microsoft.Extensions.Primitives.dll"
+    ],
+    "license": "MIT"
+  }
+]

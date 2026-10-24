@@ -1,0 +1,13 @@
+{
+  "release": "2026-10",
+  "ipv4_ranges": 362122,
+  "ipv6_ranges": 348712,
+  "country_coordinates": 175,
+  "accuracy": "country only; map markers are country label coordinates, not server locations",
+  "source_csv_sha256": "097426b8ddae89157d444a59ac1847e873f7943c32d52becc4371c8b0273af80",
+  "source_map_sha256": "0f243aeac8ac6cf26f0417285b0bd33ac47f1b5bdb719fd3e0df37d03ea37110",
+  "sources": [
+    "https://db-ip.com/db/download/ip-to-country-lite",
+    "https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/"
+  ]
+}
