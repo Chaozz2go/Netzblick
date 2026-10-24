@@ -23,6 +23,7 @@ function Is-Protected([string]$path){return $false}
 $testExe=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 [Netzblick.SetupClient]::Scenario($testExe,0)
 Initialize-AccessMode
+$window.Show()
 try{
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode

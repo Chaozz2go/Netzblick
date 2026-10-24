@@ -18,6 +18,7 @@ jobs:
         shell: pwsh
         run: dotnet run --project tools/CoreChecks.csproj -c Release -- data
       - name: Actual Windows startup checks
+        timeout-minutes: 2
         shell: powershell
         run: ./Test-Netzblick.ps1
       - name: Service JSON and framing contracts
@@ -27,6 +28,7 @@ jobs:
         shell: powershell
         run: ./tools/Build-Service.ps1
       - name: WPF fixtures without network changes
+        timeout-minutes: 2
         shell: powershell
         run: ./tools/Test-UI.ps1
       - name: Isolated service and native outbound TCP check

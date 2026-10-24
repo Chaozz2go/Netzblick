@@ -369,6 +369,7 @@ try {
     [void]$application.Run($window)
 } catch {
     $message=$_.Exception.Message
+    if($Check){Write-Error $message;exit 1}
     [void][Windows.MessageBox]::Show("Netzblick konnte nicht starten.`n`n$message",'Netzblick','OK','Error')
     Write-Error $message
     exit 1
