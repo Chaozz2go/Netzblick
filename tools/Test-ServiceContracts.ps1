@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $sources=@('InspectionCore.cs','AccessCore.cs','SetupCore.cs','SetupTransport.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}

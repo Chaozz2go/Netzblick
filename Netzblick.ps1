@@ -50,7 +50,7 @@ try {
         [void][Netzblick.ProbeCommand]::Parse('tracert -6 example.org')
         [void][Windows.Media.Geometry]::Parse([IO.File]::ReadAllText((Join-Path $appRoot 'data\world.path')))
         if([Netzblick.InspectionAuditFlags]::WithFailure(1) -ne 3){throw 'Audit-Logiktest fehlgeschlagen.'}
-        if ($ui.Count -lt 65) { throw 'UI-Elemente fehlen.' }
+        if ($ui.get_Count() -lt 65) { throw 'UI-Elemente fehlen.' }
         Write-Output ('OK: XAML geladen, C# kompiliert, {0} Sockets, {1} Adapter. Keine Firewalländerung.' -f $snapshot.Rows.Count,$snapshot.Adapters.Count)
         exit 0
     }
