@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$Check,[switch]$Tray)
+param([switch]$Check,[switch]$Tray,[switch]$SmokeTest)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 
@@ -364,12 +364,19 @@ try {
     })
     $window.Add_Closed({if($script:uiMutex){$uiMutex.ReleaseMutex();$uiMutex.Dispose()};$timer.Stop();$probeTimer.Stop();if($null -ne $script:probe){$script:probe.Cancel()}})
     $timer.Start()
+    if($SmokeTest){
+        $script:smokeTimer=New-Object Windows.Threading.DispatcherTimer
+        $smokeTimer.Interval=[timespan]::FromSeconds(3)
+        $smokeTimer.Add_Tick({$smokeTimer.Stop();$script:exitNetzblick=$true;$window.Close()})
+        $smokeTimer.Start()
+    }
     $script:application=New-Object Windows.Application
     $application.ShutdownMode='OnMainWindowClose'
     [void]$application.Run($window)
+    if($SmokeTest){Write-Output 'PASS: full WPF/tray initialization and orderly close.'}
 } catch {
     $message=$_.Exception.Message
-    if($Check){Write-Error $message;exit 1}
+    if($Check -or $SmokeTest){Write-Error ($message+[Environment]::NewLine+$_.ScriptStackTrace);exit 1}
     [void][Windows.MessageBox]::Show("Netzblick konnte nicht starten.`n`n$message",'Netzblick','OK','Error')
     Write-Error $message
     exit 1

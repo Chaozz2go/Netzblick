@@ -24,9 +24,9 @@ try{
     & (Join-Path $root 'Install-Netzblick.ps1') -NoTray
     $installed=$true
     if($LASTEXITCODE -ne 0){throw 'Dienstinstallation fehlgeschlagen.'}
-    $status=$null
-    for($i=0;$i -lt 20;$i++){try{$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});break}catch{Start-Sleep -Milliseconds 500}}
-    if(-not $status -or -not $status.Verified -or $status.Config.Ask){throw 'Dienst ist im neutralen Ausgangsmodus nicht bereit.'}
+    $status=$null;$lastFailure=''
+    for($i=0;$i -lt 20;$i++){try{$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});break}catch{$lastFailure=$_.Exception.GetBaseException().Message;Start-Sleep -Milliseconds 500}}
+    if(-not $status -or -not $status.Verified -or $status.Config.Ask){throw ('Dienst nicht bereit. Status: '+($status | ConvertTo-Json -Depth 4 -Compress)+'; letzter Verbindungsfehler: '+$lastFailure)}
     if(-not (Connect-Fixture)){Write-Warning 'SKIP: Baseline-TCP zu 1.1.1.1:443 nicht verfügbar. Dienst-/Pipe-Start bestanden; echte Sperr-/Freigabeprüfung nicht durchgeführt.';return}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
     if(Connect-Fixture){throw 'Vorab gesperrte Fixture kann weiterhin verbinden.'}
@@ -41,6 +41,9 @@ try{
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Unwatch';Path=$fixture}))
     Write-Output 'PASS: echter Dienststart, Pipe, pfadbezogene WFP-Sperre, Security-Blockereignis, gezielte IPv4/TCP-Freigabe und Rücknahme. Kein globaler Nachfragemodus aktiviert.'
 }finally{
+    $log=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Netzblick\service.log'
+    if(Test-Path -LiteralPath $log){Get-Content -LiteralPath $log -Tail 30 | Write-Host}
+    Get-Service NetzblickControl -ErrorAction SilentlyContinue | Format-List Name,Status | Out-String | Write-Host
     if($installed -or (Get-Service NetzblickControl -ErrorAction SilentlyContinue)){& (Join-Path $root 'Install-Netzblick.ps1') -Uninstall -NoTray}
     if([Netzblick.WindowsAudit]::Query() -ne $auditBefore){throw 'Audit-Ausgangszustand nach Dienstende nicht wiederhergestellt.'}
     Remove-Item -LiteralPath $directory -Recurse -Force

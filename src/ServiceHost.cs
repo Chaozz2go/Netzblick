@@ -23,7 +23,8 @@ namespace Netzblick {
   SetupConfig rollback;
   void SaveRecovery(){string temp=RecoveryPath+".tmp";File.WriteAllText(temp,SetupWire.Json().Serialize(new Recovery{Before=rollback,UntilUtc=recovery.Value}));if(File.Exists(RecoveryPath))File.Replace(temp,RecoveryPath,null);else File.Move(temp,RecoveryPath);}
   void ClearRecovery(){if(File.Exists(RecoveryPath))File.Delete(RecoveryPath);recovery=null;rollback=null;}
-  void Log(string text){history.Insert(0,DateTime.Now.ToString("HH:mm:ss")+" · "+text);if(history.Count>100)history.RemoveAt(history.Count-1);}
+  void Log(string text){string line=DateTime.Now.ToString("HH:mm:ss")+" · "+text;history.Insert(0,line);if(history.Count>100)history.RemoveAt(history.Count-1);try{string path=Path.Combine(Path.GetDirectoryName(ConfigPath),"service.log");Directory.CreateDirectory(Path.GetDirectoryName(path));if(File.Exists(path)&&new FileInfo(path).Length>131072)File.WriteAllText(path,"");File.AppendAllText(path,line+Environment.NewLine);}catch{}}
+
   static SetupConfig Clone(SetupConfig value){return SetupWire.Json().Deserialize<SetupConfig>(SetupWire.Json().Serialize(value));}
   void Save(SetupConfig value){string path=ConfigPath;Directory.CreateDirectory(Path.GetDirectoryName(path));string temp=path+".tmp";string json=SetupWire.Json().Serialize(value);if(System.Text.Encoding.UTF8.GetByteCount(json)>1048576)throw new InvalidDataException("Regeldatei wäre zu groß.");File.WriteAllText(temp,json,new System.Text.UTF8Encoding(false));if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}
   void Apply(SetupConfig next){
@@ -84,20 +85,21 @@ namespace Netzblick {
   }
   static PipeSecurity Security(){var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid,null),PipeAccessRights.FullControl,AccessControlType.Deny));foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid,null),PipeAccessRights.FullControl,AccessControlType.Allow));return security;}
   void Run(){
+   Log("Dienstworker gestartet");
    try{
     try{if(File.Exists(RecoveryPath)){
       var saved=SetupWire.Json().Deserialize<Recovery>(File.ReadAllText(RecoveryPath));if(saved==null||saved.Before==null)throw new InvalidDataException("Ungültiger Sicherheitsrückweg.");saved.Before.Validate();saved.Before.Expire(DateTime.UtcNow);Save(saved.Before);ClearRecovery();
      }
      if(File.Exists(ConfigPath)){var info=new FileInfo(ConfigPath);if(info.Length>1048576)throw new InvalidDataException("Regeldatei zu groß.");config=SetupWire.Json().Deserialize<SetupConfig>(File.ReadAllText(ConfigPath));config.Validate();config.Expire(DateTime.UtcNow);}
      gate=WfpGate.StartConfig(config);verified=true;checkedUtc=DateTime.UtcNow;
-    }catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;}
+    }catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
     if(NeedsWatch(config))try{EnsureWatch();}catch(Exception e){warning="Ereignisanzeige nicht verfügbar: "+e.Message;}
     while(!stop.WaitOne(0)){
      try{
       using(var pipe=new NamedPipeServerStream(SetupWire.PipeName,PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous,8192,8192,Security())){
        var ar=pipe.BeginWaitForConnection(null,null);
-       using(ar.AsyncWaitHandle){while(!ar.AsyncWaitHandle.WaitOne(400)){if(stop.WaitOne(0))break;Tick();}}
-       if(stop.WaitOne(0))break;pipe.EndWaitForConnection(ar);Tick();
+       using(ar.AsyncWaitHandle){while(!ar.AsyncWaitHandle.WaitOne(400)){if(stop.WaitOne(0))break;Tick();}if(stop.WaitOne(0))break;pipe.EndWaitForConnection(ar);}
+       Tick();
        SetupStatus reply;try{reply=Execute(SetupWire.Json().Deserialize<SetupCommand>(SetupWire.Read(pipe)));}catch(Exception e){reply=Status(false,e.Message);}
        SetupWire.Write(pipe,SetupWire.Json().Serialize(reply));
       }
