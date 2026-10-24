@@ -26,7 +26,7 @@ Initialize-AccessMode
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
-$renderHost.Resources=$window.Resources;$renderHost.Child=$renderRoot
+$renderHost.Background=$window.Background;$renderHost.Resources=$window.Resources;$renderHost.Child=$renderRoot
 try{
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode

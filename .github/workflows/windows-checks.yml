@@ -27,7 +27,7 @@ jobs:
       - name: Compile background service
         id: service_build
         shell: powershell
-        run: ./tools/Build-Service.ps1
+        run: ./tools/Build-Service.ps1 -LogBinary
       - name: WPF fixtures without network changes
         timeout-minutes: 2
         shell: powershell
