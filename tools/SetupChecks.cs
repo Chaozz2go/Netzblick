@@ -28,6 +28,13 @@ public static class SetupChecks {
   SetupChanges.Commit(before,after,c=>{applied=c.Ask;applications++;},c=>{});check(applied&&applications==1,"successful change applied once");
   applications=0;try{SetupChanges.Commit(before,after,c=>{applied=c.Ask;applications++;},c=>{throw new Exception("disk full");});throw new Exception("save failure swallowed");}catch(SetupChangeFailure failure){check(failure.Restored&&!applied&&applications==2,"save failure restores prior filters");}
   try{SetupChanges.Commit(before,after,c=>{throw new Exception("filter unavailable");},c=>{});throw new Exception("restore failure swallowed");}catch(SetupChangeFailure failure){check(!failure.Restored,"failed rollback never reports verified protection");}
+  check(WfpGate.ValidReturnedFlags(0,false),"unchanged soft permit flags");
+  check(WfpGate.ValidReturnedFlags(64,false),"indexing does not change permit semantics");
+  check(WfpGate.ValidReturnedFlags(72,true),"indexed hard block stays restrictive");
+  check(!WfpGate.ValidReturnedFlags(8,false),"hard permit rejected");
+  check(!WfpGate.ValidReturnedFlags(32,true),"disabled block rejected");
+  check(!WfpGate.ValidReturnedFlags(1,true),"unexpected persistent flag rejected");
+  check(!WfpGate.ValidReturnedFlags(128,true),"unknown returned flag rejected");
   return count;
  }
 }

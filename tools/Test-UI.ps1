@@ -23,7 +23,10 @@ function Is-Protected([string]$path){return $false}
 $testExe=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 [Netzblick.SetupClient]::Scenario($testExe,0)
 Initialize-AccessMode
-$window.Show()
+# Render the real WPF content independently of the runner's screen resolution.
+$renderRoot=$window.Content;$window.Content=$null
+$renderHost=New-Object Windows.Controls.Border
+$renderHost.Resources=$window.Resources;$renderHost.Child=$renderRoot
 try{
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode
@@ -32,8 +35,8 @@ try{
   if($scenario -eq 2 -and ($ui.SetupRules.Items.Count -ne 1 -or $ui.RecoveryBanner.Visibility -ne 'Visible')){throw 'Regel oder Sicherheitsrückweg fehlt.'}
   if($scenario -eq 3 -and $ui.SaveSetupRule.IsEnabled){throw 'Unbestätigter Zustand erlaubt Änderungen.'}
   foreach($size in @(@(1480,920),@(1280,800))){
-   $window.Width=$size[0];$window.Height=$size[1];$window.Measure((New-Object Windows.Size($size[0],$size[1])));$window.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$window.UpdateLayout()
-   $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($window)
+   $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
+   $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }

@@ -7,10 +7,12 @@ $out=Join-Path $env:TEMP ('netzblick-out-'+[guid]::NewGuid().ToString('N')+'.txt
 $err=$out+'.err'
 try{
  $process=Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList ('-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "'+(Join-Path $root 'Netzblick.ps1')+'" -SmokeTest') -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+ $null=$process.Handle
  if(-not $process.WaitForExit(30000)){$process.Kill();throw 'Vollständiger Start-/Tray-Check hat nicht rechtzeitig beendet.'}
+ $exitCode=$process.ExitCode
  $process.Refresh()
  $text=Get-Content -LiteralPath $out -Raw;$errorText=Get-Content -LiteralPath $err -Raw
  Write-Host $text
- if($process.ExitCode -ne 0 -or $text -notmatch 'PASS: full WPF/tray') {throw ('Startcheck fehlgeschlagen: '+$errorText)}
+ if($exitCode -ne 0 -or $text -notmatch 'PASS: full WPF/tray') {throw ('Startcheck fehlgeschlagen: ExitCode='+$process.ExitCode+'; erster ExitCode='+$exitCode+'; '+$errorText)}
  Write-Output 'PASS: echte App einschließlich Tray/Erfassung initialisiert und geschlossen. Keine Sperre aktiviert.'
 }finally{Remove-Item -LiteralPath $out,$err -Force -ErrorAction SilentlyContinue}

@@ -205,6 +205,9 @@ namespace Netzblick {
   }
   public bool OwnBlock(ulong id){foreach(var filter in expected)if(filter.Id==id && filter.Action==Block)return true;return false;}
   public int AllowedCount {get{return allowed.Count;}}
+  // INDEXED only changes lookup performance. A returned CLEAR_ACTION_RIGHT
+  // on a block remains restrictive; it is never accepted on our soft permits.
+  public static bool ValidReturnedFlags(uint flags,bool block){return (flags & ~(64u|(block?8u:0u)))==0;}
   public void Verify(){
    if(closed || engine==null || engine.IsInvalid || engine.IsClosed)throw new InvalidOperationException("WFP-Sitzung ist nicht mehr aktiv.");
    IntPtr memory;Guid key=subLayer;Check(FwpmSubLayerGetByKey0(engine,ref key,out memory),"Sitzungsebene überprüfen");
@@ -215,7 +218,7 @@ namespace Netzblick {
     Check(FwpmFilterGetById0(engine,wanted.Id,out memory),"Sperr-/Freigabefilter überprüfen");
     try{
      var actual=(Filter)Marshal.PtrToStructure(memory,typeof(Filter));
-     if(actual.Layer!=wanted.Layer || actual.SubLayer!=subLayer || actual.Action.Type!=wanted.Action || actual.Flags!=0 || actual.Weight.Type!=4 || actual.Weight.Data.Pointer==IntPtr.Zero || unchecked((ulong)Marshal.ReadInt64(actual.Weight.Data.Pointer))!=wanted.Weight || actual.Count!=wanted.Specs.Count)throw new InvalidOperationException("WFP-Filter entspricht nicht mehr der Entscheidung.");
+     if(actual.Layer!=wanted.Layer || actual.SubLayer!=subLayer || actual.Action.Type!=wanted.Action ||  !ValidReturnedFlags(actual.Flags,wanted.Action==Block) || actual.Weight.Type!=4 || actual.Weight.Data.Pointer==IntPtr.Zero || unchecked((ulong)Marshal.ReadInt64(actual.Weight.Data.Pointer))!=wanted.Weight || actual.Count!=wanted.Specs.Count)throw new InvalidOperationException("WFP-Filter entspricht nicht mehr der Entscheidung: Layer="+actual.Layer+"/"+wanted.Layer+", SubLayer="+actual.SubLayer+"/"+subLayer+", Action="+actual.Action.Type+"/"+wanted.Action+", Flags="+actual.Flags+", WeightType="+actual.Weight.Type+", Weight="+(actual.Weight.Type==4&&actual.Weight.Data.Pointer!=IntPtr.Zero?unchecked((ulong)Marshal.ReadInt64(actual.Weight.Data.Pointer)).ToString():"?")+"/"+wanted.Weight+", Conditions="+actual.Count+"/"+wanted.Specs.Count+".");
      for(int i=0;i<wanted.Specs.Count;i++){
       var spec=wanted.Specs[i];var condition=new Condition();int found=0;
       for(int j=0;j<actual.Count;j++){var candidate=(Condition)Marshal.PtrToStructure(IntPtr.Add(actual.Conditions,j*Marshal.SizeOf(typeof(Condition))),typeof(Condition));if(candidate.Field==spec.Field){condition=candidate;found++;}}

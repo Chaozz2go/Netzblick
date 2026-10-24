@@ -267,6 +267,7 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $ui.MainShell.RowDefinitions[1].Height=if($name -eq 'AccessPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
+        $ui.MainShell.RowDefinitions[2].Height=if($name -eq 'AccessPanel' -or $name -eq 'InspectionPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(42)}
         $ui.SummaryMetrics.Visibility=if($name -eq 'AccessPanel'){'Collapsed'}else{'Visible'}
         foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab')){$ui[$tab].Background='#EDF2F6'}
         $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} default{'LiveTab'}}
@@ -374,7 +375,7 @@ try {
     $script:application=New-Object Windows.Application
     $application.ShutdownMode='OnMainWindowClose'
     [void]$application.Run($window)
-    if($SmokeTest){Write-Output 'PASS: full WPF/tray initialization and orderly close.'}
+    if($SmokeTest){Write-Output 'PASS: full WPF/tray initialization and orderly close.';exit 0}
 } catch {
     $message=$_.Exception.Message
     if($Check -or $SmokeTest){Write-Error ($message+[Environment]::NewLine+$_.ScriptStackTrace);exit 1}
