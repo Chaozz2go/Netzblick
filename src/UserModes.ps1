@@ -187,8 +187,9 @@ function Refresh-Overview {
     $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
     $ui.OverviewNew.Text=[string]$newPrograms.Count
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
-    $ui.OverviewStatus.Foreground=if($trafficProblem){'#F5C477'}else{'#91ADC8'}
+    $ui.OverviewStatus.Foreground=if($trafficProblem){'#9C650A'}else{'#57677B'}
     if($newPrograms.Count){$ui.NewProgramsNotice.Text=($newPrograms.Count.ToString()+' erstmals beobachtete Programme · keine automatische Sperre. '+(($newPrograms.Values | Select-Object -First 5 -ExpandProperty Name)-join ', '))}else{$ui.NewProgramsNotice.Text='Keine neuen Programme gemeldet. Beim ersten Start werden 15 Sekunden als Ausgangsbestand erfasst.'}
     $ui.AcknowledgeNew.IsEnabled=$newPrograms.Count -gt 0
     $ui.LastNetworkChange.Text=if($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}
 }
+

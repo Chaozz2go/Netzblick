@@ -1,0 +1,39 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Core logic
+        shell: pwsh
+        run: dotnet run --project tools/CoreChecks.csproj -c Release -- data
+      - name: Actual Windows startup checks
+        shell: powershell
+        run: ./Test-Netzblick.ps1
+      - name: Service JSON and framing contracts
+        shell: powershell
+        run: ./tools/Test-ServiceContracts.ps1
+      - name: Compile background service
+        shell: powershell
+        run: ./tools/Build-Service.ps1
+      - name: WPF fixtures without network changes
+        shell: powershell
+        run: ./tools/Test-UI.ps1
+      - name: Isolated service and native outbound TCP check
+        shell: powershell
+        run: ./tools/Test-NativeService.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wpf-previews
+          path: tools/ui-preview/*.png

@@ -41,6 +41,8 @@ namespace Netzblick {
    if(port==123 && udp)return "UDP/123 · Zeitsynchronisierung möglich";
    if(port==5353 && udp)return "UDP/5353 · lokale Dienstsuche (mDNS) möglich";
    if(port==1900 && udp)return "UDP/1900 · Gerätesuche (SSDP) möglich";
+   if(port==389 && tcp)return "TCP/389 · LDAP möglich";
+   if(port==636 && tcp)return "TCP/636 · LDAPS möglich";
    if(port==445 && tcp)return "TCP/445 · Dateifreigabe (SMB) möglich";
    if(port<1 || port>65535)return "Zweck nicht ermittelt";
    return p+"/"+port+" · Zweck nicht ermittelt";
@@ -92,3 +94,4 @@ namespace Netzblick {
   public void Dispose(){lock(gate){disposed=true;enabled=false;generation++;cache.Clear();}}
  }
 }
+

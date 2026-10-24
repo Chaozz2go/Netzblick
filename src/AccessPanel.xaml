@@ -1,61 +1,20 @@
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
- <Border x:Name="AccessHero" Background="#192C42" BorderBrush="#35516B" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,10">
-  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <StackPanel Margin="0,0,18,0">
-    <TextBlock Text="KONTROLLMODUS · TESTVERSION · NUR SOLANGE NETZBLICK LÄUFT" Foreground="#91ADC8" FontSize="11"/>
-    <TextBlock x:Name="AccessHeadline" Text="Du beobachtest gerade – der Kontrollmodus ist aus" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6"/>
-    <TextBlock x:Name="AccessExplanation" Text="Aktiviere den Kontrollmodus, um Verbindungsaufbau außerhalb dieses PCs zunächst zu blockieren. Ausgehende Versuche erscheinen als Programmanfragen. Du erlaubst nur, was du ausprobieren möchtest." Foreground="#B6CDE3" TextWrapping="Wrap"/>
-    <TextBlock x:Name="AccessProof" Text="Noch keine Sitzungsfilter aktiv · vorhandene Windows-Firewallregeln bleiben wirksam" FontSize="11" Foreground="#F5C477" TextWrapping="Wrap" Margin="0,8,0,0"/>
-   </StackPanel>
-   <StackPanel Grid.Column="1" VerticalAlignment="Center" Width="230">
-    <Button x:Name="StartAccess" Content="Kontrollmodus aktivieren" Background="#16564F"/>
-    <Button x:Name="StopAccess" Content="Zurück zu Windows-Standard" IsEnabled="False"/>
-
-   </StackPanel>
+ <Border Background="White" BorderBrush="#DBE3EA" BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
+  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="270"/></Grid.ColumnDefinitions>
+   <StackPanel Margin="0,0,20,0"><TextBlock Text="Einrichten &amp; testen" FontSize="27" FontWeight="SemiBold"/><TextBlock x:Name="AccessHeadline" Text="Dienst wird geprüft …" FontSize="16" Margin="0,8,0,4" TextWrapping="Wrap"/><TextBlock x:Name="AccessExplanation" Text="Benötigte Verbindungen gezielt freigeben." Foreground="#57677B" TextWrapping="Wrap"/><TextBlock x:Name="AccessProof" FontSize="11" Foreground="#57677B" TextWrapping="Wrap" Margin="0,8,0,0"/></StackPanel>
+   <StackPanel Grid.Column="1"><Button x:Name="StartAccess" Content="Neue Programme zuerst fragen" Background="#087F8C" Foreground="White"/><Button x:Name="StopAccess" Content="Nachfragen ausschalten"/><Button x:Name="InstallControlService" Content="Hintergrunddienst installieren" Visibility="Collapsed"/><CheckBox x:Name="NotifyAttempts" Content="Neue Anfragen im Tray melden" IsChecked="True" Margin="0,10,0,4"/><CheckBox x:Name="NotifyTargets" Content="Auch neue Ziele bekannter Programme" ToolTip="Kann insbesondere bei Browsern viele Hinweise erzeugen."/></StackPanel>
   </Grid>
  </Border>
- <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,10">
-  <Border Background="#2F2630" CornerRadius="7" Padding="8" Margin="0,0,10,0"><StackPanel><TextBlock x:Name="AccessPendingLabel" Text="ANFRAGEN · NOCH BLOCKIERT" FontSize="11" Foreground="#D7B58A"/><TextBlock x:Name="AccessPendingCount" Text="0" FontSize="21" Foreground="#F5C477"/></StackPanel></Border>
-  <Border Background="#142C30" CornerRadius="7" Padding="8" Margin="0,0,10,0"><StackPanel><TextBlock Text="FÜR DIESE SITZUNG FREIGEGEBEN" FontSize="11" Foreground="#91BFB9"/><TextBlock x:Name="AccessAllowedCount" Text="0" FontSize="21" Foreground="#39DCC0"/></StackPanel></Border>
-  <Border Background="#142235" CornerRadius="7" Padding="8"><StackPanel><TextBlock x:Name="AccessBlockedLabel" Text="BEWUSST WEITER BLOCKIERT" FontSize="11" Foreground="#91ADC8"/><TextBlock x:Name="AccessBlockedCount" Text="0" FontSize="21"/></StackPanel></Border>
- </UniformGrid>
- <TabControl Grid.Row="2" x:Name="AccessViews" Background="#0C1522" BorderBrush="#35516B" Foreground="#E5EDF7"><TabControl.Resources><Style TargetType="TabItem"><Setter Property="Foreground" Value="#A8C1D9"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="TabBorder" Background="#20364E" CornerRadius="5,5,0,0" Padding="10,8" Margin="0,0,4,0"><ContentPresenter ContentSource="Header"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="#24547B"/><Setter Property="Foreground" Value="#E5EDF7"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></TabControl.Resources>
-  <TabItem Header="  Anfragen entscheiden  ">
-   <Grid Background="#0C1522" Margin="10"><Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <DockPanel Margin="0,0,12,0">
-     <TextBlock DockPanel.Dock="Top" x:Name="AccessEmpty" Text="Noch keine Anfragen. Nach Aktivierung ein Programm benutzen und hier seine blockierten Versuche verfolgen." Foreground="#A8C1D9" TextWrapping="Wrap" Margin="0,0,0,10"/>
-     <ListBox x:Name="AccessRequests"><ListBox.ItemTemplate><DataTemplate><StackPanel>
-      <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-      <TextBlock Text="{Binding DecisionText}" Foreground="#F5C477" TextWrapping="Wrap" Margin="0,5,0,3"/>
-      <TextBlock Text="{Binding Summary}" Foreground="#91ADC8" FontSize="11" TextWrapping="Wrap"/>
-     </StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
-    </DockPanel>
-    <Border Grid.Column="1" Background="#142235" CornerRadius="8" Padding="16"><DockPanel><StackPanel DockPanel.Dock="Bottom">     <WrapPanel Margin="0,12,0,0"><Button x:Name="KeepAccessBlocked" Content="Weiter blockieren" IsEnabled="False"/><Button x:Name="AllowAccess" Content="Für diese Sitzung erlauben" Background="#16564F" IsEnabled="False"/><Button x:Name="RevokeAccess" Content="Freigabe zurücknehmen" IsEnabled="False"/></WrapPanel>
-     <TextBlock x:Name="AccessDecisionNotice" Text="Die Windows-Firewall kann auch nach deiner Freigabe weiterhin sperren. Dann erscheint ein entsprechender Hinweis." Foreground="#91ADC8" FontSize="11" TextWrapping="Wrap" Margin="0,8"/></StackPanel><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
-     <TextBlock x:Name="AccessProgramTitle" Text="Ein Programm möchte nach draußen" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"/>
-     <TextBlock x:Name="AccessProgramState" Text="Wähle links eine Anfrage. Bis zu deiner Freigabe bleibt der Zugriff durch die Sitzung gesperrt." Foreground="#F5C477" TextWrapping="Wrap" Margin="0,7,0,12"/>
-     <TextBox x:Name="AccessProgramPath" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" Margin="0,0,0,12"/>
-     <TextBlock Text="WOHIN – UND WAS WISSEN WIR?" Foreground="#91ADC8" FontSize="11"/>
-     <TextBlock x:Name="AccessTargetHint" Text="IP, Name und möglicher Dienst erscheinen nach einem blockierten Versuch." TextWrapping="Wrap" Margin="0,5,0,6"/>
-     <ListBox x:Name="AccessTargets" MaxHeight="110" Margin="0,0,0,12"/>
-     <Border Background="#192C42" CornerRadius="6" Padding="12"><StackPanel>
-      <TextBlock Text="Braucht das Programm diesen Zugriff?" FontSize="16" FontWeight="SemiBold"/>
-      <TextBlock Text="1 · Hast du gerade eine Online-Funktion benutzt?&#10;2 · Funktioniert das, was du brauchst, auch blockiert?&#10;3 · Falls etwas fehlt: für diese Sitzung erlauben und die Funktion erneut ausprobieren." Foreground="#B6CDE3" TextWrapping="Wrap" Margin="0,6"/>
-      <TextBlock Text="Updates, Anmeldung, Inhalte oder Telemetrie? IP, Port und DNS allein beweisen das nicht. Eine Freigabe gilt für alle Instanzen dieses EXE-Pfads und alle ausgehenden Ziele, nicht nur für die gezeigte IP." Foreground="#91ADC8" TextWrapping="Wrap" FontSize="11"/>
-     </StackPanel></Border>
-
-    </StackPanel></ScrollViewer></DockPanel></Border>
-   </Grid>
-  </TabItem>
-  <TabItem Header="  Freigaben und Entscheidungen  ">
-   <DockPanel Background="#0C1522" Margin="12"><TextBlock DockPanel.Dock="Top" Text="Alle Entscheidungen dieser Sitzung. Doppelklick öffnet das Programm links zur Rücknahme oder Änderung." TextWrapping="Wrap" Foreground="#A8C1D9" Margin="0,0,0,12"/><DataGrid x:Name="AccessDecisions"><DataGrid.Columns><DataGridTextColumn Header="Programm" Binding="{Binding Name}" Width="200"/><DataGridTextColumn Header="Deine Entscheidung" Binding="{Binding DecisionText}" Width="*"/><DataGridTextColumn Header="Versuche" Binding="{Binding Count}" Width="90"/><DataGridTextColumn Header="Programmpfad" Binding="{Binding Path}" Width="350"/></DataGrid.Columns></DataGrid></DockPanel>
-  </TabItem>
-  <TabItem Header="  Beobachtete Verbindungen  ">
-   <DockPanel Background="#0C1522" Margin="12">
-    <StackPanel DockPanel.Dock="Top"><TextBlock Text="Ein Socket-Eintrag ist keine bestätigte Datenübertragung" FontSize="19" FontWeight="SemiBold"/><TextBlock x:Name="AccessSocketNote" Text="Die Anzeige unterscheidet verbundene TCP-Sockets von neu beobachteten Einträgen. Bereits offene Verbindungen werden nicht allein durch die Anzeige als getrennt bestätigt." Foreground="#A8C1D9" TextWrapping="Wrap" Margin="0,6,0,12"/></StackPanel>
-    <DataGrid x:Name="AccessSockets"><DataGrid.Columns><DataGridTextColumn Header="Programm" Binding="{Binding Program}" Width="180"/><DataGridTextColumn Header="Beobachtung" Binding="{Binding Observation}" Width="200"/><DataGridTextColumn Header="Gegenstelle" Binding="{Binding Remote}" Width="220"/><DataGridTextColumn Header="Socketstatus" Binding="{Binding State}" Width="120"/><DataGridTextColumn Header="Protokoll" Binding="{Binding Protocol}" Width="80"/><DataGridTextColumn Header="Sitzungsentscheidung" Binding="{Binding Decision}" Width="*"/></DataGrid.Columns></DataGrid>
-   </DockPanel>
-  </TabItem>
+ <Border x:Name="RecoveryBanner" Grid.Row="1" Background="#FFF3D9" Padding="12" CornerRadius="8" Margin="0,0,0,12" Visibility="Collapsed"><DockPanel><Button x:Name="ConfirmSetup" DockPanel.Dock="Right" Content="Einrichtung bestätigen"/><TextBlock x:Name="RecoveryText" TextWrapping="Wrap"/></DockPanel></Border>
+ <TabControl x:Name="AccessViews" Grid.Row="2" Background="#F4F7FA" BorderThickness="0">
+  <TabItem Header="  Blockierte Versuche  "><Grid Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="430"/></Grid.ColumnDefinitions>
+   <Border Background="White" CornerRadius="10" Padding="16" Margin="0,0,14,0"><DockPanel><StackPanel DockPanel.Dock="Top"><TextBlock Text="Blockierte Versuche" FontSize="19" FontWeight="SemiBold"/><TextBlock x:Name="AccessEmpty" Text="Noch keine Versuche angezeigt." TextWrapping="Wrap" Foreground="#57677B" Margin="0,6,0,12"/></StackPanel><ListBox x:Name="AccessRequests"><ListBox.ItemTemplate><DataTemplate><StackPanel><DockPanel><TextBlock Text="{Binding Program}" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="{Binding Count, StringFormat={}{0} Versuche}" HorizontalAlignment="Right" Foreground="#57677B"/></DockPanel><TextBlock Text="{Binding Target}" Margin="0,5,0,0"/><TextBlock Text="{Binding Direction}" FontSize="11" Foreground="#57677B"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel></Border>
+   <Border Grid.Column="1" Background="White" CornerRadius="10" Padding="20"><DockPanel><StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0"><Button x:Name="TrySetupRule" Content="5 Minuten testen" Background="#087F8C" Foreground="White" IsEnabled="False"/><Button x:Name="SaveSetupRule" Content="Regel dauerhaft speichern" IsEnabled="False"/><Button x:Name="KeepAccessBlocked" Content="Gesperrt lassen" IsEnabled="False"/><TextBlock x:Name="AccessDecisionNotice" TextWrapping="Wrap" FontSize="11" Foreground="#57677B" Margin="0,8,0,0"/></StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><TextBlock Text="Verbindung freigeben" FontSize="21" FontWeight="SemiBold"/><TextBlock x:Name="AccessProgramTitle" Text="Versuch auswählen" FontSize="18" Margin="0,14,0,4" TextWrapping="Wrap"/><TextBlock x:Name="AccessProgramState" Foreground="#A4680B" TextWrapping="Wrap"/><TextBox x:Name="AccessProgramPath" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Margin="0,8"/><TextBlock x:Name="AccessTargetHint" TextWrapping="Wrap" Margin="0,0,0,14"/><TextBlock Text="Regelname"/><TextBox x:Name="SetupRuleName" MaxLength="100" Margin="0,6,0,12"/><TextBlock Text="Geltungsbereich"/><ComboBox x:Name="SetupRuleScope" SelectedIndex="0" Margin="0,6,0,8" Padding="8"><ComboBoxItem Content="Nur diese Verbindung (Programm, IP, Dienst)"/><ComboBoxItem Content="Dieses Programm · alle ausgehenden Ziele"/></ComboBox><CheckBox x:Name="SetupHostIcmp" Content="ICMP für diesen Rechner statt für eine EXE" Visibility="Collapsed" Margin="0,4,0,10"/><Border Background="#F0F5F8" CornerRadius="7" Padding="12"><TextBlock Text="Erst freigeben, dann die Funktion erneut versuchen. Port und IP beweisen keinen Zweck. Bei ICMP gilt die Regel für alle ICMP-Typen zum gewählten Ziel. Andere Firewall-Sperren bleiben wirksam." TextWrapping="Wrap" FontSize="12" Foreground="#57677B"/></Border></StackPanel></ScrollViewer>
+   </DockPanel></Border>
+  </Grid></TabItem>
+  <TabItem Header="  Regeln &amp; Freigaben  "><DockPanel Margin="0,14,0,0"><StackPanel DockPanel.Dock="Top"><TextBlock Text="Deine benannten Regeln" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Gespeicherte Regeln werden vom Hintergrunddienst geladen. Eine Freigabe allein ist kein Nachweis erfolgreicher Übertragung." TextWrapping="Wrap" Foreground="#57677B" Margin="0,8"/><Button x:Name="RemoveSetupRule" Content="Ausgewählte Regel zurücknehmen" HorizontalAlignment="Left"/></StackPanel><DataGrid x:Name="SetupRules"><DataGrid.Columns><DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="230"/><DataGridTextColumn Header="Aktion" Binding="{Binding Action}" Width="80"/><DataGridTextColumn Header="Gilt für" Binding="{Binding Scope}" Width="*"/><DataGridTextColumn Header="Gültigkeit" Binding="{Binding Lifetime}" Width="150"/></DataGrid.Columns></DataGrid></DockPanel></TabItem>
+  <TabItem Header="  Verlauf  "><DockPanel Margin="0,14,0,0"><TextBlock DockPanel.Dock="Top" Text="Regeländerungen seit dem letzten Dienststart · maximal 100 Einträge" Margin="0,0,0,12" Foreground="#57677B"/><ListBox x:Name="SetupHistory"/></DockPanel></TabItem>
  </TabControl>
 </Grid>

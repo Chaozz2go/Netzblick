@@ -80,8 +80,10 @@ public static class CoreChecks {
    checks+=InspectionChecks.Run();
    checks+=EndpointChecks.Run();
    checks+=AccessChecks.Run();
+   checks+=SetupChecks.Run();
    checks+=UserModeChecks.Run();
    Console.WriteLine("PASS: "+checks+" core checks. No firewall modifications.");return 0;
   }finally{Directory.Delete(temp,true);}
  }
 }
+

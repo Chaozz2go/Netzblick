@@ -1,189 +1,95 @@
-﻿function Initialize-AccessMode {
-    $script:accessActive=$false;$script:accessGate=$null;$script:accessWatch=$null
-    $script:accessQueue=New-Object Netzblick.AccessQueue
-    $script:accessProblem='';$script:accessVerified=$false;$script:accessLastVerified=[datetime]::MinValue
-    $script:accessBaseline=New-Object 'System.Collections.Generic.HashSet[string]'
-    $script:accessSocketFirstSeen=@{}
-    $script:accessStartedUtc=$null
-    $ui.StartAccess.Add_Click({Start-AccessMode})
-    $ui.StopAccess.Add_Click({[void](Stop-AccessMode)})
-    $ui.AccessRequests.Add_SelectionChanged({Show-AccessRequest})
-    $ui.AllowAccess.Add_Click({Set-AccessDecision 'Allowed'})
-    $ui.KeepAccessBlocked.Add_Click({Set-AccessDecision 'Blocked'})
-    $ui.RevokeAccess.Add_Click({Set-AccessDecision 'Blocked'})
-    $ui.AccessDecisions.Add_MouseDoubleClick({
-        $chosen=$ui.AccessDecisions.SelectedItem
-        if($chosen){$ui.AccessViews.SelectedIndex=0;$match=$ui.AccessRequests.Items | Where-Object {$_.Key -eq $chosen.Key} | Select-Object -First 1;if($match){$ui.AccessRequests.SelectedItem=$match}}
+﻿function Send-SetupCommand($command) {
+    $reply=[Netzblick.SetupClient]::Send($command);$script:setupStatus=$reply
+    if(-not $reply.Ok){throw $reply.Error};return $reply
+}
+function Initialize-AccessMode {
+    $script:accessActive=$false;$script:accessVerified=$false;$script:accessProblem='';$script:setupStatus=$null
+    $script:setupSelection='';$script:setupNotifiedPrograms=New-Object 'System.Collections.Generic.HashSet[string]'
+    $script:setupNotifiedTargets=New-Object 'System.Collections.Generic.HashSet[string]';$script:setupLastNotice=[datetime]::MinValue
+    $script:setupPreferencesPath=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Netzblick\notifications.json'
+    try{if(Test-Path -LiteralPath $setupPreferencesPath){$p=Get-Content -LiteralPath $setupPreferencesPath -Raw | ConvertFrom-Json;$ui.NotifyAttempts.IsChecked=[bool]$p.Enabled;$ui.NotifyTargets.IsChecked=[bool]$p.Targets}}catch{}
+    foreach($n in @('NotifyAttempts','NotifyTargets')){$ui[$n].Add_Click({Save-SetupPreferences})}
+    $ui.StartAccess.Add_Click({Start-AccessMode});$ui.StopAccess.Add_Click({[void](Stop-AccessMode)})
+    $ui.InstallControlService.Add_Click({try{Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $appRoot 'Install-Netzblick.ps1')+'"')}catch{Show-Error $_.Exception.Message}})
+    $ui.ConfirmSetup.Add_Click({try{[void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='ConfirmRecovery'}));Update-AccessMode}catch{Show-Error $_.Exception.GetBaseException().Message}})
+    $ui.AccessRequests.Add_SelectionChanged({Show-AccessRequest});$ui.SetupRuleScope.Add_SelectionChanged({Update-SetupDecisionButtons});$ui.SetupHostIcmp.Add_Click({Update-SetupDecisionButtons})
+    $ui.TrySetupRule.Add_Click({Save-SetupRule -Temporary});$ui.SaveSetupRule.Add_Click({Save-SetupRule});$ui.KeepAccessBlocked.Add_Click({Save-SetupRule -Block})
+    $ui.RemoveSetupRule.Add_Click({
+        $rule=$ui.SetupRules.SelectedItem;if(-not $rule){return}
+        if([Windows.MessageBox]::Show($window,('Regel „'+$rule.Name+'“ zurücknehmen? Andere Regeln bleiben wirksam.'),'Regel zurücknehmen','YesNo','Question') -ne 'Yes'){return}
+        try{[void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Remove';RuleId=$rule.Id}));Update-AccessMode}catch{Show-Error $_.Exception.GetBaseException().Message}
     })
-    $script:accessTimer=New-Object Windows.Threading.DispatcherTimer
-    $accessTimer.Interval=[timespan]::FromSeconds(1)
-    $accessTimer.Add_Tick({try{Update-AccessMode}catch{$script:accessProblem=$_.Exception.GetBaseException().Message;$script:accessVerified=$false;Refresh-AccessState}})
-    $accessTimer.Start()
-    $window.Add_Closing({
-        if($script:accessActive){
-            if([Windows.MessageBox]::Show($window,'Netzblick schließen und den Kontrollmodus beenden? Alle vorübergehenden Sperren und Freigaben dieser Sitzung entfallen. Deine vorhandenen Windows-Firewallregeln bleiben wirksam.','Kontrollmodus beenden','YesNo','Question') -ne 'Yes'){$_.Cancel=$true;return}
-            if(-not (Stop-AccessMode -Quiet)){$_.Cancel=$true}
-        }
-    })
-    $window.Add_Closed({$accessTimer.Stop()})
-    Refresh-AccessState
+    $script:accessTimer=New-Object Windows.Threading.DispatcherTimer;$accessTimer.Interval=[timespan]::FromSeconds(2)
+    $accessTimer.Add_Tick({Update-AccessMode});$accessTimer.Start();$window.Add_Closed({$accessTimer.Stop()});Update-AccessMode
+}
+function Save-SetupPreferences {
+    try{[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($setupPreferencesPath)) | Out-Null;[IO.File]::WriteAllText($setupPreferencesPath,(@{Enabled=[bool]$ui.NotifyAttempts.IsChecked;Targets=[bool]$ui.NotifyTargets.IsChecked} | ConvertTo-Json))}catch{$ui.UserNotice.Text='Benachrichtigungsoptionen konnten nicht gespeichert werden.'}
 }
 function Start-AccessMode {
-    if($script:accessActive){return}
-    if($script:inspectionActive){Show-Error 'Bitte zuerst die laufende Einzelprogramm-Prüfung beenden.';return}
-    $nl=[Environment]::NewLine
-    $message="Kontrollmodus für diese Sitzung aktivieren?$nl$nl Verbindungsaufbau außerhalb dieses PCs wird zunächst ein- und ausgehend gesperrt – auch LAN, DNS und Windows-Dienste können betroffen sein. Kommunikation auf diesem PC bleibt möglich.$nl$nl Du kannst Programme anschließend für ausgehenden Zugriff freigeben. Die Freigabe gilt für alle Instanzen des Programmpfads und alle Ziele. Vorhandene Windows-Regeln werden nicht geändert.$nl$nl Beim Beenden oder Absturz von Netzblick entfallen diese Sitzungsfilter. Bereits bestehende Verbindungen werden in der Anzeige nicht als sicher getrennt bestätigt.$nl$nl Testversion: zunächst lokal mit einem bekannten Programm ausprobieren."
-    if([Windows.MessageBox]::Show($window,$message,'Erst blockieren, dann entscheiden','YesNo','Question') -ne 'Yes'){return}
-    $watch=$null;$gate=$null
-    try{
-        $ui.AccessHeadline.Text='Sperre und Ereignisanzeige werden vorbereitet …'
-        $ui.ResolveNames.IsChecked=$false
-        $watch=[Netzblick.AccessWatch]::Start()
-        $gate=[Netzblick.WfpGate]::Start()
-        $script:accessWatch=$watch;$script:accessGate=$gate
-        $script:accessQueue=New-Object Netzblick.AccessQueue
-        $script:accessStartedUtc=$watch.StartedUtc;$script:accessProblem='';$script:accessVerified=$true
-        $script:accessLastVerified=[datetime]::UtcNow;$script:accessActive=$true
-        $script:accessSocketFirstSeen=@{}
-        $script:accessBaseline.Clear()
-        foreach($row in $script:rows){[void]$accessBaseline.Add($row.Key)}
-        $ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$true
-        Add-Event 'Kontrollmodus aktiviert' 'Netzblick' 'Dynamische WFP-Sitzung · ohne Freigaben · lokale Kommunikation auf diesem PC ausgenommen'
-        Update-AccessMode
-    }catch{
-        $reason=$_.Exception.GetBaseException().Message
-        $script:accessActive=$false;$script:accessGate=$null;$script:accessWatch=$null
-        $failure=$_.Exception
-        while($failure){if($failure.PSObject.Properties['RecoveryGate']){$gate=$failure.RecoveryGate;break};$failure=$failure.InnerException}
-        if($gate){try{$gate.Dispose()}catch{$reason+=' Sitzungsende nicht bestätigt: '+$_.Exception.GetBaseException().Message;$script:accessGate=$gate;$script:accessActive=$true}}
-        if($watch){try{$watch.Dispose()}catch{$reason+=' Audit-Wiederherstellung: '+$_.Exception.GetBaseException().Message}}
-        $script:accessProblem=$reason;$script:accessVerified=$false
-        $ui.ResolveNames.IsEnabled=$true
-        Refresh-AccessState;Show-Error $reason
-    }
+    if(-not $setupStatus -or -not $setupStatus.Verified){Show-Error 'Der Hintergrunddienst muss bereit sein.';return}
+    $text='Neue Verbindungen zunächst ein- und ausgehend blockieren? Auch DNS, LAN, Updates und Fernwartung können ausfallen. Bestehende Regeln bleiben erhalten. Ohne Bestätigung in Netzblick werden nach 2 Minuten die vorherigen Regeln wiederhergestellt. Bitte auf einem lokal bedienten Testgerät beginnen.'
+    if([Windows.MessageBox]::Show($window,$text,'Einrichten & testen','YesNo','Warning') -ne 'Yes'){return}
+    try{[void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Ask';Enabled=$true;RecoveryMinutes=2}));Update-AccessMode}catch{Show-Error $_.Exception.GetBaseException().Message}
 }
 function Stop-AccessMode([switch]$Quiet) {
-    if(-not $script:accessActive){return $true}
-    try{
-        $accessGate.Dispose()
-        $script:accessActive=$false;$script:accessVerified=$false;$script:accessGate=$null
-    }catch{
-        $script:accessProblem='Sitzungsfilter konnten nicht als beendet bestätigt werden: '+$_.Exception.GetBaseException().Message
-        $script:accessVerified=$false;Refresh-AccessState
-        if(-not $Quiet){Show-Error $accessProblem}
-        return $false
-    }
-    $restoreError=''
-    try{if($accessWatch){$accessWatch.Dispose()}}catch{$restoreError=$_.Exception.GetBaseException().Message}
-    $script:accessWatch=$null
-    $script:accessProblem=if($restoreError){'Sitzungsfilter beendet; Audit-Wiederherstellung prüfen: '+$restoreError}else{''}
-    $ui.ResolveNames.IsEnabled=$true;$ui.StartAccess.IsEnabled=-not $restoreError;$ui.StopAccess.IsEnabled=$false
-    Add-Event 'Kontrollmodus beendet' 'Netzblick' 'Sitzungsfilter entfernt; normale Windows-Firewallregeln wieder maßgeblich'
-    Refresh-AccessState;Refresh-AccessLists;Show-AccessRequest
-    if($restoreError -and -not $Quiet){Show-Error $accessProblem}
-    return -not [bool]$restoreError
+    if(-not $Quiet -and [Windows.MessageBox]::Show($window,'Nachfragen ausschalten? Die Grundsperre entfällt. Gespeicherte Einzelregeln und Programm-Prüfsperren bleiben aktiv.','Nur beobachten','YesNo','Question') -ne 'Yes'){return $false}
+    try{[void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Ask';Enabled=$false}));Update-AccessMode;return $true}catch{if(-not $Quiet){Show-Error $_.Exception.GetBaseException().Message};return $false}
 }
-function Refresh-AccessState {
-    $items=@($accessQueue.Snapshot())
-    $pending=@($items | Where-Object {$_.Decision -eq 'Pending'}).Count
-    $blocked=@($items | Where-Object {$_.Decision -eq 'Blocked'}).Count
-    $allowed=if($accessGate){$accessGate.AllowedCount}else{0}
-    $ui.AccessPendingLabel.Text=if(-not $accessActive){'ANFRAGEN DER LETZTEN SITZUNG'}elseif(-not $accessVerified -or $accessProblem){'ANFRAGEN · STATUS OFFEN'}else{'ANFRAGEN · NOCH BLOCKIERT'}
-    $ui.AccessBlockedLabel.Text=if($accessActive -and $accessVerified -and -not $accessProblem){'BEWUSST WEITER BLOCKIERT'}else{'ENTSCHEIDUNG: BLOCKIEREN'}
-    $ui.AccessPendingCount.Text=[string]$pending;$ui.AccessAllowedCount.Text=[string]$allowed;$ui.AccessBlockedCount.Text=[string]$blocked
-    $ui.StopAccess.IsEnabled=$script:accessActive
-    $ui.StartAccess.IsEnabled=-not $script:accessActive
-    $ui.StartAccess.Content=if($accessProblem -and -not $accessActive){'Erneut versuchen'}else{'Kontrollmodus aktivieren'}
-    if($script:accessActive -and $script:accessVerified -and -not $accessProblem){
-        $ui.AccessHero.BorderBrush='#39DCC0';$ui.AccessHero.Background='#12302E'
-        $ui.AccessHeadline.Text=if($allowed){'Kontrollmodus aktiv · '+$allowed+' bewusste Freigaben'}else{'Kontrollmodus aktiv · noch keine Programme freigegeben'}
-        $ui.AccessExplanation.Text=if($pending){$pending.ToString()+' Programme haben ausgehenden Zugriff versucht. Ihre Anfragen bleiben bis zu deiner Freigabe blockiert.'}else{'Neue Verbindungen außerhalb dieses PCs werden ohne Freigabe zunächst blockiert. Benutze ein Programm und entscheide anhand seiner Anfragen.'}
-        $ui.AccessProof.Text='Sitzungsfilter zuletzt geprüft: '+$accessLastVerified.ToLocalTime().ToString('HH:mm:ss')+' · Ereignisanzeige aktiv · '+$accessQueue.Incoming+' eingehende Blockereignisse · lokale Kommunikation ausgenommen'
-        $ui.AccessGlobalStatus.Text='Kontrollmodus aktiv · '+$allowed+' Freigaben · '+$pending+' Anfragen';$ui.AccessGlobalStatus.Foreground='#39DCC0'
-    }elseif($accessProblem){
-        $ui.AccessHero.BorderBrush='#FF7E85';$ui.AccessHero.Background='#321F2A'
-        $ui.AccessHeadline.Text=if($accessActive){'Schutzstatus / Anzeige nicht bestätigt'}else{'Kontrollmodus nicht aktiv · Hinweis prüfen'}
-        $ui.AccessExplanation.Text=$accessProblem
-        $ui.AccessProof.Text=if($accessActive){'Sitzungsfilter können weiter aktiv sein. Keine neue Freigabe möglich. Kontrollmodus beenden und Meldung prüfen.'}else{'Es wird kein aktiver Kontrollmodus angezeigt. Vorhandene Windows-Firewallregeln bleiben maßgeblich.'}
-        $ui.AccessGlobalStatus.Text='Aufmerksamkeit erforderlich · Kontrollmodus prüfen';$ui.AccessGlobalStatus.Foreground='#FF7E85'
-    }else{
-        $ui.AccessHero.BorderBrush='#35516B';$ui.AccessHero.Background='#192C42'
-        $ui.AccessHeadline.Text='Du beobachtest gerade – der Kontrollmodus ist aus'
-        $ui.AccessExplanation.Text='Aktiviere den Kontrollmodus, um Verbindungsaufbau außerhalb dieses PCs zunächst zu blockieren. Anfragen und Entscheidungen der letzten Sitzung bleiben zur Ansicht erhalten.'
-        $ui.AccessProof.Text='Keine Netzblick-Sitzungsfilter aktiv · keine aktuellen Sitzungsfreigaben · vorhandene Windows-Firewallregeln bleiben wirksam'
-        $ui.AccessGlobalStatus.Text='Beobachten · Kontrollmodus aus';$ui.AccessGlobalStatus.Foreground='#A8C1D9'
-    }
-}
-function Refresh-AccessLists {
-    $selected=$ui.AccessRequests.SelectedItem;$key=if($selected){$selected.Key}else{''}
-    $items=@($accessQueue.Snapshot())
-    $ordered=@($items | Sort-Object -Property @{Expression={if($_.Decision -eq 'Pending'){0}elseif($_.Decision -eq 'Allowed'){1}else{2}}},@{Expression='LastUtc';Descending=$true})
-    $ui.AccessRequests.ItemsSource=$ordered;$ui.AccessDecisions.ItemsSource=$items
-    $match=$ordered | Where-Object {$_.Key -eq $key} | Select-Object -First 1
-    if($match){$ui.AccessRequests.SelectedItem=$match}elseif($ordered.Count){$ui.AccessRequests.SelectedIndex=0}
-    $ui.AccessEmpty.Text=if($ordered.Count){'Pro Programm gesammelt. Mehrere Versuche erzeugen keine Flut von Rückfragen.'}elseif($accessActive){'Noch kein ausgehender Blockversuch angezeigt. Nutze jetzt ein Programm. Eine leere Liste ist kein Sicherheitsnachweis.'}else{'Aktiviere den Kontrollmodus und benutze dann ein Programm. Noch keine Anfragen dieser Sitzung.'}
+function Update-SetupDecisionButtons {
+    $r=$ui.AccessRequests.SelectedItem;$ready=$setupStatus -and $setupStatus.Verified -and $r;$valid=$false
+    if($ready){$valid=([Netzblick.AccessQueue]::CanAllow($r.Path) -and [IO.File]::Exists($r.Path)) -or ($r.Protocol -in @(1,58) -and $ui.SetupHostIcmp.IsChecked -and $ui.SetupRuleScope.SelectedIndex -eq 0)}
+    foreach($n in @('TrySetupRule','SaveSetupRule','KeepAccessBlocked')){$ui[$n].IsEnabled=[bool]($ready -and $valid)}
 }
 function Show-AccessRequest {
-    $request=$ui.AccessRequests.SelectedItem
-    foreach($name in @('AllowAccess','KeepAccessBlocked','RevokeAccess')){$ui[$name].IsEnabled=$false}
-    if($null -eq $request){$ui.AccessProgramTitle.Text='Ein Programm möchte nach draußen';$ui.AccessProgramState.Text='Wähle eine Anfrage links. Ohne Freigabe bleibt sie im aktiven Kontrollmodus gesperrt.';$ui.AccessProgramPath.Text='';$ui.AccessTargets.ItemsSource=@();return}
-    $ui.AccessProgramTitle.Text=$request.Name;$ui.AccessProgramPath.Text=$request.Path
-    $ui.AccessProgramState.Text=if($accessActive -and (-not $accessVerified -or $accessProblem)){'Filterstatus unbestätigt · aktueller Zugriff nicht bestätigt'}elseif(-not $accessActive){'Vergangene Sitzung: '+$request.DecisionText+' · aktuell keine Sitzungsfreigabe aktiv'}elseif($request.Decision -eq 'Pending'){'Entscheidung offen · im Kontrollmodus zunächst blockiert'}elseif($request.Decision -eq 'Blocked'){'Deine Entscheidung: im Kontrollmodus weiter blockiert'}else{$request.DecisionText}
-    $scope=[Netzblick.EndpointInfo]::Scope($request.LatestAddress)
-    $hint=[Netzblick.EndpointInfo]::Service($request.Protocol,$request.LatestPort)
-    $nl=[Environment]::NewLine
-    $peerName=Get-EndpointName $request.LatestAddress
-    $ui.AccessTargetHint.Text="Name: $peerName$nl Letztes Ziel: $($request.LatestAddress):$($request.LatestPort)$nl Bereich: $scope$nl Möglicher Dienst: $hint$nl Nachweis: $($request.Evidence)"
-    $ui.AccessTargets.ItemsSource=@($request.Targets)
-    $ready=$accessActive -and $accessVerified -and -not $accessProblem
-    $ui.AllowAccess.IsEnabled=$ready -and $request.Decision -ne 'Allowed' -and [Netzblick.AccessQueue]::CanAllow($request.Path) -and [IO.File]::Exists($request.Path)
-    $ui.KeepAccessBlocked.IsEnabled=$ready -and $request.Decision -ne 'Blocked'
-    $ui.RevokeAccess.IsEnabled=$ready -and $request.Decision -eq 'Allowed'
-    $ui.AccessDecisionNotice.Text=if($request.BlockedAfterAllow){'Nach der Freigabe wurde erneut blockiert. Eine andere Windows-Regel oder ein anderer beteiligter Prozess kann den Zugriff verhindern. Die Freigabe ist kein Nachweis einer erfolgreichen Verbindung.'}elseif(-not [Netzblick.AccessQueue]::CanAllow($request.Path)){'Der Programmpfad ist nicht eindeutig als lokale EXE zugeordnet. Keine pauschale Freigabe möglich.'}else{'Nur diese Sitzung · alle Ziele dieses Programmpfads · vorhandene Sperren bleiben wirksam.'}
+    $r=$ui.AccessRequests.SelectedItem
+    if(-not $r){$ui.AccessProgramTitle.Text='Versuch auswählen';$ui.AccessProgramPath.Text='';$ui.AccessProgramState.Text='Noch keine Anfrage ausgewählt.';Update-SetupDecisionButtons;return}
+    $ui.AccessProgramTitle.Text=$r.Program;$ui.AccessProgramPath.Text=$r.Path;$ui.AccessProgramState.Text=$r.Evidence
+    $port=if($r.Port){' · Port '+$r.Port}else{''};$hint=[Netzblick.EndpointInfo]::Service([Netzblick.SetupRule]::ProtocolName($r.Protocol),$r.Port)
+    $ui.AccessTargetHint.Text=$r.Direction+[Environment]::NewLine+$r.Address+[Environment]::NewLine+[Netzblick.SetupRule]::ProtocolName($r.Protocol)+$port+[Environment]::NewLine+'Möglicher Dienst: '+$hint
+    if($script:setupSelection -ne $r.Key){$script:setupSelection=$r.Key;$ui.SetupRuleName.Text=$r.Program+' – '+$r.Address;$ui.SetupRuleScope.SelectedIndex=0;$ui.SetupHostIcmp.IsChecked=$false}
+    $ui.SetupHostIcmp.Visibility=if($r.Protocol -in @(1,58)){'Visible'}else{'Collapsed'}
+    $ui.AccessDecisionNotice.Text=if(-not $setupStatus.Verified){'Dienst-/Filterstatus nicht bestätigt. Keine neue Freigabe möglich.'}elseif($ui.SetupRuleScope.SelectedIndex -eq 1){'Freigabe umfasst alle ausgehenden Ziele und Protokolle dieses EXE-Pfads.'}else{'Nur Programm, Richtung, genaue IP und Dienst. Eingehend wird der lokale Dienstport verwendet.'}
+    Update-SetupDecisionButtons
 }
-function Set-AccessDecision([string]$decision) {
-    $request=$ui.AccessRequests.SelectedItem
-    if($null -eq $request -or -not $accessActive -or -not $accessVerified -or $accessProblem){return}
-    if($decision -eq 'Allowed'){
-        $nl=[Environment]::NewLine
-        $extra=if(Is-Protected $request.Path){"$nl$nl Achtung: Windows-Sammelprozess. Die Freigabe betrifft alle Dienste/Instanzen unter diesem EXE-Pfad, nicht nur die angezeigte Anfrage."}else{''}
-        $message="Diesem Programmpfad ausgehenden Netzwerkzugriff für diese Sitzung erlauben?$nl$nl$($request.Path)$nl$nl Gilt für alle Instanzen und alle Ziele. Vorhandene Windows-Sperren bleiben wirksam. Starte die gewünschte Online-Funktion anschließend erneut.$extra"
-        if([Windows.MessageBox]::Show($window,$message,'Bewusste Sitzungsfreigabe','YesNo','Question') -ne 'Yes'){return}
-    }
+function Save-SetupRule([switch]$Temporary,[switch]$Block) {
+    $r=$ui.AccessRequests.SelectedItem;if(-not $r){return}
     try{
-        if($decision -eq 'Allowed'){$accessGate.Allow($request.Path)}else{$accessGate.Revoke($request.Path)}
-        $accessQueue.Decide($request.Key,$decision)
-        $script:accessLastVerified=[datetime]::UtcNow
-        Add-Event $(if($decision -eq 'Allowed'){'Sitzungszugriff erlaubt'}else{'Bleibt im Kontrollmodus blockiert'}) $request.Name $request.Path
-        Refresh-AccessLists;Refresh-AccessState;Show-AccessRequest
-    }catch{$script:accessProblem=$_.Exception.GetBaseException().Message;$script:accessVerified=$false;Refresh-AccessState;Show-AccessRequest;Show-Error $accessProblem}
-}
-function Refresh-AccessSockets {
-    if($ui.AccessPanel.Visibility -ne 'Visible'){return}
-    $list=@();$index=0
-    foreach($row in $script:rows){
-        if(-not $row.Address){continue}
-        $index++;if($index -gt 1000){break}
-        $request=$accessQueue.Find([Netzblick.ProcessLineage]::Normalize($row.Path))
-        if(-not $accessSocketFirstSeen.ContainsKey($row.Key) -and $accessSocketFirstSeen.Count -lt 10000){$accessSocketFirstSeen[$row.Key]=[datetime]::UtcNow}
-        $recent=$accessSocketFirstSeen.ContainsKey($row.Key) -and (([datetime]::UtcNow-$accessSocketFirstSeen[$row.Key]).TotalSeconds -lt 8)
-        $observation=if($accessActive -and $accessBaseline.Contains($row.Key)){'Schon vor Aktivierung beobachtet'}elseif($recent){'Neu beobachtet · kein Transfernachweis'}elseif($row.State -eq 'Verbunden'){'TCP-Socket verbunden'}else{'Socket beobachtet'}
-        $decision=if(-not $accessActive){'Kontrollmodus aus'}elseif($request -and $request.Decision -eq 'Allowed'){'Sitzungsfreigabe vorhanden'}else{'Keine Sitzungsfreigabe'}
-        $list+=[pscustomobject]@{Program=$row.Program;Observation=$observation;Remote=$row.Remote;State=$row.State;Protocol=$row.Protocol;Decision=$decision}
-    }
-    $ui.AccessSockets.ItemsSource=$list
-    $ui.AccessSocketNote.Text=if($paused){'Aktivitätsansicht pausiert. Sperrfilter und Anfragen werden weiter geprüft. Sichtbare Socket-Einträge sind veraltet.'}else{'Bis zu 1000 aktuelle Socket-Beobachtungen · keine Byte-Messung. Vorher vorhandene Einträge werden nicht als sicher getrennt bestätigt; Freigabe ist nicht gleich erfolgreicher Datentransfer.'}
+        $rule=New-Object Netzblick.SetupRule;$rule.Id=[guid]::NewGuid().ToString();$rule.Name=$ui.SetupRuleName.Text.Trim();$rule.Path=$r.Path;$rule.Direction=$r.Direction;$rule.Address=$r.Address;$rule.Protocol=$r.Protocol;$rule.Port=$r.Port
+        $rule.Action=if($Block){'Block'}else{'Allow'}
+        if($ui.SetupRuleScope.SelectedIndex -eq 1){$rule.Direction='Ausgehend';$rule.Address='*';$rule.Protocol=0;$rule.Port=0}
+        elseif($ui.SetupHostIcmp.IsChecked -and $r.Protocol -in @(1,58)){$rule.Path='*'}
+        if($Temporary){$rule.ExpiresUtc=[datetime]::UtcNow.AddMinutes(5)};$rule.Validate()
+        $action=if($Block){'Sperren'}elseif($Temporary){'5 Minuten erlauben'}else{'Dauerhaft speichern'}
+        $warning=if($rule.Path -eq '*'){'Die ICMP-Regel gilt für den gesamten Rechner und alle ICMP-Typen zu diesem Ziel.'}elseif(Is-Protected $rule.Path){'Windows-Sammelprozess: Mehrere Dienste können denselben EXE-Pfad nutzen.'}else{'Alle Instanzen dieses EXE-Pfads sind betroffen; keine Bindung an einen Datei-Hash.'}
+        if([Windows.MessageBox]::Show($window,($action+': '+$rule.Name+[Environment]::NewLine+$rule.Scope+[Environment]::NewLine+$warning),'Regel prüfen','YesNo','Question') -ne 'Yes'){return}
+        [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Rule';Rule=$rule}));Add-Event 'Regel gespeichert' $r.Program $rule.Name;Update-AccessMode
+    }catch{Show-Error $_.Exception.GetBaseException().Message}
 }
 function Update-AccessMode {
-    if($script:accessActive -and $accessWatch){
-        foreach($entry in $accessWatch.Drain()){$accessQueue.Observe($entry,$accessGate.OwnBlock($entry.FilterId))}
-        try{
-            $accessGate.Verify();$accessWatch.VerifyAudit()
-            if(-not $accessWatch.Healthy){throw $accessWatch.Warning}
-            if($accessQueue.Overflow -gt 0 -or $accessQueue.Unknown -gt 0){throw 'Anfragen nicht vollständig zugeordnet: '+$accessQueue.Unknown+' unbekannt, '+$accessQueue.Overflow+' wegen Kapazitätsgrenze nicht gelistet.'}
-            $script:accessVerified=$true;$script:accessLastVerified=[datetime]::UtcNow
-        }catch{$script:accessVerified=$false;$script:accessProblem=$_.Exception.GetBaseException().Message}
-        Refresh-AccessLists
-    }
-    Refresh-AccessState;Show-AccessRequest;Refresh-AccessSockets
+    try{
+        $script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'});$script:accessVerified=$setupStatus.Verified;$script:accessActive=$setupStatus.Config.Ask
+        $ui.InstallControlService.Visibility='Collapsed';$ui.StartAccess.IsEnabled=$accessVerified -and -not $accessActive;$ui.StopAccess.IsEnabled=$accessVerified -and $accessActive
+        $ui.AccessHeadline.Text=if(-not $accessVerified){'Filterstatus nicht bestätigt'}elseif($accessActive){'Nachfragen aktiv · unbekannte Zugriffe zunächst gesperrt'}else{'Beobachten · gezielte Einzelregeln bleiben aktiv'}
+        $ui.AccessExplanation.Text=if(-not $accessVerified){$setupStatus.Error}else{'Der Hintergrunddienst arbeitet auch bei geschlossenem Fenster. Kommunikation auf diesem PC bleibt ausgenommen.'}
+        $ui.AccessProof.Text='Filterprüfung: '+$setupStatus.CheckedUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$setupStatus.Warning;$ui.AccessGlobalStatus.Text=$ui.AccessHeadline.Text
+        $ui.AccessGlobalStatus.Foreground=if(-not $accessVerified -or $setupStatus.Warning){'#A4680B'}else{'#087F8C'};$script:trayStatusText=$ui.AccessHeadline.Text
+        $ui.RecoveryBanner.Visibility=if($setupStatus.RecoveryUtc){'Visible'}else{'Collapsed'}
+        if($setupStatus.RecoveryUtc){$seconds=[Math]::Max(0,[int]($setupStatus.RecoveryUtc-[datetime]::UtcNow).TotalSeconds);$ui.RecoveryText.Text='Sicherheitsrückweg in '+$seconds+' Sekunden. Benötigte Zugriffe testen und die Einrichtung bestätigen.'}
+        $selected=$ui.AccessRequests.SelectedItem;$key=if($selected){$selected.Key}else{''};$ui.AccessRequests.ItemsSource=@($setupStatus.Attempts)
+        $match=$setupStatus.Attempts | Where-Object {$_.Key -eq $key} | Select-Object -First 1
+        if($match){$ui.AccessRequests.SelectedItem=$match}elseif($setupStatus.Attempts.Count){$ui.AccessRequests.SelectedIndex=0}
+        $chosenRule=$ui.SetupRules.SelectedItem;$ruleId=if($chosenRule){$chosenRule.Id}else{''};$ui.SetupRules.ItemsSource=@($setupStatus.Config.Rules);$ui.SetupRules.SelectedItem=$setupStatus.Config.Rules | Where-Object {$_.Id -eq $ruleId} | Select-Object -First 1
+        $ui.SetupHistory.ItemsSource=@($setupStatus.History)
+        $ui.AccessEmpty.Text=if($setupStatus.Attempts.Count){'Pro Programm, Gegenstelle und Dienst gesammelt. '+$setupStatus.Attempts.Count+' Einträge seit Dienststart.'}else{'Noch keine Blockereignisse angezeigt. Eine leere Liste beweist keinen fehlenden Netzwerkzugriff.'}
+        Update-SetupNotifications;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection}
+    }catch{
+        $script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
+        $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
+    };Show-AccessRequest
+}
+function Update-SetupNotifications {
+    if(-not $script:tray){return};$fresh=@()
+    foreach($a in $setupStatus.Attempts){$path=[Netzblick.ProcessLineage]::Normalize($a.Path);$newProgram=$setupNotifiedPrograms.Add($path);$newTarget=$setupNotifiedTargets.Add($a.Key);$decided=@($setupStatus.Config.Rules | Where-Object {$_.Matches($a)}).Count -gt 0;if(-not $decided -and ($newProgram -or ($ui.NotifyTargets.IsChecked -and $newTarget))){$fresh+=$a}}
+    if($fresh.Count -and $ui.NotifyAttempts.IsChecked){$script:setupPendingNotice=$fresh[-1]}
+    if($script:setupPendingNotice -and $ui.NotifyAttempts.IsChecked -and ([datetime]::UtcNow-$setupLastNotice).TotalSeconds -ge 15){$a=$script:setupPendingNotice;$tray.BalloonTipTitle='Netzblick · blockierter Verbindungsversuch';$tray.BalloonTipText=$a.Program+' → '+$a.Target+'. Zum Prüfen anklicken.';$script:setupNoticeTarget=$a;$tray.ShowBalloonTip(6000);$script:setupLastNotice=[datetime]::UtcNow;$script:setupPendingNotice=$null}
 }

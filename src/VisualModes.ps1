@@ -120,7 +120,7 @@ function Add-CountryLine($overlay,$from,$to,[string]$color,[bool]$dashed=$false)
         [void]$overlay.Children.Add($line)
     }
 }
-function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[string]$color='#4EA5FF',[bool]$selectable=$false) {
+function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[string]$color='#1672B6',[bool]$selectable=$false) {
     $point=Map-Point $location
     $dot=New-Object Windows.Shapes.Ellipse
     $dot.Width=12;$dot.Height=12;$dot.Fill=$color;$dot.Stroke='#D0EDFF';$dot.StrokeThickness=1
@@ -139,7 +139,7 @@ function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[s
 }
 function Draw-Origin($overlay) {
     $origin=$ui.OriginCountry.SelectedItem
-    if($origin){Add-CountryMarker $overlay $origin ('Start: '+$origin.Code) ('Manuell gewähltes Ausgangsland: '+$origin.Name+' · keine automatische Standortmessung') '#39DCC0'}
+    if($origin){Add-CountryMarker $overlay $origin ('Start: '+$origin.Code) ('Manuell gewähltes Ausgangsland: '+$origin.Name+' · keine automatische Standortmessung') '#087F8C'}
 }
 function Refresh-World([switch]$Rebuild) {
     if($Rebuild){
@@ -171,9 +171,9 @@ function Refresh-World([switch]$Rebuild) {
     $origin=$ui.OriginCountry.SelectedItem
     foreach($countryGroup in $groups){
         $location=$countryGroup.Group[0].Location
-        if($origin){Add-CountryLine $ui.WorldOverlay $origin $location '#4EA5FF'}
+        if($origin){Add-CountryLine $ui.WorldOverlay $origin $location '#1672B6'}
         $tooltip=$location.Country+' · '+$countryGroup.Count+' Programm-/IP-Zuordnungen · Länderpunkt, kein Serverstandort'
-        Add-CountryMarker $ui.WorldOverlay $location ($location.Code+' · '+$countryGroup.Count) $tooltip '#4EA5FF' $true
+        Add-CountryMarker $ui.WorldOverlay $location ($location.Code+' · '+$countryGroup.Count) $tooltip '#1672B6' $true
     }
     Draw-Origin $ui.WorldOverlay
     $unplotted=@($peers | Where-Object {-not $_.Location.CanPlot}).Count
@@ -224,19 +224,19 @@ function Draw-ProbeMap {
             $responders=@($hopGroup.Group | Where-Object {$null -ne $_.Location -and $_.Location.CanPlot})
             if($responders.Count -eq 0){$previous=$null;continue}
             $point=$responders[0]
-            if($previous -and ($previousHop+1) -eq $point.Number){Add-CountryLine $ui.RouteOverlay $previous $point.Location '#F5C477' $true}
+            if($previous -and ($previousHop+1) -eq $point.Number){Add-CountryLine $ui.RouteOverlay $previous $point.Location '#9C650A' $true}
             $previous=$point.Location;$previousHop=$point.Number
         }
     }elseif($origin){
-        foreach($item in @($points | Group-Object Code)){Add-CountryLine $ui.RouteOverlay $origin $item.Group[0].Location '#39DCC0'}
+        foreach($item in @($points | Group-Object Code)){Add-CountryLine $ui.RouteOverlay $origin $item.Group[0].Location '#087F8C'}
     }
     foreach($countryGroup in @($points | Group-Object Code)){
         $location=$countryGroup.Group[0].Location
         $numbers=($countryGroup.Group.Number | Select-Object -Unique)-join ','
-        Add-CountryMarker $ui.RouteOverlay $location ($location.Code+' · '+$numbers) ($location.Country+' · Probe/Hop '+$numbers+' · nur Länderzuordnung') '#F5C477'
+        Add-CountryMarker $ui.RouteOverlay $location ($location.Code+' · '+$numbers) ($location.Country+' · Probe/Hop '+$numbers+' · nur Länderzuordnung') '#9C650A'
     }
     if($null -ne $probeTarget -and $probeTarget.CanPlot -and @($points | Where-Object {$_.Code -eq $probeTarget.Code}).Count -eq 0){
-        Add-CountryMarker $ui.RouteOverlay $probeTarget ('Ziel: '+$probeTarget.Code) ('Aufgelöstes Ziel: '+$probeTarget.Address+' · noch keine ICMP-Antwort an diesem Länderpunkt bestätigt') '#91ADC8'
+        Add-CountryMarker $ui.RouteOverlay $probeTarget ('Ziel: '+$probeTarget.Code) ('Aufgelöstes Ziel: '+$probeTarget.Address+' · noch keine ICMP-Antwort an diesem Länderpunkt bestätigt') '#57677B'
     }
     Draw-Origin $ui.RouteOverlay
 }
@@ -249,14 +249,14 @@ function Draw-Latency {
     for($i=0;$i -le 2;$i++){
         $y=12+$i*44
         Add-VisualLine $canvas 55 $y 980 $y '#28425A'
-        Add-VisualText $canvas (($max*(2-$i)/2).ToString('0.#')+' ms') 0 ($y-8) '#91ADC8' 11
+        Add-VisualText $canvas (($max*(2-$i)/2).ToString('0.#')+' ms') 0 ($y-8) '#57677B' 11
     }
     $trace=$null -ne $script:probe -and $script:probe.Command.Mode -eq 'tracert'
     $slots=if($trace){30}else{10}
     $ui.LatencyTitle.Text=if($trace){'ICMP-RÜCKLAUFZEIT PRO HOP · keine Laufzeit einzelner Leitungsabschnitte'}else{'PING-ANTWORTZEITEN · Rot am unteren Rand = keine erfolgreiche Zeitmessung'}
     for($i=1;$i -le $slots;$i++){
         $x=55+($i-1)*925/($slots-1)
-        if(-not $trace -or $i -eq 1 -or $i%5 -eq 0){Add-VisualText $canvas ([string]$i) ($x-3) 111 '#91ADC8' 11}
+        if(-not $trace -or $i -eq 1 -or $i%5 -eq 0){Add-VisualText $canvas ([string]$i) ($x-3) 111 '#57677B' 11}
     }
     $last=$null
     foreach($item in $probeRows.ToArray()){
@@ -264,11 +264,12 @@ function Draw-Latency {
         if($trace){$x+=($item.Attempt-2)*3}
         if($item.HasLatency){
             $y=100-$item.Milliseconds/$max*88
-            if(-not $trace -and $last -and $last.Number -eq ($item.Number-1)){Add-VisualLine $canvas $last.X $last.Y $x $y '#39DCC0' 2}
+            if(-not $trace -and $last -and $last.Number -eq ($item.Number-1)){Add-VisualLine $canvas $last.X $last.Y $x $y '#087F8C' 2}
             $dot=New-Object Windows.Shapes.Ellipse
-            $dot.Width=6;$dot.Height=6;$dot.Fill='#39DCC0';$dot.ToolTip='Nr. '+$item.Number+' · '+$item.Address+' · '+$item.Latency+' · '+$item.Status
+            $dot.Width=6;$dot.Height=6;$dot.Fill='#087F8C';$dot.ToolTip='Nr. '+$item.Number+' · '+$item.Address+' · '+$item.Latency+' · '+$item.Status
             [Windows.Controls.Canvas]::SetLeft($dot,$x-3);[Windows.Controls.Canvas]::SetTop($dot,$y-3);[void]$canvas.Children.Add($dot)
             $last=@{Number=$item.Number;X=$x;Y=$y}
-        }else{Add-VisualLine $canvas ($x-3) 97 ($x+3) 103 '#FF7E85' 2;Add-VisualLine $canvas ($x-3) 103 ($x+3) 97 '#FF7E85' 2;$last=$null}
+        }else{Add-VisualLine $canvas ($x-3) 97 ($x+3) 103 '#AF3B4B' 2;Add-VisualLine $canvas ($x-3) 103 ($x+3) 97 '#AF3B4B' 2;$last=$null}
     }
 }
+

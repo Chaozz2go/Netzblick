@@ -1,0 +1,15 @@
+﻿using System;
+using System.Collections.Generic;
+using Netzblick;
+// UI fixtures only. This file is never part of the installed app/service.
+namespace Netzblick {
+ public static class SetupClient {
+  static SetupStatus status;
+  public static void Scenario(string path,int scenario){
+   status=new SetupStatus{Ok=true,Verified=scenario!=3,Error=scenario==3?"Test: Filterprüfung fehlgeschlagen":"",Warning="Beispieldaten – keine Netzwerkfilter aktiv",CheckedUtc=DateTime.UtcNow,StartedUtc=DateTime.UtcNow,Config=new SetupConfig{Ask=scenario>0},Attempts=new List<SetupAttempt>(),History=new List<string>{"12:00 · Testdaten geladen"}};
+   if(scenario>0)status.Attempts.Add(new SetupAttempt{Key="fixture",Path=path,Program="powershell.exe",Direction="Ausgehend",Address="10.0.0.10",Protocol=6,Port=636,Count=12,OwnBlock=true,FirstUtc=DateTime.UtcNow,LastUtc=DateTime.UtcNow});
+   if(scenario==2){status.Config.Rules.Add(new SetupRule{Id=Guid.NewGuid().ToString(),Name="LDAPS zum DC",Path=path,Direction="Ausgehend",Address="10.0.0.10",Protocol=6,Port=636,Action="Allow",ExpiresUtc=DateTime.UtcNow.AddMinutes(5)});status.RecoveryUtc=DateTime.UtcNow.AddMinutes(2);}
+  }
+  public static SetupStatus Send(SetupCommand command){if(command.Operation!="Status")throw new InvalidOperationException("UI-Fixture erlaubt keine Befehle.");return status;}
+ }
+}

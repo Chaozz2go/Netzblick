@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$Check)
+param([switch]$Check,[switch]$Tray)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 
@@ -10,14 +10,20 @@ try {
         $principal = New-Object Security.Principal.WindowsPrincipal($identity)
         if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
             $exe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-            Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"')
+            Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'+$(if($Tray){' -Tray'}else{''}))
             exit
         }
     }
     $script:appRoot=$PSScriptRoot
+    $script:startInTray=[bool]$Tray
+    if(-not $Check){
+        $created=$false
+        $script:uiMutex=New-Object Threading.Mutex($true,('Local\Netzblick.UI.'+$identity.User.Value),[ref]$created)
+        if(-not $created){[void][Windows.MessageBox]::Show('Netzblick läuft bereits. Über das Tray-Symbol öffnen.','Netzblick');exit}
+    }
     # Windows PowerShell 5.1 does not reference System.Xml automatically.
-    $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll')
-    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'))
+    $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll')
+    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'),(Join-Path $appRoot 'src\SetupCore.cs'),(Join-Path $appRoot 'src\SetupTransport.cs'))
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
@@ -66,6 +72,7 @@ try {
     . (Join-Path $appRoot 'src\UserModes.ps1')
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
     . (Join-Path $appRoot 'src\AccessMode.ps1')
+    . (Join-Path $appRoot 'src\TrayMode.ps1')
 
     function Show-Error([string]$message) {
         [void][Windows.MessageBox]::Show($window,$message,'Netzblick','OK','Error')
@@ -99,19 +106,19 @@ try {
             $restricted = [int]$policy.LocalPolicyModifyState
             if ($disabled.Count -gt 0) {
                 $ui.FirewallStatus.Text = 'Firewall aus: '+(($disabled | ForEach-Object {$_.Name}) -join ', ')
-                $ui.FirewallStatus.Foreground = '#FF7E85'
+                $ui.FirewallStatus.Foreground = '#AF3B4B'
             } elseif ($restricted -ne 0) {
                 $ui.FirewallStatus.Text = 'Firewall aktiv · lokale Regeln eingeschränkt'
-                $ui.FirewallStatus.Foreground = '#F5C477'
+                $ui.FirewallStatus.Foreground = '#9C650A'
             } else {
                 $ui.FirewallStatus.Text = 'Windows-Firewall aktiv'
-                $ui.FirewallStatus.Foreground = '#39DCC0'
+                $ui.FirewallStatus.Foreground = '#087F8C'
             }
             $script:lastRuleRead = Get-Date
         } catch {
             $script:ruleError = $_.Exception.Message
             $ui.FirewallStatus.Text = 'Firewallstatus nicht verfügbar'
-            $ui.FirewallStatus.Foreground = '#F5C477'
+            $ui.FirewallStatus.Foreground = '#9C650A'
         }
     }
     function Is-Protected([string]$path) {
@@ -124,7 +131,7 @@ try {
         if ($value -ge 1024) { return ('{0:N1} KB/s' -f ($value/1024)) }
         return ('{0:N0} B/s' -f $value)
     }
-    function Map-Label([string]$text,[double]$x,[double]$y,[double]$width,[string]$color='#E5EDF7',[int]$fontSize=13) {
+    function Map-Label([string]$text,[double]$x,[double]$y,[double]$width,[string]$color='#19283C',[int]$fontSize=13) {
         $label = New-Object Windows.Controls.TextBlock
         $label.Text=$text; $label.Width=$width; $label.FontSize=$fontSize; $label.Foreground=$color
         $label.TextTrimming='CharacterEllipsis'; $label.ToolTip=$text
@@ -135,21 +142,21 @@ try {
         $ui.Map.Children.Clear()
         if ($null -eq $program) { Map-Label 'Keine passenden Programme gefunden.' 20 100 550; return }
         $peers = @($sockets | Where-Object {$_.Address} | Group-Object Remote | Sort-Object Count -Descending)
-        Map-Label $program.Name 6 100 165 '#E5EDF7' 18
-        Map-Label ($sockets.Count.ToString()+' Beobachtungen') 6 128 160 '#91ADC8'
-        if ($peers.Count -eq 0) { Map-Label 'Keine Gegenstelle erfasst' 230 105 350 '#91ADC8'; return }
+        Map-Label $program.Name 6 100 165 '#19283C' 18
+        Map-Label ($sockets.Count.ToString()+' Beobachtungen') 6 128 160 '#57677B'
+        if ($peers.Count -eq 0) { Map-Label 'Keine Gegenstelle erfasst' 230 105 350 '#57677B'; return }
         $limit=[Math]::Min(6,$peers.Count)
         for ($i=0;$i -lt $limit;$i++) {
             $y=18+$i*34
             $line=New-Object Windows.Shapes.Path
-            $line.Stroke='#4EA5FF'; $line.StrokeThickness=2
+            $line.Stroke='#1672B6'; $line.StrokeThickness=2
             $line.Data=[Windows.Media.Geometry]::Parse(('M 170,120 C 235,120 250,{0} 330,{0}' -f ($y+8)))
             [void]$ui.Map.Children.Add($line)
             $label=$peers[$i].Group[0].PeerName
             if(-not $label -or $label -notlike '*(Reverse-DNS)'){$label=$peers[$i].Name}
             Map-Label $label 342 $y 250 '#B8DAFA'
         }
-        if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 '#91ADC8' 11 }
+        if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 '#57677B' 11 }
     }
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
@@ -167,7 +174,12 @@ try {
         $ui.Connections.ItemsSource=$displayRows;Show-ConnectionDetails
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
         $ui.ProgramStatus.Text=Network-ModeLabel $mode
-        if($script:accessActive){$decision=$accessQueue.Find($program.Key);$ui.ProgramStatus.Text+=' · Kontrollmodus: '+$(if($decision -and $decision.Decision -eq 'Allowed'){'Sitzungsfreigabe vorhanden'}else{'keine Sitzungsfreigabe'})}
+        $ui.ProgramStatus.Text='Frühere Windows-Regeln: '+$ui.ProgramStatus.Text
+        if($script:setupStatus -and $setupStatus.Verified){
+            $watched=@($setupStatus.Config.WatchedPaths | Where-Object {[Netzblick.ProcessLineage]::Normalize($_) -eq [Netzblick.ProcessLineage]::Normalize($program.Path)}).Count -gt 0
+            $ruleCount=@($setupStatus.Config.Rules | Where-Object {$_.Path -eq '*' -or [Netzblick.ProcessLineage]::Normalize($_.Path) -eq [Netzblick.ProcessLineage]::Normalize($program.Path)}).Count
+            $ui.ProgramStatus.Text+=[Environment]::NewLine+'Dienst: '+$(if($watched){'Prüfsperre vorhanden'}elseif($accessActive){'Nachfragen aktiv'}else{'Beobachten'})+' · '+$ruleCount+' Einzelregeln; Details unter Regeln'
+        }else{$ui.ProgramStatus.Text+=[Environment]::NewLine+'Dienststatus unbekannt'}
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=(-not (Is-Protected $program.Path)) -and (-not $ruleError) -and $mode -ne 'Modified' -and -not $script:accessActive}
         $sample=$trafficSamples[$program.Key]
         $ui.ProgramTraffic.Text=if($sample){'Seit Netzblick-Start (ETW):'+"`n↑ "+(Format-Bytes $sample.Sent)+' gesendet'+"`n↓ "+(Format-Bytes $sample.Received)+' empfangen'+"`n"+$(if($sample.RateReady){(Format-Rate $sample.SentRate)+' ↑ · '+(Format-Rate $sample.ReceivedRate)+' ↓'}else{'Rate wird ermittelt …'})}else{'Für diesen Programmpfad bisher keine Byte-Messung verfügbar.'}
@@ -256,15 +268,17 @@ try {
     function Show-Panel([string]$name) {
         $ui.MainShell.RowDefinitions[1].Height=if($name -eq 'AccessPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
         $ui.SummaryMetrics.Visibility=if($name -eq 'AccessPanel'){'Collapsed'}else{'Visible'}
-        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab')){$ui[$tab].Background='#20364E'}
+        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab')){$ui[$tab].Background='#EDF2F6'}
         $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} default{'LiveTab'}}
-        $ui[$activeTab].Background='#24547B'
+        $ui[$activeTab].Background='#DDF0F2'
         foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility=if($name -eq 'LivePanel'){'Visible'}else{'Collapsed'}
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
         if($name -eq 'OverviewPanel'){Refresh-Overview}
     }
+    $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
+    $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
     $ui.AccessTab.Add_Click({Show-Panel 'AccessPanel'})
     $ui.OverviewTab.Add_Click({Show-Panel 'OverviewPanel'})
     foreach($key in @('BackFromRules','BackFromHistory','BackFromWorld','BackFromTerminal')){$ui[$key].Add_Click({Show-Panel 'LivePanel'})}
@@ -306,6 +320,7 @@ try {
     Initialize-EndpointNames
     Initialize-InspectionMode
     Initialize-AccessMode
+    Initialize-TrayMode
     $timer=New-Object Windows.Threading.DispatcherTimer
     $timer.Interval=[timespan]::FromMilliseconds(250)
     $script:nextSample=[datetime]::MinValue
@@ -347,12 +362,15 @@ try {
             if($null -eq $script:job -and (Get-Date) -ge $nextSample){$script:job=[Netzblick.Reader]::Start()}
         }catch{$ui.Status.Text='Erfassungsfehler: '+$_.Exception.Message;$script:nextSample=(Get-Date).AddSeconds(5)}
     })
-    $window.Add_Closed({$timer.Stop();$probeTimer.Stop();if($null -ne $script:probe){$script:probe.Cancel()}})
+    $window.Add_Closed({if($script:uiMutex){$uiMutex.ReleaseMutex();$uiMutex.Dispose()};$timer.Stop();$probeTimer.Stop();if($null -ne $script:probe){$script:probe.Cancel()}})
     $timer.Start()
-    [void]$window.ShowDialog()
+    $script:application=New-Object Windows.Application
+    $application.ShutdownMode='OnMainWindowClose'
+    [void]$application.Run($window)
 } catch {
     $message=$_.Exception.Message
     [void][Windows.MessageBox]::Show("Netzblick konnte nicht starten.`n`n$message",'Netzblick','OK','Error')
     Write-Error $message
     exit 1
 }
+

@@ -1,54 +1,57 @@
-Netzblick 0.6.0: 2.256 Kernprüfungen und UI-Prüfungen mit Fakes bestanden.
-Neue WFP-Sperrfunktion NICHT mit echten Filtern aktiviert/getestet.
-Geräteprüfung erforderlich; siehe docs/Version-0.6.0.md.
+﻿Netzblick 0.7.0 – Entwicklungsversion
 
-Netzblick 0.5.0: aktueller Prüfstand und Grenzen unter docs/Version-0.5.0.md.
-Die folgenden Angaben dokumentieren den vorherigen Stand.
+In dieser Linux-Entwicklungsumgebung bestanden:
+- 2.287 Kernprüfungen unter .NET 8, einschließlich 31 neuer Prüfungen
+  zu genauen Verbindungsregeln, eingehenden Dienstports, ICMP ohne Ports,
+  Ablaufzeiten, Kapazitätsgrenzen und Rücknahme nach Speicher-/Filterfehlern.
+- Alle zwölf C#-Dateien der GUI mit genau den tatsächlichen Startreferenzen
+  gegen .NET Framework 4.8 / C# 5 kompiliert.
+- Windows-x64-Hintergrunddienst gegen .NET Framework 4.8 / C# 5 kompiliert.
+- Alle PowerShell-Dateien mit dem nativen PowerShell-Sprachparser geprüft.
+- Sechs XAML-Dateien als XML geprüft; 116 benannte Steuerelemente und
+  110 direkte Skriptverweise auf UI-Elemente vollständig aufgelöst.
+- Neue WFP-Bedingungs-GUIDs mit Microsofts SDK-Header abgeglichen.
 
-Netzblick 0.4.1 – Prüfstand
+Die Windows-CI im Repository prüft zusätzlich den echten Startcheck sowie
+vier UI-Zustände und acht Renderings ausschließlich mit Fake-Dienstantworten.
+Auf dem isolierten Windows-Runner ist zusätzlich ein nativer Dienst-/IPv4-
+TCP-Test mit eigener Fixture vorgesehen (kann bei fehlender Baseline
+übersprungen werden). Dessen Ergebnis steht im GitHub-Actions-Lauf; es ist kein Beweis
+für die echte Netzwerksperre. Hier wurde keine WPF-Oberfläche ausgeführt.
 
-Bestanden in der Entwicklungsumgebung:
-- 0.4.1: Fehlende System.Xml-Referenz aus dem Startskript korrigiert.
-  Fehler ohne XML-Referenz reproduziert; alle sechs Basis-C#-Dateien
-  mit ausschließlich den tatsächlichen Startreferenzen und mscorlib
-  gegen .NET Framework 4.8/C# 5 erfolgreich kompiliert. Die vorherige
-  Prüfung nutzte zu viele Referenzen und erkannte diesen Startfehler nicht.
-- Basis-C#-Quellen gegen .NET Framework 4.8/C# 5 kompiliert.
-- Separates ETW-Modul mit TraceEvent 3.1.21 gegen .NET Framework 4.8
-  kompiliert; Abhängigkeiten lokal mitgeliefert.
-- Fünf PowerShell-Dateien mit nativem PowerShell-Parser geprüft.
-- 7219 Kernprüfungen unter .NET 8 bestanden. Darunter:
-  53 Prüfungen der Inspektionslogik und 2075 neue Prüfungen für
-  IP-Komplementbereiche, CIDR-/Range-Normalisierung, IPv4/IPv6,
-  private Adressgrenzen, ETW-Zähler und verspätete PID-Ereignisse.
-- Fünf XAML-Dateien als XML geprüft; 86 benannte Steuerelemente,
-  81 Skriptverweise auf UI-Elemente vollständig aufgelöst.
-- Git-Arbeitsstand und mitgepackter Verlauf geprüft.
-- ZIP-Datei: CRC und Datenbankgröße geprüft; nach Übertragung zusätzlich
-  Größe und Hash mit der geprüften lokalen Kopie verglichen.
+Noch nicht als bestanden dargestellt:
+- Installation, ACLs, Tray-Autostart und tatsächlicher Windows-Dienstbetrieb.
+- Echte WFP-Filterinstallation, Blockierung und Freigabe für TCP, UDP,
+  IPv4, IPv6 und ICMP; bestehende Verbindungen; Zusammenspiel mit VPNs.
+- Reale Security-Ereigniszustellung und Audit-Wiederherstellung.
+- Ablauf und Rücknahme temporärer Regeln sowie Sicherheitsrückweg im
+  echten Dienst, einschließlich Prozessabbruch und Neustart.
+- Tatsächliche Sperrwirkung einer vorab gewählten EXE und Hilfsprozesse.
 
-Weiterhin offen – nicht als bestanden dargestellt:
-- WPF-Darstellung und tatsächliche Bedienung auf Windows.
-- ETW-Echtbetrieb, Byte-/PID-/Gegenstellenzuordnung auf Windows und
-  Verhalten neben anderen ETW-Sitzungen.
-- COM-Firewalländerungen, private Adressbereiche im echten Netzwerk,
-  Rückgängig und Wiederanlauf einschließlich fremder Regeländerungen.
-- Windows-Audit, Security-Ereignisabonnement und Crash-Wiederherstellung.
-- ICMP-Gerätetests unter Windows.
+Gerätetest auf einem lokal bedienten Windows-Testrechner:
+1. Installieren. Dienstzustand und Registry-Audit-Ausgangszustand festhalten.
+   Beobachtungsmodus muss zunächst ohne globale Netzblick-Grundsperre laufen.
+2. Bekannte lokale EXE vorab sperren, danach selbst starten. TCP/UDP/IPv4/IPv6
+   zu kontrollierten Gegenstellen jeweils unabhängig auf der Gegenseite prüfen.
+   Keine IPv6-Erreichbarkeit ist kein bestandener IPv6-Sperrtest.
+3. Nachfragemodus einschalten und ohne Bestätigung warten: nach zwei Minuten
+   muss der vorherige Regelstand zurückkehren. Danach erneut einschalten,
+   gezielte DNS/LDAP-Freigaben testen und Einrichtung bestätigen.
+4. Fünf-Minuten-Freigabe, dauerhafte Freigabe, Rücknahme und weitere
+   Windows-Sperre testen. Eingehende Verbindungen benötigen gegebenenfalls
+   zusätzlich eine passende Windows-Firewall-Zulassungsregel (README).
+5. Fenster schließen/minimieren, Tray öffnen, Benachrichtigungen aus/an,
+   neue Ziele optional, kein automatisches Erlauben bei ausbleibender Antwort.
+6. Oberfläche ausdrücklich beenden: Dienstfilter müssen weiterarbeiten.
+   Dienst stoppen/abbrechen: dynamische Filter entfallen; vorhandene
+   Windows-Firewallregeln müssen erhalten bleiben. Automatischen Wiederanlauf
+   prüfen; es besteht in dieser Version keine lückenlose Start-/Crash-Sperre.
+7. Nicht bestätigte Einrichtung während eines Dienstabsturzes: beim nächsten
+   Dienststart vorherigen Stand aus dem Rückwegjournal wiederherstellen.
+8. Dienst-/Datendateien und Pipe mit nicht erhöhtem Konto prüfen: kein
+   Schreibzugriff oder Steuerbefehl. Kein anonymer/entfernter Pipe-Zugriff.
+9. Deinstallation: Dienst/Autostart weg, Daten erhalten, fremde Firewallregeln
+   unverändert, Audit-Wiederherstellung beziehungsweise Konflikt sichtbar.
 
-Gerätetest:
-1. Mit bekanntem Browser/Download prüfen: ETW-Bytes und Richtung mit
-   einem unabhängigen Werkzeug vergleichen; erste Rate benötigt zwei Proben.
-2. Falls ETW nicht verfügbar ist, muss die UI unbekannte Werte anzeigen
-   und die Firewallbedienung weiter funktionieren.
-3. Windows-Standard → Nur private Netze → Netzwerk sperren → zweimal
-   rückgängig. Lokalen NAS-/Druckerzugriff und öffentliche Ziele separat
-   testen. Keine erfolgreiche Freigabe gegen andere Regeln behaupten.
-4. Nach einem Moduswechsel eine betroffene eigene Regel außerhalb der
-   App ändern. Rückgängig muss die fremde Änderung erhalten und ablehnen.
-5. Ausgangsbestand/gesammelte Meldungen, beendete Programme, UDP/IPv6,
-   Pausieren/Fortsetzen und Gegenstellen in Detailansicht/Karte prüfen.
-6. Prüfsitzung und Audit-Wiederherstellung entsprechend docs/Pruefmodus.md.
-
-Test-Netzblick.ps1 startet keine ETW-Sitzung und verändert keine Firewall-
-oder Audit-Einstellung. Die Kernprüfungen ersetzen keinen Gerätetest.
+Die neue Version ist erst nach diesen Gerätetests als verlässlicher
+Sicherheitsgewinn zu bewerten. Keine Sandbox, keine TLS-Inhaltsprüfung.
