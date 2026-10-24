@@ -9,6 +9,12 @@ namespace Netzblick {
   public SetupChangeFailure(string text,bool restored,Exception inner):base(text,inner){Restored=restored;}
  }
  public static class SetupChanges {
+  public static void Upsert(SetupConfig config,SetupRule rule){
+   rule.Validate();var keep=config.Rules.Where(r=>!(r.Covers(rule)&&rule.Covers(r))).ToList();
+   var conflict=keep.FirstOrDefault(r=>r.Action=="Block"&&r.Covers(rule));
+   if(rule.Action=="Allow"&&conflict!=null)throw new InvalidOperationException("Zuerst die übergeordnete Sperrregel zurücknehmen: "+conflict.Name);
+   keep.Add(rule);config.Rules=keep;
+  }
   public static void Commit(SetupConfig before,SetupConfig next,Action<SetupConfig> apply,Action<SetupConfig> save){
    next.Validate();
    try{apply(next);save(next);}
@@ -24,7 +30,7 @@ namespace Netzblick {
   public int Protocol {get;set;} public int Port {get;set;} public DateTime? ExpiresUtc {get;set;}
   public string Scope {get{return (Path=="*"?"Gesamter Rechner":Path)+" · "+Direction+" · "+Address+" · "+ProtocolName(Protocol)+(Port>0?" "+Port:"");}}
   public string Lifetime {get{return ExpiresUtc.HasValue?"Bis "+ExpiresUtc.Value.ToLocalTime().ToString("HH:mm:ss"):"Gespeichert";}}
-  public static string ProtocolName(int p){return p==6?"TCP":p==17?"UDP":p==1?"ICMP (alle Typen)":p==58?"ICMPv6 (alle Typen)":"Alle Protokolle";}
+  public static string ProtocolName(int p){return p==6?"TCP":p==17?"UDP":p==1?"ICMP (alle Typen)":p==58?"ICMPv6 (alle Typen)":p==0?"Alle Protokolle":"Protokoll "+p;}
   public static int Number(string p){int n;return p=="TCP"?6:p=="UDP"?17:p=="ICMP"?1:p=="ICMPv6"?58:Int32.TryParse(p,out n)?n:-1;}
   public void Validate(){
    Guid id;if(!Guid.TryParse(Id,out id))throw new ArgumentException("Ungültige Regel-ID.");
@@ -43,6 +49,7 @@ namespace Netzblick {
    }else if(!AccessQueue.CanAllow(Path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
    if(ExpiresUtc.HasValue&&ExpiresUtc.Value.Kind!=DateTimeKind.Utc)throw new ArgumentException("Ablaufzeit muss UTC sein.");
   }
+  public bool Covers(SetupRule other){return (Path=="*"||ProcessLineage.Normalize(Path)==ProcessLineage.Normalize(other.Path))&&Direction==other.Direction&&(Address=="*"||Address==other.Address)&&(Protocol==0||Protocol==other.Protocol)&&(Port==0||Port==other.Port);}
   public bool Matches(SetupAttempt a){return (Path=="*"||ProcessLineage.Normalize(Path)==ProcessLineage.Normalize(a.Path))&&Direction==a.Direction&&(Address=="*"||Address==a.Address)&&(Protocol==0||Protocol==a.Protocol)&&(Port==0||Port==a.Port);}
  }
  public sealed class SetupConfig {

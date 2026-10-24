@@ -66,15 +66,17 @@ namespace Netzblick {
     case "Watch":
      EnsureWatch();
      if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);
      if(next.Rules.Any(r=>r.Action=="Allow"&&(r.Path=="*"||ProcessLineage.Normalize(r.Path)==ProcessLineage.Normalize(command.Path))))throw new InvalidOperationException("Zuerst bestehende Freigaben dieses Programms unter Regeln zurücknehmen.");
      if(!next.WatchedPaths.Any(p=>ProcessLineage.Normalize(p)==ProcessLineage.Normalize(command.Path)))next.WatchedPaths.Add(command.Path);break;
     case "Unwatch":next.WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==ProcessLineage.Normalize(command.Path));break;
     case "Rule":
      if(command.Rule==null)throw new ArgumentException("Regel fehlt.");command.Rule.Validate();
      if(command.Rule.Path!="*"&&!File.Exists(command.Rule.Path))throw new ArgumentException("Programm existiert nicht mehr.");
+     if(command.Rule.Path!="*")command.Rule.Path=WfpGate.CanonicalPath(command.Rule.Path);
      if(command.Rule.ExpiresUtc.HasValue&&(command.Rule.ExpiresUtc<=DateTime.UtcNow||command.Rule.ExpiresUtc>DateTime.UtcNow.AddHours(24)))throw new ArgumentException("Temporäre Regel muss innerhalb der nächsten 24 Stunden ablaufen.");
      if(next.Rules.Any(r=>r.Id==command.Rule.Id))throw new InvalidOperationException("Regel-ID ist bereits vorhanden.");
-     if(command.Rule.Action=="Block")EnsureWatch();next.Rules.Add(command.Rule);break;
+     if(command.Rule.Action=="Block")EnsureWatch();SetupChanges.Upsert(next,command.Rule);break;
     case "Remove":if(next.Rules.RemoveAll(r=>r.Id==command.RuleId)==0)throw new ArgumentException("Regel nicht gefunden.");break;
     default:throw new ArgumentException("Unbekannter Befehl.");
    }

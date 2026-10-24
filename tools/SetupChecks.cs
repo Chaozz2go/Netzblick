@@ -35,6 +35,12 @@ public static class SetupChecks {
   check(!WfpGate.ValidReturnedFlags(32,true),"disabled block rejected");
   check(!WfpGate.ValidReturnedFlags(1,true),"unexpected persistent flag rejected");
   check(!WfpGate.ValidReturnedFlags(128,true),"unknown returned flag rejected");
+  var decisions=new SetupConfig();var denied=rule();denied.Action="Block";decisions.Rules.Add(denied);
+  var granted=rule();SetupChanges.Upsert(decisions,granted);check(decisions.Rules.Count==1&&decisions.Rules[0].Action=="Allow","same scope decision replaces previous deny");
+  var all=rule();all.Action="Block";all.Address="*";all.Protocol=0;all.Port=0;decisions.Rules.Clear();decisions.Rules.Add(all);
+  try{SetupChanges.Upsert(decisions,rule());throw new Exception("ignored narrow allowance accepted");}catch(InvalidOperationException){check(decisions.Rules.Count==1,"broad block conflict keeps existing decision");}
+  decisions.Rules.Clear();decisions.Rules.Add(denied);var full=rule();full.Address="*";full.Protocol=0;full.Port=0;SetupChanges.Upsert(decisions,full);check(decisions.Rules.Count==2,"broad allowance preserves explicit narrower deny");
+  check(SetupRule.ProtocolName(47)!="Alle Protokolle","unknown protocol never described as all protocols");
   return count;
  }
 }

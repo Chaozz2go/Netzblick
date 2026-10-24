@@ -8,7 +8,7 @@ $principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.Wi
 if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){Write-Warning 'SKIP: Runner ist nicht erhöht; keine automatische UAC-Abfrage.';return}
 $root=Split-Path $PSScriptRoot -Parent
 if(Get-Service NetzblickControl -ErrorAction SilentlyContinue){throw 'Ein vorhandener Dienst wird vom Test nicht verändert.'}
-$sources=@('InspectionCore.cs','WindowsInspection.cs','AccessCore.cs','SetupCore.cs','SetupTransport.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}
+$sources=@('InspectionCore.cs','WindowsInspection.cs','AccessCore.cs','SetupCore.cs','SetupTransport.cs','WindowsAccess.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}
 Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll') -Path $sources
 $directory=Join-Path $env:TEMP ('NetzblickCheck-'+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($directory)
 $fixture=Join-Path $directory 'ConnectFixture.exe'
@@ -16,8 +16,13 @@ $source=Join-Path $directory 'ConnectFixture.cs'
 [IO.File]::WriteAllText($source,'using System;using System.Net.Sockets;class Check{static int Main(){using(var c=new TcpClient()){try{var t=c.ConnectAsync("1.1.1.1",443);if(!t.Wait(4000)||!c.Connected)return 2;return 0;}catch{return 2;}}}}')
 & "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe "/out:$fixture" $source
 if($LASTEXITCODE -ne 0){throw 'Netzwerk-Fixture kompiliert nicht.'}
-function Connect-Fixture {& $fixture;return $LASTEXITCODE -eq 0}
+function Connect-Fixture {
+    $info=New-Object Diagnostics.ProcessStartInfo($fixture);$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+    $process=[Diagnostics.Process]::Start($info)
+    try{$null=$process.Handle;if(-not $process.WaitForExit(8000)){$process.Kill();return $false};$code=$process.ExitCode;Write-Host ('Fixture exit code: '+$code);return $code -eq 0}finally{$process.Dispose()}
+}
 function Send-Control($command){$r=[Netzblick.SetupClient]::Send($command);if(-not $r.Ok){throw $r.Error};return $r}
+$fixture=[Netzblick.WfpGate]::CanonicalPath($fixture)
 $auditBefore=[Netzblick.WindowsAudit]::Query()
 $installed=$false
 try{

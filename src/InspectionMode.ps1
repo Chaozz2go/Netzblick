@@ -5,7 +5,7 @@
         $dialog=New-Object Microsoft.Win32.OpenFileDialog;$dialog.Filter='Windows-Programme (*.exe)|*.exe';$dialog.CheckFileExists=$true
         if(-not $dialog.ShowDialog($window)){return}
         try{
-            $path=[IO.Path]::GetFullPath($dialog.FileName)
+            $path=[Netzblick.WfpGate]::CanonicalPath([IO.Path]::GetFullPath($dialog.FileName))
             if(-not [Netzblick.AccessQueue]::CanAllow($path) -or -not [IO.File]::Exists($path)){throw 'Eine vorhandene lokale EXE auswählen.'}
             if(Is-Protected $path){throw 'Windows-Sammelprozesse nicht mit der Einzelprogramm-Prüfung sperren.'}
             $script:inspectionPath=$path;$script:inspection=@{Path=$path};$script:inspectionMetadata=$null;$script:inspectionActive=$false

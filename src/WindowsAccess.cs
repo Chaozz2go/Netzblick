@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Linq;
+using System.Text;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -140,7 +141,7 @@ namespace Netzblick {
     return new Expected{Id=id,Layer=layer,Action=action,Weight=weight,Specs=specs};
    }
   }
-  byte[] AppId(string path){IntPtr blob=IntPtr.Zero;try{Check(FwpmGetAppIdFromFileName0(path,out blob),"Programm-ID lesen");return ReadBlob(blob);}finally{if(blob!=IntPtr.Zero)FwpmFreeMemory0(ref blob);}}
+  byte[] AppId(string path){if(File.Exists(path))path=CanonicalPath(path);IntPtr blob=IntPtr.Zero;try{Check(FwpmGetAppIdFromFileName0(path,out blob),"Programm-ID lesen");return ReadBlob(blob);}finally{if(blob!=IntPtr.Zero)FwpmFreeMemory0(ref blob);}}
   List<Expected> Build(SetupConfig config){
    config.Validate();var result=new List<Expected>();
    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6}){
@@ -179,6 +180,18 @@ namespace Netzblick {
     next=Build(config);Check(FwpmTransactionCommit0(engine),"Regeländerung bestätigen");
    }catch{FwpmTransactionAbort0(engine);throw;}
    expected.Clear();expected.AddRange(next);allowed.Clear();Verify();
+  }
+  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint creation,uint flags,IntPtr template);
+  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern uint GetFinalPathNameByHandle(SafeFileHandle file,StringBuilder name,uint size,uint flags);
+  public static string CanonicalPath(string path){
+   if(!AccessQueue.CanAllow(path))throw new ArgumentException("Lokaler EXE-Pfad erforderlich.");
+   using(var file=CreateFile(Path.GetFullPath(path),0x80,7,IntPtr.Zero,3,0,IntPtr.Zero)){
+    if(file.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error(),"Programmpfad öffnen");
+    var name=new StringBuilder(32768);uint n=GetFinalPathNameByHandle(file,name,(uint)name.Capacity,0);
+    if(n==0||n>=name.Capacity)throw new Win32Exception(Marshal.GetLastWin32Error(),"Kanonischen Programmpfad lesen");
+    string result=name.ToString();if(result.StartsWith(@"\\?\",StringComparison.Ordinal))result=result.Substring(4);
+    if(!AccessQueue.CanAllow(result))throw new ArgumentException("Der endgültige Programmpfad ist keine lokale EXE.");return result;
+   }
   }
   static byte[] ReadBlob(IntPtr pointer){var blob=(Blob)Marshal.PtrToStructure(pointer,typeof(Blob));if(blob.Size>131072 || blob.Data==IntPtr.Zero)throw new InvalidOperationException("Ungültige WFP-App-ID.");var bytes=new byte[blob.Size];Marshal.Copy(blob.Data,bytes,0,bytes.Length);return bytes;}
   static bool Same(byte[] a,byte[] b){if(a==null || b==null || a.Length!=b.Length)return false;for(int i=0;i<a.Length;i++)if(a[i]!=b[i])return false;return true;}
