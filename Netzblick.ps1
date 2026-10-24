@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$Check,[switch]$Tray,[switch]$SmokeTest)
+param([switch]$Check,[Alias('Tray')][switch]$LaunchInTray,[switch]$SmokeTest)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 
@@ -10,12 +10,12 @@ try {
         $principal = New-Object Security.Principal.WindowsPrincipal($identity)
         if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
             $exe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-            Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'+$(if($Tray){' -Tray'}else{''}))
+            Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'+$(if($LaunchInTray){' -Tray'}else{''}))
             exit
         }
     }
     $script:appRoot=$PSScriptRoot
-    $script:startInTray=[bool]$Tray
+    $script:startInTray=[bool]$LaunchInTray
     if(-not $Check){
         $created=$false
         $script:uiMutex=New-Object Threading.Mutex($true,('Local\Netzblick.UI.'+$identity.User.Value),[ref]$created)
@@ -299,7 +299,8 @@ try {
                 elseif($ui.HistoryPanel.Visibility -eq 'Visible'){$data=@($events.ToArray())}
                 elseif($ui.RulesPanel.Visibility -eq 'Visible'){$data=@($ownRules)}
                 elseif($ui.WorldPanel.Visibility -eq 'Visible'){$data=@($worldPeers | Select-Object -Property @('Program','Address','Country','Code','Count','Kind'))}
-                elseif($ui.InspectionPanel.Visibility -eq 'Visible'){$data=@($inspectionRows.ToArray() | Select-Object -Property @('TimeUtc','RecordId','Program','Pid','Application','Direction','Protocol','Source','SourcePort','Destination','DestinationPort','Country','Kind'))}
+                elseif($ui.InspectionPanel.Visibility -eq 'Visible'){$data=@($inspectionRows | Select-Object -Property @('Program','Path','Direction','Address','Protocol','Port','Count','LastUtc','OwnBlock'))}
+                elseif($ui.AccessPanel.Visibility -eq 'Visible'){$data=@($setupStatus.Attempts | Select-Object -Property @('Program','Path','Direction','Address','Protocol','Port','Count','LastUtc','OwnBlock'))}
                 elseif($ui.TerminalPanel.Visibility -eq 'Visible'){$data=@($probeRows.ToArray() | Select-Object -Property @('Number','Attempt','Address','Latency','Status','Country','Code'))}
                 else{$data=@($rows | Select-Object -Property @('Program','Pid','Path','Protocol','Local','Remote','State'))}
                 if($data.Count -eq 0){throw 'Die gewählte Ansicht enthält noch keine Daten zum Exportieren.'}

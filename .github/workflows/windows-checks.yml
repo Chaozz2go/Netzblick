@@ -25,17 +25,19 @@ jobs:
         shell: powershell
         run: ./tools/Test-ServiceContracts.ps1
       - name: Compile background service
+        id: service_build
         shell: powershell
         run: ./tools/Build-Service.ps1
       - name: WPF fixtures without network changes
         timeout-minutes: 2
         shell: powershell
-        run: ./tools/Test-UI.ps1
+        run: ./tools/Test-UI.ps1 -LogPreview
       - name: Full WPF and tray smoke test
         timeout-minutes: 2
         shell: powershell
         run: ./tools/Test-Application.ps1
       - name: Isolated service and native outbound TCP check
+        if: ${{ !cancelled() && steps.service_build.outcome == 'success' }}
         shell: powershell
         run: ./tools/Test-NativeService.ps1
       - uses: actions/upload-artifact@v4

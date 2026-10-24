@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([string]$OutputDirectory=(Join-Path $PSScriptRoot 'ui-preview'))
+param([string]$OutputDirectory=(Join-Path $PSScriptRoot 'ui-preview'),[switch]$LogPreview)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 $appRoot=Split-Path $PSScriptRoot -Parent
@@ -37,6 +37,10 @@ try{
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
+ }
+ if($LogPreview){
+  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'setup-2-1480.png')))
+  for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
  Write-Output 'PASS: vier UI-Zustände; acht Renderings. Nur Fakes, keine WFP-/Firewall-/Audit-Änderungen.'
 }finally{$accessTimer.Stop();$window.Close()}
