@@ -1,4 +1,4 @@
-function Initialize-Updates {
+﻿function Initialize-Updates {
     $script:updateJob=$null;$script:updateRelease=$null
     $ui.InstalledVersion.Text='Installiert: '+[Netzblick.ReleaseUpdates]::CurrentVersion+' · Build '+[Netzblick.ReleaseUpdates]::CurrentBuild
     $ui.TokenStatus.Text=if([Netzblick.UpdateCredentials]::Exists){'Ein verschlüsselter Zugang ist gespeichert.'}else{'Kein Zugang gespeichert. Die Browser-Downloadseite nutzt deine dortige GitHub-Anmeldung.'}

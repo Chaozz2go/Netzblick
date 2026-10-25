@@ -1,4 +1,4 @@
-function Normalize-ReviewPath([string]$path){return [Netzblick.ProcessLineage]::Normalize($path)}
+﻿function Normalize-ReviewPath([string]$path){return [Netzblick.ProcessLineage]::Normalize($path)}
 function Save-ReviewDecision([string]$path){
     $key=Normalize-ReviewPath $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
 }

@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Web.Extensions.dll','System.Security.dll') -Path (Join-Path $root 'src\ReleaseUpdates.cs')

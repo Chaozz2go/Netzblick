@@ -86,7 +86,7 @@ function Save-UserState {
         $state=@{Version=2;NotifyObserved=$script:notifyObserved;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray())}
         $temp=$userStateFile+'.tmp'
         [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false))
-        if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,$null)}else{[IO.File]::Move($temp,$userStateFile)}
+        if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,($userStateFile+'.bak'))}else{[IO.File]::Move($temp,$userStateFile)}
     }catch{$ui.UserNotice.Text='Einstellungen konnten nicht gespeichert werden: '+$_.Exception.Message}
 }
 function Initialize-UserModes {

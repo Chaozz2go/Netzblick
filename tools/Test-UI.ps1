@@ -49,6 +49,8 @@ if(@($saved.Pending).Count -ne 1 -or $saved.Pending[0].Path -ne $testExe){throw 
 $rulesBefore=$setupStatus.Config.Rules.Count
 Save-ReviewDecision $testExe
 if($newPrograms.Count -ne 0 -or $setupStatus.Config.Rules.Count -ne $rulesBefore){throw 'Prüfmarkierung verändert Regeln oder lässt Eintrag stehen.'}
+$savedAfter=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if(@($savedAfter.Pending).Count -ne 0 -or $ui.UserNotice.Text -like '*nicht gespeichert*'){throw 'Erneutes Speichern der Prüfliste fehlgeschlagen.'}
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
