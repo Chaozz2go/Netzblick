@@ -81,13 +81,14 @@ function Set-NetworkMode([string]$path,[string]$mode,[switch]$NoHistory) {
     Refresh-Detail;Refresh-Overview
 }
 function Save-UserState {
+    param([switch]$ThrowOnError)
     try{
         [void][IO.Directory]::CreateDirectory($userStateDirectory)
         $state=@{Version=2;NotifyObserved=$script:notifyObserved;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray())}
         $temp=$userStateFile+'.tmp'
         [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false))
         if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,($userStateFile+'.bak'))}else{[IO.File]::Move($temp,$userStateFile)}
-    }catch{$ui.UserNotice.Text='Einstellungen konnten nicht gespeichert werden: '+$_.Exception.Message}
+    }catch{if($ThrowOnError){throw};$ui.UserNotice.Text='Einstellungen konnten nicht gespeichert werden: '+$_.Exception.Message}
 }
 function Initialize-UserModes {
     $script:allProgramItems=@();$script:policyReady=$true;$script:changes=New-Object 'System.Collections.Generic.List[object]'

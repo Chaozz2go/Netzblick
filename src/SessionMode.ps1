@@ -45,11 +45,11 @@ function Reset-NetzblickState {
     $script:inspectionActive=$false;$script:inspectionPath='';$script:inspectionMetadata=$null;$script:inspectionMetadataTask=$null;$ui.InspectionPath.Text='';$ui.InspectionMetadata.Text='Wähle eine lokale EXE.'
     $script:setupNotifiedPrograms.Clear();$script:setupNotifiedTargets.Clear();$script:setupPendingNotice=$null;$script:setupNoticeTarget=$null
     $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficProblem='';$script:trafficSampleUtc=[datetime]::UtcNow
-    if($script:traffic){$traffic.Dispose();$script:traffic=$null}
+    if($script:traffic){try{$traffic.Dispose()}catch{$script:trafficProblem='Vorherige Messung konnte nicht geordnet beendet werden.'}finally{$script:traffic=$null}}
     try{$script:traffic=[Netzblick.Capture.NetworkCapture]::Start()}catch{$script:trafficProblem=$_.Exception.GetBaseException().Message}
     $notifyBefore=$script:notifyObserved;$script:notifyObserved=$false
     try{Refresh-Programs}finally{$script:notifyObserved=$notifyBefore}
-    Save-UserState;Update-AccessMode;Refresh-Overview
+    Save-UserState -ThrowOnError;Update-AccessMode;Refresh-Overview
     $ui.UserNotice.Text='Neu begonnen: alle aktuellen Programme erneut prüfen. Sicherung: '+$backup
     if(-not $script:accessVerified){$ui.UserNotice.Text+=' · Filterdienst weiterhin unbestätigt; Details unter Programm prüfen.'}
 }

@@ -75,7 +75,7 @@ foreach($selection in @($single.Key,'EMPTY','*',$single.Key)){
 }
 if($ui.WorldPeers.Items.Count -lt 1){throw 'Einzel-Socket/ETW-Gegenstelle fehlt auf der Karte.'}
 Zoom-World 120 500 250
-if($worldScale -le 1 -or $ui.WorldMap.RenderTransform.Matrix.M11 -le 1){throw 'Mausrad-Zoom verändert die Karte nicht.'}
+if($worldScale -le 1 -or $ui.WorldMap.RenderTransform.Matrix.M11 -le 1){throw ('Mausrad-Zoom verändert die Karte nicht: Scale='+$worldScale+'; Matrix='+$ui.WorldMap.RenderTransform.Matrix)}
 Zoom-World 12000 500 250
 if($worldScale -ne 8){throw 'Zoom-Obergrenze fehlt.'}
 Set-WorldTransform 2 -99999 99999

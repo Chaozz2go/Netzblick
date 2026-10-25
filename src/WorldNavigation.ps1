@@ -1,12 +1,12 @@
 ﻿function Set-WorldTransform([double]$scale,[double]$x,[double]$y){
-    $script:worldScale=[Math]::Max(1,[Math]::Min(8,$scale))
-    $script:worldOffsetX=[Math]::Min(0,[Math]::Max(1000*(1-$worldScale),$x))
-    $script:worldOffsetY=[Math]::Min(0,[Math]::Max(500*(1-$worldScale),$y))
+    $script:worldScale=[Math]::Max(1.0,[Math]::Min(8.0,$scale))
+    $script:worldOffsetX=[Math]::Min(0.0,[Math]::Max(1000*(1-$worldScale),$x))
+    $script:worldOffsetY=[Math]::Min(0.0,[Math]::Max(500*(1-$worldScale),$y))
     $ui.WorldMap.RenderTransform=New-Object Windows.Media.MatrixTransform([Windows.Media.Matrix]::new($worldScale,0,0,$worldScale,$worldOffsetX,$worldOffsetY))
     $ui.WorldZoomText.Text=('{0:0} % · Mausrad: Zoom · Ziehen: Verschieben' -f ($worldScale*100))
 }
 function Zoom-World([double]$delta,[double]$x,[double]$y){
-    $next=[Math]::Max(1,[Math]::Min(8,$worldScale*[Math]::Pow(1.2,$delta/120)))
+    $next=[Math]::Max(1.0,[Math]::Min(8.0,$worldScale*[Math]::Pow(1.2,$delta/120)))
     $factor=$next/$worldScale
     Set-WorldTransform $next ($x-($x-$worldOffsetX)*$factor) ($y-($y-$worldOffsetY)*$factor)
 }
