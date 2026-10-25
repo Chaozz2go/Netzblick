@@ -20,7 +20,7 @@ namespace Netzblick {
   public string Message {get;set;} public UpdateRelease Release {get;set;} public bool Available {get;set;}
  }
  public static class ReleaseUpdates {
-  public const string CurrentVersion="0.11.0";
+  public const string CurrentVersion="0.11.1";
   public const string RepositoryUrl="https://github.com/Chaozz2go/Netzblick";
   public static int CurrentBuild {get{
    var entry=Assembly.GetEntryAssembly();if(entry==null)return 0;
@@ -61,7 +61,7 @@ namespace Netzblick {
     ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
     var request=(HttpWebRequest)WebRequest.Create("https://api.github.com/repos/Chaozz2go/Netzblick/releases?per_page=100");
     request.Method="GET";request.UserAgent="Netzblick/"+CurrentVersion;request.Accept="application/vnd.github+json";request.Timeout=15000;request.ReadWriteTimeout=15000;request.AllowAutoRedirect=false;
-    string token=UpdateCredentials.Read();if(token.Length>0)request.Headers[HttpRequestHeader.Authorization]="Bearer "+token;
+    string token=drafts?UpdateCredentials.Read():"";if(token.Length>0)request.Headers[HttpRequestHeader.Authorization]="Bearer "+token;
     using(var response=(HttpWebResponse)request.GetResponse()){
      if(response.StatusCode!=HttpStatusCode.OK)throw new InvalidDataException("GitHub antwortet nicht mit einer Release-Liste.");
      using(var stream=response.GetResponseStream())using(var memory=new MemoryStream()){
@@ -73,9 +73,9 @@ namespace Netzblick {
    }catch(WebException e){
     using(var response=e.Response as HttpWebResponse){
      int status=response==null?0:(int)response.StatusCode;
-     return new UpdateResult{Message=status==401||status==404?"GitHub-Zugriff fehlt oder ist abgelaufen. Für das private Repository einen Token mit Contents: Read einrichten oder die Downloadseite im Browser öffnen.":status==403||status==429?"GitHub verweigert den Zugriff oder das API-Limit ist erreicht. Berechtigungen prüfen oder später erneut versuchen.":"Updateprüfung nicht möglich. Netzwerkverbindung prüfen und später erneut versuchen."};
+     return new UpdateResult{Message=status==401||status==404?"GitHub-Zugriff fehlt oder ist abgelaufen. Die veröffentlichten Updates benötigen keinen Token. „Release-Entwürfe einschließen“ ausschalten oder einen gespeicherten Zugang entfernen.":status==403||status==429?"GitHub verweigert den Zugriff oder das API-Limit ist erreicht. Berechtigungen prüfen oder später erneut versuchen.":"Updateprüfung nicht möglich. Netzwerkverbindung prüfen und später erneut versuchen."};
     }
-   }catch{ return new UpdateResult{Message="Updateprüfung nicht möglich. GitHub-Zugang oder Antwort konnten nicht verarbeitet werden. Gespeicherten Zugang bei Bedarf neu einrichten."}; }
+   }catch{ return new UpdateResult{Message="Updateprüfung nicht möglich. GitHub-Antwort konnte nicht verarbeitet werden. Bei eingeschlossenen Entwürfen den gespeicherten Zugang prüfen."}; }
   }
  }
  public static class UpdateCredentials {

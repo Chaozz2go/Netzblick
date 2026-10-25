@@ -89,7 +89,7 @@ function Update-AccessMode {
     }catch{
         $script:accessProblem=$_.Exception.GetBaseException().Message;$script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
         $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
-    };if(-not $script:setupStatus){Refresh-Permissions};Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
+    };if(-not $script:setupStatus){Refresh-Permissions};Refresh-ProgramSignals;Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
 }
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()

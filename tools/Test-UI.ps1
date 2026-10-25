@@ -56,11 +56,14 @@ if(@($savedAfter.Pending).Count -ne 0 -or $ui.UserNotice.Text -like '*nicht gesp
 # independent review state, and refresh selections after atomic changes.
 [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
 Set-PermissionProgram $testExe 'BlockProgram'
+Refresh-ProgramSignals
+if((Get-PermissionStatus $testExe).SignalColor -ne '#B32D40' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Rote Ampel am Programmnamen fehlt.'}
 if($ui.PermissionPrograms.Items.Count -ne 1 -or $ui.PermissionPrograms.Items[0].Category -ne 'Blocked'){throw 'Gespeicherte Programmsperre fehlt.'}
 $ui.PermissionFilter.SelectedIndex=1
 if($ui.PermissionPrograms.Items.Count -ne 1){throw 'Gesperrt-Filter fehlt.'}
 Set-PermissionProgram $testExe 'AllowProgram'
 if($ui.PermissionPrograms.Items.Count -ne 0){throw 'Erlaubtes Programm bleibt unter Gesperrt.'}
+if((Get-PermissionStatus $testExe).SignalColor -ne '#08704E'){throw 'Grüne Freigabeampel fehlt.'}
 $ui.PermissionFilter.SelectedIndex=3
 if($ui.PermissionPrograms.Items.Count -ne 1 -or $setupStatus.Config.Rules.Count -ne 2){throw 'Atomare Programmfreigabe fehlt.'}
 $setupStatus.Config.Ask=$true
@@ -80,7 +83,9 @@ Set-PermissionProgram $missing 'ProgramDefault'
 $ui.PermissionSearch.Text=''
 [Netzblick.SetupClient]::Scenario($testExe,3);Update-AccessMode
 if($ui.PermissionPrograms.Items[0].Category -ne 'Unknown' -or $ui.PermissionAllow.IsEnabled -or $ui.PermissionDefault.IsEnabled){throw 'Unbestätigter Dienst erlaubt Änderungen oder meldet Sperrwirkung.'}
+if((Get-PermissionStatus $testExe).SignalColor -ne '#57677B'){throw 'Unbestätigte Ampel ist nicht grau.'}
 [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+if((Get-PermissionStatus $testExe).SignalColor -ne '#08704E'){throw 'Beobachten-Standard ist nicht grün.'}
 Write-Output 'PASS: Sperren/Freigaben-Filter, atomare Programmfreigabe, Standard im Nachfragemodus, Prüfsperre, beendete Apps, Suche und unbestätigter Status.'
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
@@ -161,8 +166,8 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
- foreach($panelName in @('Overview','Updates','World','Inspection','Access')){
-  foreach($n in @('Access','Overview','Updates','World','Inspection')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+ foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live')){
+  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
    [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')
@@ -181,7 +186,7 @@ try{
   }
  }
  if($LogPreview){
-  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Access-1280.png')))
+  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Overview-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
  # Hide keeps both tray and process alive; complete quit closes the window.

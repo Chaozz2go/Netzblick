@@ -1,4 +1,10 @@
-﻿Netzblick 0.11.0 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.11.1 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.11.1: Ampelpunkte direkt bei Programmnamen in Aktivität und Programme.
+Öffentliche Updateabfragen verwenden keine gespeicherten privaten Tokens.
+Releasepipeline prüft Quellen/Verlauf auf bekannte Zugangsdatenmuster und
+veröffentlicht nur vom öffentlichen main reguläre Releases samt SHA256SUMS.
+Die Mustersuche ersetzt keine vollständige manuelle Sicherheitsprüfung.
 
 Neu 0.11.0: Programmverwaltung mit getrennten Statusfiltern, Suche, gespeicherten
 beendeten Apps, Prüfsperren/globalem Modus und direkten Änderungen. Programmaktionen

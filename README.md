@@ -1,6 +1,14 @@
-﻿# Netzblick 0.11.0 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.11.1 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
+
+## Download und Updates
+
+**[Windows-Installer und portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest)**
+
+Nicht den grünen „Code“-Download zum Installieren verwenden: Die fertigen Windows-Pakete liegen bei den Releases. Beim Update Netzblick im Tray vollständig beenden, den Installer starten bzw. die portable EXE ersetzen. Den Ordner `Netzblick-Daten` behalten. `SHA256SUMS.txt` enthält die Prüfsummen der Pakete.
+
+Die Ampel steht direkt vor dem Namen in **Aktivität** und **Programme**: Rot = gesperrt, Gelb = teilweise eingeschränkt, Grün = Netzblick lässt durch, Grau = unbestätigter Status. Der Tooltip erklärt den Zustand. Grün ist keine Aussage über den Zweck einer Verbindung und hebt keine fremden Windows-/Sicherheitsregeln auf. „Noch ungeprüft“ ist eine getrennte Prüfliste. Unter Programme führt **Sperren & Freigaben ändern** direkt zur ausgewählten App.
 
 ## Sperren und Freigaben auf einen Blick (0.11.0)
 
@@ -45,7 +53,7 @@ Optional: **Unbekannte Verbindungen bis zur Freigabe sperren**. Dieser Modus ver
 
 **Updates → Auf Updates prüfen** vergleicht veröffentlichte GitHub-Releases mit der installierten Version und Buildnummer. Netzwerkzugriff erfolgt nur auf diesen Klick. Testversionen und Entwürfe lassen sich ausdrücklich einschließen. Nur Releases mit einem passenden Windows-Paket zählen. Die App öffnet die gewählte Version im Browser; sie führt keinen Download automatisch aus. Der Installer erhält bestehende Daten.
 
-Das Repository ist privat: Für den Versionsvergleich einen Fine-grained GitHub-Token nur für Netzblick mit **Contents: Read** im Passwortfeld einrichten. Windows verschlüsselt ihn für das aktuelle Benutzerkonto unter `%LOCALAPPDATA%\Netzblick`; er reist nicht im portablen Ordner mit. Schreibrechte sind nicht erforderlich. Für Entwürfe ist zusätzlich entsprechende GitHub-Sichtbarkeit nötig. Ohne Token bleibt **Downloadseite öffnen** über die eigene Browser-Anmeldung möglich. Der Zugang lässt sich jederzeit entfernen. Ein fehlender GitHub-Zugriff wird ausdrücklich angezeigt und nicht als „aktuell“ gewertet.
+Veröffentlichte Versionen im öffentlichen Repository werden **ohne Token und ohne GitHub-Anmeldung** geprüft. Ein gespeicherter alter Token wird dabei nicht verwendet. Nur für interne Release-Entwürfe ist optional ein Fine-grained GitHub-Token nur für Netzblick mit **Contents: Read** nötig. Windows verschlüsselt ihn für das aktuelle Benutzerkonto unter `%LOCALAPPDATA%\Netzblick`; er reist nicht im portablen Ordner mit. Schreibrechte sind nicht erforderlich. Für Entwürfe ist zusätzlich entsprechende GitHub-Sichtbarkeit nötig. **Downloadseite öffnen** führt direkt zu den GitHub-Releases. Der Zugang lässt sich jederzeit entfernen. Ein fehlender GitHub-Zugriff wird ausdrücklich angezeigt und nicht als „aktuell“ gewertet.
 
 Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldungen erzeugen keinen falschen Installationsabbruch; echte Fehler liefern Details.
 
@@ -53,8 +61,8 @@ Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldun
 
 Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-- **Portabel:** `Netzblick-Portable-0.11.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
-- **Installiert:** `Netzblick-Setup-0.11.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
+- **Portabel:** `Netzblick-Portable-0.11.1-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.11.1-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
 Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
 
@@ -62,7 +70,7 @@ Die EXE enthält ihre verwalteten DLLs und lädt diese aus eigenen Ressourcen in
 
 Fenster schließen/minimieren blendet ins Tray aus. **Fenster schließen** lässt die Sitzung im Tray weiterlaufen. **Netzblick vollständig beenden** beendet auch die Filtersteuerung und stoppt den installierten Dienst. Ohne angemeldeten Benutzer zeigt die installierte Version keine Tray-Meldungen, der Dienst sammelt weiter Blockereignisse.
 
-Die alten `.ps1`/`.cmd`-Dateien sind nur noch Entwicklungs- und Kompatibilitätseinstiege im Quellrepository, nicht der Startweg der neuen Pakete. Für Entwicklung: `tools/Build-Desktop.ps1`, danach Inno Setup 6 mit `installer/Netzblick.iss` kompilieren. Der Workflow „Windows EXE and installer“ prüft beide Pakete und legt bei Erfolg einen GitHub-Releaseentwurf mit Downloads an.
+Die alten `.ps1`/`.cmd`-Dateien sind nur noch Entwicklungs- und Kompatibilitätseinstiege im Quellrepository, nicht der Startweg der neuen Pakete. Für Entwicklung: `tools/Build-Desktop.ps1`, danach Inno Setup 6 mit `installer/Netzblick.iss` kompilieren. Der Workflow „Windows EXE and installer“ prüft beide Pakete. Auf dem öffentlichen `main` veröffentlicht er anschließend eine reguläre Version samt Prüfsummen, die der Updater findet. Entwicklungszweige und private Repository-Stände erzeugen nur Entwürfe.
 
 ## Die beiden Prüfabläufe
 

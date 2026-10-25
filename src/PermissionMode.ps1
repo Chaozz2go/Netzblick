@@ -4,9 +4,12 @@
     $legacy=@($script:ownRules | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $key})
     if($legacy.Count){$mode=try{Get-NetworkMode $path $legacy}catch{'Modified'};if($mode -eq 'Blocked'){$category='Blocked'}elseif($category -ne 'Blocked'){$category='Limited'}}
     if(-not $script:setupStatus -or -not $setupStatus.Verified){$category='Unknown'}
+    if(-not [Netzblick.AccessQueue]::CanAllow($path)){$category='Unknown'}
     $label=switch($category){'Blocked'{'Gesperrt'} 'Limited'{'Teilweise eingeschränkt'} 'Allowed'{'Erlaubt (Netzblick)'} 'Default'{'Windows-Standard'} default{'Status unbestätigt'}}
     $color=switch($category){'Blocked'{'#B32D40'} 'Limited'{'#996000'} 'Allowed'{'#08704E'} default{'#57677B'}}
-    [pscustomobject]@{Category=$category;Status=$label;Color=$color;Legacy=($legacy.Count -gt 0)}
+    $signal=if($category -eq 'Default'){'#08704E'}else{$color}
+    $hint=$label+' · neue externe Verbindungen. '+$(if($category -eq 'Default'){'Netzblick lässt im Beobachten-Modus durch; Windows kann zusätzlich sperren.'}else{'Windows und andere Sicherheitsprogramme können zusätzlich sperren.'})
+    [pscustomobject]@{Category=$category;Status=$label;Color=$color;SignalColor=$signal;SignalHint=$hint;Legacy=($legacy.Count -gt 0)}
 }
 function Open-Permissions([string]$path=''){
     Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1;$ui.PermissionFilter.SelectedIndex=0;$ui.PermissionSearch.Text='';Refresh-Permissions
@@ -14,6 +17,7 @@ function Open-Permissions([string]$path=''){
 }
 function Initialize-PermissionMode {
     $script:permissionRefreshing=$false
+    $ui.ProgramAccessRules.Add_Click({if($ui.Programs.SelectedItem){Open-Permissions $ui.Programs.SelectedItem.Path}})
     $ui.OverviewPermissions.Add_Click({Open-Permissions $(if($ui.OverviewPrograms.SelectedItem){$ui.OverviewPrograms.SelectedItem.Path}else{''})})
     $ui.PermissionFilter.Add_SelectionChanged({if(-not $script:permissionRefreshing){Refresh-Permissions}})
     $ui.PermissionSearch.Add_TextChanged({if(-not $script:permissionRefreshing){Refresh-Permissions}})
@@ -101,4 +105,24 @@ function Remove-PermissionEntry($entry){
         default {[Netzblick.SetupCommand]@{Operation='Remove';RuleId=$entry.Id}}
     }
     [void](Send-SetupCommand $command)
+}
+
+function Set-ProgramSignal($program){
+    if(-not $program){return}
+    $state=Get-PermissionStatus $program.Path
+    $program | Add-Member NoteProperty SignalColor $state.SignalColor -Force
+    $program | Add-Member NoteProperty SignalHint $state.SignalHint -Force
+}
+function Refresh-ProgramSignals {
+    foreach($p in @($script:allProgramItems)){Set-ProgramSignal $p}
+    foreach($p in @($ui.OverviewPrograms.Items)){
+        $state=Get-PermissionStatus $p.Path
+        $p | Add-Member NoteProperty SignalColor $state.SignalColor -Force
+        $p | Add-Member NoteProperty SignalHint $state.SignalHint -Force
+        $p.Status=$state.Status
+    }
+    $ui.Programs.Items.Refresh();$ui.OverviewPrograms.Items.Refresh()
+    $selected=$ui.Programs.SelectedItem
+    if($selected){$state=Get-PermissionStatus $selected.Path;$ui.ProgramSignal.Fill=$state.SignalColor;$ui.ProgramSignal.ToolTip=$state.SignalHint}else{$ui.ProgramSignal.Fill='#57677B';$ui.ProgramSignal.ToolTip='Kein Programm ausgewählt.'}
+    $ui.ProgramAccessRules.IsEnabled=[bool]($selected -and [Netzblick.AccessQueue]::CanAllow($selected.Path))
 }

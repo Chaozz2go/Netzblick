@@ -1,7 +1,7 @@
 ﻿function Initialize-Updates {
     $script:updateJob=$null;$script:updateRelease=$null
     $ui.InstalledVersion.Text='Installiert: '+[Netzblick.ReleaseUpdates]::CurrentVersion+' · Build '+[Netzblick.ReleaseUpdates]::CurrentBuild
-    $ui.TokenStatus.Text=if([Netzblick.UpdateCredentials]::Exists){'Ein verschlüsselter Zugang ist gespeichert.'}else{'Kein Zugang gespeichert. Die Browser-Downloadseite nutzt deine dortige GitHub-Anmeldung.'}
+    $ui.TokenStatus.Text=if([Netzblick.UpdateCredentials]::Exists){'Optionaler Zugang gespeichert; öffentliche Updates werden ohne Token geprüft.'}else{'Öffentliche Updates sind ohne GitHub-Anmeldung und ohne Token verfügbar.'}
     $ui.CheckUpdates.Add_Click({
         if($script:updateJob){return};$ui.CheckUpdates.IsEnabled=$false;$ui.OpenUpdate.IsEnabled=$false;$ui.UpdateMessage.Text='GitHub wird geprüft …';$ui.UpdateNotes.Text='';$ui.ReleaseKind.Text=''
         $script:updateJob=[Netzblick.ReleaseUpdates]::Start([bool]$ui.IncludeDrafts.IsChecked,[bool]$ui.IncludePrereleases.IsChecked)
