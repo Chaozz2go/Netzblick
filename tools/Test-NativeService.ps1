@@ -44,6 +44,14 @@ try{
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Remove';RuleId=$rule.Id}))
     if(Connect-Fixture){throw 'Rücknahme der Freigabe sperrt nicht erneut.'}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Unwatch';Path=$fixture}))
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
+    if(Connect-Fixture){throw 'Schnellsperre verhindert die neue Fixture-Verbindung nicht.'}
+    $status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    $blocks=@($status.Config.Rules | Where-Object {$_.Path -eq $fixture -and $_.Action -eq 'Block' -and $_.Protocol -eq 0 -and $_.Address -eq '*'})
+    if($blocks.Count -ne 2 -or @($blocks.Direction | Select-Object -Unique).Count -ne 2){throw 'Schnellsperre hat nicht beide Richtungen gespeichert.'}
+    foreach($block in $blocks){[void](Send-Control ([Netzblick.SetupCommand]@{Operation='Remove';RuleId=$block.Id}))}
+    if(-not (Connect-Fixture)){throw 'Rücknahme der Schnellsperre stellt die Baseline nicht wieder her.'}
+    Write-Output 'PASS: atomare Programm-Schnellsperre für beide Richtungen, echte IPv4/TCP-Sperrwirkung und Rücknahme.'
     Write-Output 'PASS: echter Dienststart, Pipe, pfadbezogene WFP-Sperre, Security-Blockereignis, gezielte IPv4/TCP-Freigabe und Rücknahme. Kein globaler Nachfragemodus aktiviert.'
 }finally{
     $log=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Netzblick\service.log'
@@ -53,3 +61,4 @@ try{
     if([Netzblick.WindowsAudit]::Query() -ne $auditBefore){throw 'Audit-Ausgangszustand nach Dienstende nicht wiederhergestellt.'}
     Remove-Item -LiteralPath $directory -Recurse -Force
 }
+

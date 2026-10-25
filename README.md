@@ -1,15 +1,31 @@
-﻿# Netzblick 0.8.1 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.9.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
 
-**Korrektur 0.8.1:** Die EXE unterscheidet jetzt unterdrückte PowerShell-Meldungen von echten Fehlern. Installation und Deinstallation gelten nur nach dem abschließenden Erfolgsmarker als erfolgreich. Fehlerprotokolle enthalten konkrete Details; es gibt keine leere Standardausnahme mehr.
+## Schnell bewerten
+
+Die Startseite **Aktivität** zeigt neue Programme in einer gespeicherten Prüfliste. Ein optionaler Hinweis bietet **Anzeigen**, **Sperren** und **Später**. Anzeigen öffnet direkt das passende Programm mit Socket-, ETW- und blockierten Gegenstellen. Beendete Programme bleiben in der Prüfliste erhalten. **Als geprüft markieren** entfernt nur den Prüfeintrag und ändert keine Firewallregel.
+
+Standard ist **Zulassen und anschließend prüfen**. Neue Programme können bereits Daten übertragen haben, bevor sie beobachtet werden. Die Erkennung basiert auf dem EXE-Pfad, nicht auf dem Datei-Hash. Beim ersten Start werden 15 Sekunden als Ausgangsbestand erfasst.
+
+Optional: **Unbekannte Verbindungen bis zur Freigabe sperren**. Dieser Modus verwendet die bestehende globale WFP-Grundsperre und die gezielten Freigaben. Das betrifft auch neue Gegenstellen bekannter Programme, DNS und Windows-Dienste. Die Aktivierung fragt nach und verwendet den Zwei-Minuten-Sicherheitsrückweg. Es werden nicht automatisch alle bisherigen Programme freigegeben. Benötigte Regeln und die Bestätigung liegen unter **Einrichten & testen**.
+
+**Sperren** setzt in einer Diensttransaktion zwei dauerhafte Netzblick-Regeln für alle neuen externen Verbindungen des gewählten EXE-Pfads, ein- und ausgehend. Die Prüfliste bleibt offen. Loopback bleibt ausgenommen. Eine bestehende Verbindung wird damit nicht als sicher getrennt bestätigt. System-Sammelprozesse müssen gezielt unter Einrichten & testen bewertet werden. Zum Aufheben beide Regeln unter Regeln zurücknehmen.
+
+## Updates
+
+**Updates → Auf Updates prüfen** vergleicht veröffentlichte GitHub-Releases mit der installierten Version und Buildnummer. Netzwerkzugriff erfolgt nur auf diesen Klick. Testversionen und Entwürfe lassen sich ausdrücklich einschließen. Nur Releases mit einem passenden Windows-Paket zählen. Die App öffnet die gewählte Version im Browser; sie führt keinen Download automatisch aus. Der Installer erhält bestehende Daten.
+
+Das Repository ist privat: Für den Versionsvergleich einen Fine-grained GitHub-Token nur für Netzblick mit **Contents: Read** im Passwortfeld einrichten. Windows verschlüsselt ihn für das aktuelle Benutzerkonto unter `%LOCALAPPDATA%\Netzblick`; er reist nicht im portablen Ordner mit. Schreibrechte sind nicht erforderlich. Für Entwürfe ist zusätzlich entsprechende GitHub-Sichtbarkeit nötig. Ohne Token bleibt **Downloadseite öffnen** über die eigene Browser-Anmeldung möglich. Der Zugang lässt sich jederzeit entfernen. Ein fehlender GitHub-Zugriff wird ausdrücklich angezeigt und nicht als „aktuell“ gewertet.
+
+Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldungen erzeugen keinen falschen Installationsabbruch; echte Fehler liefern Details.
 
 ## Installation und Start
 
 Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-- **Portabel:** `Netzblick-Portable-0.8.1-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
-- **Installiert:** `Netzblick-Setup-0.8.1-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
+- **Portabel:** `Netzblick-Portable-0.9.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.9.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
 Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
 

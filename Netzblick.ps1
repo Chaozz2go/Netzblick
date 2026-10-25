@@ -22,20 +22,20 @@ try {
         if(-not $created){[void][Windows.MessageBox]::Show('Netzblick läuft bereits. Über das Tray-Symbol öffnen.','Netzblick');exit}
     }
     # Windows PowerShell 5.1 does not reference System.Xml automatically.
-    $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll')
+    $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll','System.Security.dll')
     if(-not $Embedded){
-        Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'),(Join-Path $appRoot 'src\SetupCore.cs'),(Join-Path $appRoot 'src\SetupTransport.cs'))
+        Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'),(Join-Path $appRoot 'src\SetupCore.cs'),(Join-Path $appRoot 'src\SetupTransport.cs'),(Join-Path $appRoot 'src\ReleaseUpdates.cs'))
     }
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.8.1'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.9.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -76,6 +76,8 @@ try {
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
     . (Join-Path $appRoot 'src\AccessMode.ps1')
     . (Join-Path $appRoot 'src\TrayMode.ps1')
+    . (Join-Path $appRoot 'src\ReviewMode.ps1')
+    . (Join-Path $appRoot 'src\UpdatesMode.ps1')
 
     function Show-Error([string]$message) {
         [void][Windows.MessageBox]::Show($window,$message,'Netzblick','OK','Error')
@@ -169,6 +171,7 @@ try {
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $displayRows=@($program.Rows)
         foreach($peer in @($trafficPeers | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('ETW|'+$peer.Protocol+'|'+$peer.Address+'|'+$peer.Port);Pid='aggregiert';Protocol=$peer.Protocol;Local='— (ETW)';Remote=($peer.Address+':'+$peer.Port);Address=$peer.Address;Port=$peer.Port;State='ETW beobachtet'})}
+        if($script:setupStatus){foreach($attempt in @($setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('BLOCK|'+$attempt.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($attempt.Protocol);Local=$attempt.Direction;Remote=$attempt.Target;Address=$attempt.Address;Port=$attempt.Port;State=$attempt.Evidence})}}
         $endpointIndex=0
         $displayRows=@($displayRows | ForEach-Object {
             $endpointIndex++
@@ -199,6 +202,7 @@ try {
         foreach($sample in @($trafficSamples.Values)){
             if(-not $map.ContainsKey($sample.Key)){$map[$sample.Key]=[pscustomobject]@{Key=$sample.Key;Name=$sample.Name;Path=$sample.Path;Summary='In dieser Sitzung gemessen';Rows=@()}}
         }
+        foreach($pending in @($script:newPrograms.Values)){if(-not $map.ContainsKey($pending.Key)){$map[$pending.Key]=[pscustomobject]@{Key=$pending.Key;Name=$pending.Name;Path=$pending.Path;Summary='Noch zu prüfen';Rows=@()}}}
         $script:allProgramItems=@($map.Values | Sort-Object Name)
         Track-ObservedPrograms $allProgramItems
         $term=$ui.Search.Text.Trim()
@@ -269,13 +273,14 @@ try {
     $ui.Search.Add_TextChanged({Refresh-Programs})
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
-        $ui.MainShell.RowDefinitions[1].Height=if($name -eq 'AccessPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
-        $ui.MainShell.RowDefinitions[2].Height=if($name -eq 'AccessPanel' -or $name -eq 'InspectionPanel'){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(42)}
-        $ui.SummaryMetrics.Visibility=if($name -eq 'AccessPanel'){'Collapsed'}else{'Visible'}
-        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab')){$ui[$tab].Background='#EDF2F6'}
-        $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} default{'LiveTab'}}
+        $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel')
+        $ui.MainShell.RowDefinitions[1].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
+        $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(42)}
+        $ui.SummaryMetrics.Visibility=if($compact){'Collapsed'}else{'Visible'}
+        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab','UpdatesTab')){$ui[$tab].Background='#EDF2F6'}
+        $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} default{'LiveTab'}}
         $ui[$activeTab].Background='#DDF0F2'
-        foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility=if($name -eq 'LivePanel'){'Visible'}else{'Collapsed'}
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
@@ -285,6 +290,7 @@ try {
     $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
     $ui.AccessTab.Add_Click({Show-Panel 'AccessPanel'})
     $ui.OverviewTab.Add_Click({Show-Panel 'OverviewPanel'})
+    $ui.UpdatesTab.Add_Click({Show-Panel 'UpdatesPanel'})
     foreach($key in @('BackFromRules','BackFromHistory','BackFromWorld','BackFromTerminal')){$ui[$key].Add_Click({Show-Panel 'LivePanel'})}
     $ui.LiveTab.Add_Click({Show-Panel 'LivePanel'})
     $ui.InspectionTab.Add_Click({Show-Panel 'InspectionPanel'})
@@ -325,7 +331,10 @@ try {
     Initialize-EndpointNames
     Initialize-InspectionMode
     Initialize-AccessMode
+    Initialize-ReviewMode
+    Initialize-Updates
     Initialize-TrayMode
+    Show-Panel 'OverviewPanel'
     $timer=New-Object Windows.Threading.DispatcherTimer
     $timer.Interval=[timespan]::FromMilliseconds(250)
     $script:nextSample=[datetime]::MinValue

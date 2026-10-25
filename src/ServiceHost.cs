@@ -88,12 +88,15 @@ namespace Netzblick {
      if(command.Rule.ExpiresUtc.HasValue&&(command.Rule.ExpiresUtc<=DateTime.UtcNow||command.Rule.ExpiresUtc>DateTime.UtcNow.AddHours(24)))throw new ArgumentException("Temporäre Regel muss innerhalb der nächsten 24 Stunden ablaufen.");
      if(next.Rules.Any(r=>r.Id==command.Rule.Id))throw new InvalidOperationException("Regel-ID ist bereits vorhanden.");
      if(command.Rule.Action=="Block")EnsureWatch();SetupChanges.Upsert(next,command.Rule);break;
+    case "BlockProgram":
+     if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);EnsureWatch();SetupChanges.BlockProgram(next,command.Path);break;
     case "Remove":if(next.Rules.RemoveAll(r=>r.Id==command.RuleId)==0)throw new ArgumentException("Regel nicht gefunden.");break;
     default:throw new ArgumentException("Unbekannter Befehl.");
    }
    try{Apply(next);}catch{if(command.Operation=="Ask"&&verified)ClearRecovery();throw;}
    if(command.Operation=="Ask"&&!command.Enabled)ClearRecovery();
-   Log(command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
+   Log(command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
    return Status(true,problem);
   }
   static PipeSecurity Security(){var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid,null),PipeAccessRights.FullControl,AccessControlType.Deny));foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid,null),PipeAccessRights.FullControl,AccessControlType.Allow));return security;}

@@ -83,7 +83,7 @@ function Set-NetworkMode([string]$path,[string]$mode,[switch]$NoHistory) {
 function Save-UserState {
     try{
         [void][IO.Directory]::CreateDirectory($userStateDirectory)
-        $state=@{Version=1;Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray())}
+        $state=@{Version=2;NotifyObserved=$script:notifyObserved;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray())}
         $temp=$userStateFile+'.tmp'
         [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false))
         if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,$null)}else{[IO.File]::Move($temp,$userStateFile)}
@@ -91,7 +91,7 @@ function Save-UserState {
 }
 function Initialize-UserModes {
     $script:allProgramItems=@();$script:policyReady=$true;$script:changes=New-Object 'System.Collections.Generic.List[object]'
-    $script:knownPrograms=@{};$script:newPrograms=@{};$script:traffic=$null;$script:trafficProblem=''
+    $script:knownPrograms=@{};$script:newPrograms=@{};$script:notifyObserved=$true;$script:traffic=$null;$script:trafficProblem=''
     $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow
     $script:sessionStartedUtc=[datetime]::UtcNow;$script:userBaseline=$false
     $script:userStateDirectory=Join-Path $env:LOCALAPPDATA 'Netzblick';$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
@@ -101,6 +101,13 @@ function Initialize-UserModes {
             $saved=Get-Content -LiteralPath $userStateFile -Raw -Encoding UTF8 | ConvertFrom-Json
             foreach($path in @($saved.Seen)){if($path -is [string] -and $path.Length -lt 32768){$knownPrograms[$path]=$true}}
             foreach($change in @($saved.Changes | Select-Object -First 20)){if($change.Version -eq 1 -and $change.Path -is [string] -and $change.Before -in @('Default','Private','Blocked') -and $change.After -in @('Default','Private','Blocked') -and $change.Fingerprint -is [string]){$changes.Add($change)}}
+            if($null -ne $saved.NotifyObserved){$script:notifyObserved=[bool]$saved.NotifyObserved}
+            foreach($pending in @($saved.Pending | Select-Object -First 1000)){
+                if($pending.Path -is [string] -and [Netzblick.AccessQueue]::CanAllow($pending.Path)){
+                    $key=[Netzblick.ProcessLineage]::Normalize($pending.Path)
+                    $newPrograms[$key]=[pscustomobject]@{Key=$key;Name=[IO.Path]::GetFileName($pending.Path);Path=$pending.Path;FirstUtc=$pending.FirstUtc}
+                }
+            }
             $script:userBaseline=$knownPrograms.Count -gt 0
         }
     }catch{$ui.UserNotice.Text='Gespeicherter Zustand konnte nicht gelesen werden: '+$_.Exception.Message}
@@ -128,7 +135,7 @@ function Initialize-UserModes {
             Refresh-Overview
         }catch{Show-Error $_.Exception.GetBaseException().Message}
     })
-    $ui.AcknowledgeNew.Add_Click({$script:newPrograms.Clear();Refresh-Overview})
+    $ui.AcknowledgeNew.Add_Click({if([Windows.MessageBox]::Show($window,'Alle Einträge als geprüft markieren? Firewallregeln bleiben unverändert.','Prüfliste','YesNo','Question') -eq 'Yes'){$script:newPrograms.Clear();Save-UserState;Refresh-Overview}})
     $ui.OverviewPrograms.Add_MouseDoubleClick({
         $item=$ui.OverviewPrograms.SelectedItem;if($item){$ui.Search.Text='';Show-Panel 'LivePanel';$match=$ui.Programs.Items | Where-Object {$_.Key -eq $item.Key} | Select-Object -First 1;if($match){$ui.Programs.SelectedItem=$match}}
     })
@@ -168,14 +175,14 @@ function Update-Traffic {
     elseif($traffic.Lost -lt 0){$script:trafficProblem='Vollständigkeit der ETW-Messung konnte nicht bestätigt werden.'}
     elseif($traffic.Lost -ne 0 -or $traffic.Uncounted -ne 0){$script:trafficProblem='Messung unvollständig · verlorene ETW-Ereignisse: '+$traffic.Lost+' · nicht gezählte Datensätze: '+$traffic.Uncounted}
 }
-function Track-ObservedPrograms($items) {
+function Track-ObservedPrograms($items,[switch]$AlwaysReview) {
     $changed=$false
-    $bootstrap=-not $userBaseline -and (([datetime]::UtcNow-$sessionStartedUtc).TotalSeconds -lt 15)
+    $bootstrap=-not $AlwaysReview -and -not $userBaseline -and (([datetime]::UtcNow-$sessionStartedUtc).TotalSeconds -lt 15)
     foreach($item in $items){
         if(-not $item.Path){continue};$key=[Netzblick.ProcessLineage]::Normalize($item.Path)
         if(-not $knownPrograms.ContainsKey($key) -and $knownPrograms.Count -lt 10000){
             $knownPrograms[$key]=$true;$changed=$true
-            if(-not $bootstrap){$newPrograms[$key]=[pscustomobject]@{Name=$item.Name;Path=$item.Path;FirstUtc=[datetime]::UtcNow};Add-Event 'Erstmals beobachtet' $item.Name 'Seit Beginn der gespeicherten Beobachtung · keine automatische Vorabsperre'}
+            if(-not $bootstrap -and $newPrograms.Count -lt 1000){$newPrograms[$key]=[pscustomobject]@{Key=$key;Name=$item.Name;Path=$item.Path;FirstUtc=[datetime]::UtcNow};Add-Event 'Erstmals beobachtet' $item.Name 'Zur Prüfung vorgemerkt';if(Get-Command Show-ObservedNotice -ErrorAction SilentlyContinue){Show-ObservedNotice $newPrograms[$key]}}
         }
     }
     if($changed){Save-UserState}
@@ -186,13 +193,18 @@ function Refresh-Overview {
     foreach($program in @($script:allProgramItems)){
         $sample=$trafficSamples[$program.Key]
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;Status=(Network-ModeLabel $mode);Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;Status=$(if($script:setupStatus -and @($setupStatus.Config.Rules | Where-Object {$_.Action -eq 'Block' -and $_.Address -eq '*' -and $_.Protocol -eq 0 -and ([Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key)}).Count -ge 2){'Extern gesperrt (Dienst)'}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
+    $oldKey=if($ui.PendingPrograms.SelectedItem){$ui.PendingPrograms.SelectedItem.Key}else{''}
+    $ui.PendingPrograms.ItemsSource=@($newPrograms.Values | Sort-Object FirstUtc -Descending)
+    $selected=$ui.PendingPrograms.Items | Where-Object {$_.Key -eq $oldKey} | Select-Object -First 1
+    if($selected){$ui.PendingPrograms.SelectedItem=$selected}elseif($ui.PendingPrograms.Items.Count){$ui.PendingPrograms.SelectedIndex=0}
+    if(Get-Command Refresh-ReviewSelection -ErrorAction SilentlyContinue){Refresh-ReviewSelection}
     $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
     $ui.OverviewNew.Text=[string]$newPrograms.Count
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
     $ui.OverviewStatus.Foreground=if($trafficProblem){'#9C650A'}else{'#57677B'}
-    if($newPrograms.Count){$ui.NewProgramsNotice.Text=($newPrograms.Count.ToString()+' erstmals beobachtete Programme · keine automatische Sperre. '+(($newPrograms.Values | Select-Object -First 5 -ExpandProperty Name)-join ', '))}else{$ui.NewProgramsNotice.Text='Keine neuen Programme gemeldet. Beim ersten Start werden 15 Sekunden als Ausgangsbestand erfasst.'}
+    if($newPrograms.Count){$ui.NewProgramsNotice.Text=($newPrograms.Count.ToString()+' Programme warten auf deine Prüfung. '+(($newPrograms.Values | Select-Object -First 5 -ExpandProperty Name)-join ', '))}else{$ui.NewProgramsNotice.Text='Prüfliste leer. Beim ersten Start werden 15 Sekunden als Ausgangsbestand erfasst.'}
     $ui.AcknowledgeNew.IsEnabled=$newPrograms.Count -gt 0
     $ui.LastNetworkChange.Text=if($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}
 }

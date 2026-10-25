@@ -9,6 +9,12 @@ namespace Netzblick {
   public SetupChangeFailure(string text,bool restored,Exception inner):base(text,inner){Restored=restored;}
  }
  public static class SetupChanges {
+  public static void BlockProgram(SetupConfig config,string path){
+   if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
+   string name=System.IO.Path.GetFileName(path);
+   foreach(string direction in new[]{"Ausgehend","Eingehend"})Upsert(config,new SetupRule{Id=Guid.NewGuid().ToString(),Name="Gesperrt: "+name.Substring(0,Math.Min(70,name.Length)),Path=path,Direction=direction,Address="*",Protocol=0,Port=0,Action="Block"});
+   config.Validate();
+  }
   public static void Upsert(SetupConfig config,SetupRule rule){
    rule.Validate();var keep=config.Rules.Where(r=>!(r.Covers(rule)&&rule.Covers(r))).ToList();
    var conflict=keep.FirstOrDefault(r=>r.Action=="Block"&&r.Covers(rule));
@@ -99,3 +105,4 @@ namespace Netzblick {
   public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
  }
 }
+

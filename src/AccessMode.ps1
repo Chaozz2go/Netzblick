@@ -72,7 +72,7 @@ function Update-AccessMode {
         $script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'});$script:accessVerified=$setupStatus.Verified;$script:accessActive=$setupStatus.Config.Ask
         $ui.InstallControlService.Visibility='Collapsed';$ui.StartAccess.IsEnabled=$accessVerified -and -not $accessActive;$ui.StopAccess.IsEnabled=$accessVerified -and $accessActive
         $ui.AccessHeadline.Text=if(-not $accessVerified){'Filterstatus nicht bestätigt'}elseif($accessActive){'Nachfragen aktiv · unbekannte Zugriffe zunächst gesperrt'}else{'Beobachten · gezielte Einzelregeln bleiben aktiv'}
-        $ui.AccessExplanation.Text=if(-not $accessVerified){$setupStatus.Error}else{'Der Hintergrunddienst arbeitet auch bei geschlossenem Fenster. Kommunikation auf diesem PC bleibt ausgenommen.'}
+        $ui.AccessExplanation.Text=if(-not $accessVerified){$setupStatus.Error}elseif($Portable){'Portable Filtersteuerung läuft bis zum vollständigen Beenden von Netzblick. Loopback bleibt ausgenommen.'}else{'Der Hintergrunddienst arbeitet auch bei geschlossenem Fenster. Kommunikation auf diesem PC bleibt ausgenommen.'}
         $ui.AccessProof.Text='Filterprüfung: '+$setupStatus.CheckedUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$setupStatus.Warning;$ui.AccessGlobalStatus.Text=$ui.AccessHeadline.Text
         $ui.AccessGlobalStatus.Foreground=if(-not $accessVerified -or $setupStatus.Warning){'#A4680B'}else{'#087F8C'};$script:trayStatusText=$ui.AccessHeadline.Text
         $ui.RecoveryBanner.Visibility=if($setupStatus.RecoveryUtc){'Visible'}else{'Collapsed'}
@@ -83,11 +83,12 @@ function Update-AccessMode {
         $chosenRule=$ui.SetupRules.SelectedItem;$ruleId=if($chosenRule){$chosenRule.Id}else{''};$ui.SetupRules.ItemsSource=@($setupStatus.Config.Rules);$ui.SetupRules.SelectedItem=$setupStatus.Config.Rules | Where-Object {$_.Id -eq $ruleId} | Select-Object -First 1
         $ui.SetupHistory.ItemsSource=@($setupStatus.History)
         $ui.AccessEmpty.Text=if($setupStatus.Attempts.Count){'Pro Programm, Gegenstelle und Dienst gesammelt. '+$setupStatus.Attempts.Count+' Einträge seit Dienststart.'}else{'Noch keine Blockereignisse angezeigt. Eine leere Liste beweist keinen fehlenden Netzwerkzugriff.'}
+        if($script:policyReady -and (Get-Command Track-ObservedPrograms -ErrorAction SilentlyContinue)){$blocked=@($setupStatus.Attempts | Where-Object {[Netzblick.AccessQueue]::CanAllow($_.Path)} | ForEach-Object {[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($_.Path);Name=$_.Program;Path=$_.Path}});Track-ObservedPrograms $blocked -AlwaysReview}
         Update-SetupNotifications;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection}
     }catch{
         $script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
         $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
-    };Show-AccessRequest
+    };Show-AccessRequest;if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
 }
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()

@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-$files=@('Netzblick.ps1','src\VisualModes.ps1','src\InspectionMode.ps1','src\UserModes.ps1','src\EndpointNames.ps1','src\AccessMode.ps1','src\TrayMode.ps1','Install-Netzblick.ps1','tools\Build-Service.ps1','tools\Test-UI.ps1','Test-Netzblick.ps1')
+$files=@('Netzblick.ps1','src\VisualModes.ps1','src\InspectionMode.ps1','src\UserModes.ps1','src\EndpointNames.ps1','src\AccessMode.ps1','src\TrayMode.ps1','src\ReviewMode.ps1','src\UpdatesMode.ps1','Install-Netzblick.ps1','tools\Build-Service.ps1','tools\Test-UI.ps1','Test-Netzblick.ps1')
 foreach($file in $files){
     $tokens=$null;$errors=$null
     [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file),[ref]$tokens,[ref]$errors)
@@ -8,4 +8,5 @@ foreach($file in $files){
 }
 & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Netzblick.ps1') -Check
 exit $LASTEXITCODE
+
 

@@ -14,8 +14,8 @@ using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Netzblick")]
-[assembly: AssemblyVersion("0.8.1.0")]
-[assembly: AssemblyFileVersion("0.8.1.0")]
+[assembly: AssemblyVersion("0.9.0.0")]
+[assembly: AssemblyFileVersion("0.9.0.0")]
 
 namespace Netzblick.Desktop {
  // No downloads, external PowerShell process, runtime compiler or LoadFrom.
