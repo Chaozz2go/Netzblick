@@ -39,21 +39,23 @@ Standard ist **Zulassen und anschließend prüfen**. Neue Programme können bere
 
 Optional: **Unbekannte Verbindungen bis zur Freigabe sperren**. Dieser Modus verwendet die bestehende globale WFP-Grundsperre und die gezielten Freigaben. Das betrifft auch neue Gegenstellen bekannter Programme, DNS und Windows-Dienste. Die Aktivierung fragt nach und verwendet den Zwei-Minuten-Sicherheitsrückweg. Es werden nicht automatisch alle bisherigen Programme freigegeben. Benötigte Regeln und die Bestätigung liegen unter **Einrichten & testen**.
 
-**Sperren** setzt in einer Diensttransaktion zwei dauerhafte Netzblick-Regeln für alle neuen externen Verbindungen des gewählten EXE-Pfad…29222 tokens truncated…APS zum DC",Path=path,Direction="Ausgehend",Address="10.0.0.10",Protocol=6,Port=636,Action="Allow",ExpiresUtc=DateTime.UtcNow.AddMinutes(5)});status.RecoveryUtc=DateTime.UtcNow.AddMinutes(2);}
-  }
-  public static SetupStatus Send(SetupCommand command){
-   LastOperation=command.Operation;
-   if(command.Operation=="Status"||command.Operation=="Recheck")return status;
-   if(command.Operation=="Watch"){if(!status.Verified)throw new InvalidOperationException("Test: Filterprüfung fehlgeschlagen");status.Config.WatchedPaths.Add(command.Path);return status;}
-   if(command.Operation=="AllowProgram"){SetupChanges.AllowProgram(status.Config,command.Path);return status;}
-   if(command.Operation=="BlockProgram"){SetupChanges.BlockProgram(status.Config,command.Path);return status;}
-   if(command.Operation=="ProgramDefault"){SetupChanges.ProgramDefault(status.Config,command.Path);return status;}
-   if(command.Operation=="Unwatch"){status.Config.WatchedPaths.Remove(command.Path);return status;}
-   if(command.Operation=="Remove"){status.Config.Rules.RemoveAll(r=>r.Id==command.RuleId);return status;}
-   if(command.Operation=="Ask"){status.Config.Ask=command.Enabled;return status;}
-   if(command.Operation=="Reset"){status.Config=new SetupConfig();status.Attempts.Clear();status.History.Clear();return status;}
-   throw new InvalidOperationException("UI-Fixture erlaubt diesen Befehl nicht.");
-  }
- }
-}
+**Sperren** setzt in einer Diensttransaktion zwei dauerhafte Netzblick-Regeln für alle neuen externen Verbindungen des gewählten EXE-Pfads, ein- und ausgehend. Die Prüfliste bleibt offen. Loopback bleibt ausgenommen. Eine bestehende Verbindung wird damit nicht als sicher getrennt bestätigt. System-Sammelprozesse müssen gezielt unter Einrichten & testen bewertet werden. Zum Aufheben beide Regeln unter Regeln zurücknehmen.
 
+## Updates
+
+**Updates → Auf Updates prüfen** vergleicht veröffentlichte GitHub-Releases mit der installierten Version und Buildnummer. Netzwerkzugriff erfolgt nur auf diesen Klick. Testversionen und Entwürfe lassen sich ausdrücklich einschließen. Nur Releases mit einem passenden Windows-Paket zählen. Die App öffnet die gewählte Version im Browser; sie führt keinen Download automatisch aus. Der Installer erhält bestehende Daten.
+
+Das Repository ist privat: Für den Versionsvergleich einen Fine-grained GitHub-Token nur für Netzblick mit **Contents: Read** im Passwortfeld einrichten. Windows verschlüsselt ihn für das aktuelle Benutzerkonto unter `%LOCALAPPDATA%\Netzblick`; er reist nicht im portablen Ordner mit. Schreibrechte sind nicht erforderlich. Für Entwürfe ist zusätzlich entsprechende GitHub-Sichtbarkeit nötig. Ohne Token bleibt **Downloadseite öffnen** über die eigene Browser-Anmeldung möglich. Der Zugang lässt sich jederzeit entfernen. Ein fehlender GitHub-Zugriff wird ausdrücklich angezeigt und nicht als „aktuell“ gewertet.
+
+Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldungen erzeugen keinen falschen Installationsabbruch; echte Fehler liefern Details.
+
+## Installation und Start
+
+Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisher…28222 tokens truncated…ortedRuntime version="v4.0" sku=".NETFramework,Version=v4.8"/></startup></configuration>
+'@ | Set-Content -LiteralPath ($exe+'.config') -Encoding UTF8
+foreach($file in @('README.md','PRUEFSTAND.txt','THIRD-PARTY-NOTICES.txt')){Copy-Item -LiteralPath (Join-Path $root $file) -Destination $OutputDirectory}
+Copy-Item -LiteralPath (Join-Path $root 'lib') -Destination (Join-Path $OutputDirectory 'licenses') -Recurse -Force
+Get-ChildItem -LiteralPath (Join-Path $OutputDirectory 'licenses') -Recurse -File | Where-Object {$_.Extension -in @('.dll','.exe')} | Remove-Item -Force
+[void][IO.Directory]::CreateDirectory((Join-Path $OutputDirectory 'lib'))
+Copy-Item -LiteralPath (Join-Path $root 'lib\Netzblick.Service.exe') -Destination (Join-Path $OutputDirectory 'lib')
+Write-Output ('PASS: Windows x64 EXE mit eingebetteten Komponenten: '+$exe)

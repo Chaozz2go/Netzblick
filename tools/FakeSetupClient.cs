@@ -15,6 +15,12 @@ namespace Netzblick {
    LastOperation=command.Operation;
    if(command.Operation=="Status"||command.Operation=="Recheck")return status;
    if(command.Operation=="Watch"){if(!status.Verified)throw new InvalidOperationException("Test: Filterprüfung fehlgeschlagen");status.Config.WatchedPaths.Add(command.Path);return status;}
+   if(command.Operation=="AllowProgram"){SetupChanges.AllowProgram(status.Config,command.Path);return status;}
+   if(command.Operation=="BlockProgram"){SetupChanges.BlockProgram(status.Config,command.Path);return status;}
+   if(command.Operation=="ProgramDefault"){SetupChanges.ProgramDefault(status.Config,command.Path);return status;}
+   if(command.Operation=="Unwatch"){status.Config.WatchedPaths.Remove(command.Path);return status;}
+   if(command.Operation=="Remove"){status.Config.Rules.RemoveAll(r=>r.Id==command.RuleId);return status;}
+   if(command.Operation=="Ask"){status.Config.Ask=command.Enabled;return status;}
    if(command.Operation=="Reset"){status.Config=new SetupConfig();status.Attempts.Clear();status.History.Clear();return status;}
    throw new InvalidOperationException("UI-Fixture erlaubt diesen Befehl nicht.");
   }
