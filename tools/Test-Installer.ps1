@@ -1,7 +1,8 @@
 #requires -Version 5.1
+param([string]$ExpectedCulture)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.8.0-win-x64.exe'
+$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.8.1-win-x64.exe'
 $installed=Join-Path $env:ProgramFiles 'Netzblick'
 function Run-Checked([string]$exe,[string]$arguments){
  $p=Start-Process -FilePath $exe -ArgumentList $arguments -PassThru
@@ -23,6 +24,7 @@ try{
  $report=Join-Path $env:TEMP 'netzblick-installed-report.txt'
  Run-Checked (Join-Path $installed 'Netzblick.exe') ('--smoke-test --report "'+$report+'"')
  if((Get-Content -LiteralPath $report -Raw) -notmatch 'PASS: EXE host; embedded assemblies; installed'){throw 'Installierte EXE nicht bestätigt.'}
+ if($ExpectedCulture -and (Get-Content -LiteralPath $report -Raw) -notmatch ('Kultur='+[regex]::Escape($ExpectedCulture))){throw 'Erwartete Windows-Benutzerkultur wurde nicht im EXE-Prozess bestätigt.'}
  # Repeat installation exercises stopping and replacing an existing service.
  Run-Checked $setup '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
  if(-not(Test-Path -LiteralPath $marker)){throw 'Update hat Einstellungen entfernt.'}

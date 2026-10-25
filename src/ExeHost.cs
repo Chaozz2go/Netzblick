@@ -14,8 +14,8 @@ using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Netzblick")]
-[assembly: AssemblyVersion("0.8.0.0")]
-[assembly: AssemblyFileVersion("0.8.0.0")]
+[assembly: AssemblyVersion("0.8.1.0")]
+[assembly: AssemblyFileVersion("0.8.1.0")]
 
 namespace Netzblick.Desktop {
  // No downloads, external PowerShell process, runtime compiler or LoadFrom.
@@ -42,9 +42,9 @@ namespace Netzblick.Desktop {
     report=Option(args,"--report");
     for(int i=0;i<args.Length;i++){
      if(String.Equals(args[i],"--report",StringComparison.OrdinalIgnoreCase)){i++;continue;}
-     if(!new[]{"--portable","--installed","--tray","--check","--smoke-test","--install","--uninstall","--no-tray"}.Any(flag=>String.Equals(flag,args[i],StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Unbekannter Startparameter: "+args[i]);
+     if(!new[]{"--portable","--installed","--tray","--check","--host-check","--smoke-test","--install","--uninstall","--no-tray"}.Any(flag=>String.Equals(flag,args[i],StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Unbekannter Startparameter: "+args[i]);
     }
-    bool check=Has(args,"--check"),smoke=Has(args,"--smoke-test");
+    bool check=Has(args,"--check")||Has(args,"--host-check"),smoke=Has(args,"--smoke-test");
     using(var id=WindowsIdentity.GetCurrent()){
      if(!new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator)){
       var info=new ProcessStartInfo(Self.Location){Verb="runas",UseShellExecute=true,Arguments=String.Join(" ",args.Select(Quote))};
@@ -132,6 +132,7 @@ namespace Netzblick.Desktop {
        using(var ps=PowerShell.Create()){
         ps.Runspace=runspace;
         runspace.SessionStateProxy.SetVariable("NetzblickDistributionRoot",Path.GetDirectoryName(Self.Location));
+        if(Has(args,"--host-check")){HostChecks(runspace);WriteReport("PASS: EXE host; suppressed, caught and real PowerShell errors verified.");return 0;}
         if(maintenance){
          ps.AddCommand(Path.Combine(root,"Install-Netzblick.ps1"));
          if(Has(args,"--uninstall"))ps.AddParameter("Uninstall");
@@ -141,10 +142,8 @@ namespace Netzblick.Desktop {
          if(portable)ps.AddParameter("Portable");if(state!=null)ps.AddParameter("StateDirectory",state);
          if(check)ps.AddParameter("Check");if(smoke)ps.AddParameter("SmokeTest");if(Has(args,"--tray"))ps.AddParameter("LaunchInTray");
         }
-        var output=ps.Invoke();
-        string text=String.Join(Environment.NewLine,output.Select(o=>o.ToString()));
-        if(ps.HadErrors)throw new InvalidOperationException(String.Join(Environment.NewLine,ps.Streams.Error.Select(e=>e.ToString())));
-        if((check||smoke)&&!text.Contains(check?"OK: XAML":"PASS: full WPF/tray"))throw new InvalidOperationException("Startprüfung lieferte keine Erfolgsbestätigung. "+text);
+        string marker=maintenance?"NETZBLICK_MAINTENANCE_OK":check?"OK: XAML":smoke?"PASS: full WPF/tray":"NETZBLICK_UI_OK";
+        string text=InvokeChecked(ps,marker);
         if(smoke){
          var status=Netzblick.SetupClient.Send(new Netzblick.SetupCommand{Operation="Status"});if(!status.Ok||!status.Verified)throw new InvalidOperationException("Filtersteuerung nicht bereit: "+status.Error);
         }
@@ -155,7 +154,42 @@ namespace Netzblick.Desktop {
     }finally{if(owns)global.ReleaseMutex();}
    }
   }
-  static string ReadCaptureHealth(Runspace runspace){using(var ps=PowerShell.Create()){ps.Runspace=runspace;ps.AddScript("[string]$script:trafficProblem");return String.Join("",ps.Invoke().Select(o=>o.ToString()));}}
+  static string ErrorDetails(ErrorRecord error){
+   if(error==null)return "Kein PowerShell-Fehlerdatensatz verfügbar.";
+   return String.Join(Environment.NewLine,new[]{error.ToString(),error.Exception==null?null:error.Exception.ToString(),error.ErrorDetails==null?null:error.ErrorDetails.Message,error.FullyQualifiedErrorId,error.InvocationInfo==null?null:error.InvocationInfo.PositionMessage,error.ScriptStackTrace}.Where(s=>!String.IsNullOrWhiteSpace(s)));
+  }
+  static string InvokeChecked(PowerShell ps,string marker){
+   System.Collections.ObjectModel.Collection<PSObject> output;
+   try{output=ps.Invoke();}
+   catch(RuntimeException e){throw new InvalidOperationException("PowerShell-Ausführung fehlgeschlagen:"+Environment.NewLine+ErrorDetails(e.ErrorRecord),e);}
+   string text=String.Join(Environment.NewLine,output.Select(o=>o.ToString()));
+   string state="PowerShell-Status: "+ps.InvocationStateInfo.State+"; HadErrors="+ps.HadErrors+"; Fehlerausgabe="+ps.Streams.Error.Count+"; Kultur="+System.Globalization.CultureInfo.CurrentCulture.Name;
+   // HadErrors is also true for explicitly suppressed or successfully caught
+   // errors. It is not a success/failure exit code. Require a completed
+   // invocation, no unsuppressed errors, and the script's final success marker.
+   if(ps.InvocationStateInfo.State!=PSInvocationState.Completed||ps.Streams.Error.Count>0)
+    throw new InvalidOperationException("PowerShell-Auftrag fehlgeschlagen. "+state+Environment.NewLine+String.Join(Environment.NewLine,ps.Streams.Error.Select(ErrorDetails)),ps.InvocationStateInfo.Reason);
+   if(!text.Contains(marker))throw new InvalidOperationException("PowerShell-Auftrag wurde ohne Erfolgsbestätigung beendet. Erwartet: "+marker+Environment.NewLine+state+Environment.NewLine+text);
+   return text+Environment.NewLine+state;
+  }
+  static void HostChecks(Runspace runspace){
+   foreach(string script in new[]{
+    "$ErrorActionPreference='Stop'; Write-Error 'EXPECTED_SUPPRESSED' -ErrorAction SilentlyContinue; 'HOST_OK'",
+    "$ErrorActionPreference='Stop'; try { throw 'EXPECTED_CAUGHT' } catch {}; 'HOST_OK'"
+   })using(var ps=PowerShell.Create()){
+    ps.Runspace=runspace;ps.AddScript(script);InvokeChecked(ps,"HOST_OK");
+    if(script.Contains("EXPECTED_SUPPRESSED")&&(!ps.HadErrors||ps.Streams.Error.Count!=0))throw new InvalidOperationException("Der ursprüngliche HadErrors-Fehler wurde im Test nicht reproduziert.");
+   }
+   foreach(string script in new[]{
+    "$ErrorActionPreference='Stop'; throw 'EXPECTED_REAL_FAILURE'",
+    "$ErrorActionPreference='Continue'; Write-Error 'EXPECTED_REAL_FAILURE'; 'HOST_OK'",
+    "$ErrorActionPreference='Stop'; 'Kein Erfolgsmarker'"
+   })using(var ps=PowerShell.Create()){
+    ps.Runspace=runspace;ps.AddScript(script);bool failed=false;
+    try{InvokeChecked(ps,"HOST_OK");}catch(InvalidOperationException e){failed=true;if(String.IsNullOrWhiteSpace(e.Message))throw new InvalidOperationException("Leere Fehlermeldung im Hosttest.");}
+    if(!failed)throw new InvalidOperationException("Ein echter Fehler oder fehlender Erfolgsmarker wurde übergangen.");
+   }
+  }
   static void WriteReport(string text){if(report!=null)File.WriteAllText(report,text);}
  }
 }

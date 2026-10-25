@@ -37,6 +37,7 @@ try{
         if($service){Invoke-Sc @('delete','NetzblickControl')}
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
         Write-Host 'Dienst und Tray-Autostart entfernt. Regeldatei und installierte Dateien bleiben als Sicherung erhalten. Frühere Windows-Firewallregeln werden nicht gelöscht.'
+        Write-Output 'NETZBLICK_MAINTENANCE_OK'
         if($NetzblickDistributionRoot){return}else{exit 0}
     }
     Protect-Directory $target;Protect-Directory $data
@@ -64,5 +65,6 @@ try{
         else{Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList ('-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+(Join-Path $target 'Netzblick.ps1')+'"')}
     }
     Write-Host 'Netzblick installiert. Der Kontrollmodus wird erst nach deiner Entscheidung aktiviert.'
-}catch{Write-Error $_;exit 1}
+    Write-Output 'NETZBLICK_MAINTENANCE_OK'
+}catch{throw}
 

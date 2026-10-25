@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.8.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.8.1'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -383,6 +383,7 @@ try {
         Write-Output 'PASS: full WPF/tray initialization and orderly close.'
         if($Embedded){return}else{exit 0}
     }
+    if($Embedded){Write-Output 'NETZBLICK_UI_OK'}
 } catch {
     $message=$_.Exception.Message
     if($Check -or $SmokeTest){Write-Error ($message+[Environment]::NewLine+$_.ScriptStackTrace);exit 1}

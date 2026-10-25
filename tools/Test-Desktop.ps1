@@ -19,6 +19,7 @@ $before=Get-Service NetzblickControl -ErrorAction SilentlyContinue
 if($before){throw 'Desktop-Prüfung nur auf einem isolierten Runner ohne Netzblick-Dienst ausführen.'}
 # Reproduce the user's exact download condition without unblocking anything.
 Set-Content -LiteralPath $exe -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3" -Encoding ASCII
+Run-Exe '--host-check'
 Run-Exe '--portable --check'
 Run-Exe '--portable --smoke-test'
 if(Get-Service NetzblickControl -ErrorAction SilentlyContinue){throw 'Portable Version hat einen Dienst hinterlassen.'}

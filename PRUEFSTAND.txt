@@ -1,4 +1,15 @@
-﻿Netzblick 0.8.0 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.8.1 – EXE-Pakete (Entwicklungsversion)
+
+Korrektur 0.8.1:
+- PowerShell-HadErrors wird nicht mehr pauschal als Abbruchcode bewertet.
+  Bewusst unterdrückte oder abgefangene Meldungen können das Flag setzen,
+  obwohl der Auftrag erfolgreich abgeschlossen wurde.
+- Installations-/Deinstallationsskript muss seinen letzten Erfolgsmarker
+  liefern. Echte ausgegebene/terminierende Fehler bleiben Fehler.
+- Protokolle enthalten Fehlerdetails, Skriptposition, Zustand und Kultur.
+- Host-Regression prüft unterdrückte, abgefangene und echte Fehler sowie
+  einen fehlenden Erfolgsmarker mit der tatsächlich verwendeten PS-Engine.
+- Setup-Prüfung verwendet zusätzlich die deutsche Benutzerkultur de-DE.
 
 Neue Windows-Prüfungen im Workflow windows-desktop.yml:
 - Windows-x64-EXE und Hintergrunddienst kompilieren.
