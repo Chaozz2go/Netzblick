@@ -1,7 +1,7 @@
 name: Windows EXE and installer
 on:
   push:
-    branches: [main]
+    branches: [main, fix/powershell-host-result]
   workflow_dispatch:
 permissions:
   contents: write
