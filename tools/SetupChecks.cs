@@ -41,6 +41,19 @@ public static class SetupChecks {
   try{SetupChanges.Upsert(decisions,rule());throw new Exception("ignored narrow allowance accepted");}catch(InvalidOperationException){check(decisions.Rules.Count==1,"broad block conflict keeps existing decision");}
   decisions.Rules.Clear();decisions.Rules.Add(denied);var full=rule();full.Address="*";full.Protocol=0;full.Port=0;SetupChanges.Upsert(decisions,full);check(decisions.Rules.Count==2,"broad allowance preserves explicit narrower deny");
   check(SetupRule.ProtocolName(47)!="Alle Protokolle","unknown protocol never described as all protocols");
+  var managed=new SetupConfig();string app=@"C:\Apps\test.exe",peer=@"C:\Apps\other.exe";
+  check(ProgramPolicy.Category(managed,app)=="Default","observer uses Windows standard, no invented allow");
+  managed.WatchedPaths.Add(app);check(ProgramPolicy.Category(managed,app)=="Blocked","watch visible without rule rows");
+  var narrow=rule();narrow.Path=app;managed.Rules.Add(narrow);check(ProgramPolicy.Category(managed,app)=="Limited","watch exception is partial, not full permission");
+  SetupChanges.BlockProgram(managed,app);check(ProgramPolicy.Category(managed,app)=="Blocked","two full denies override grants");
+  SetupChanges.BlockProgram(managed,peer);var peerId=managed.Rules.Find(x=>x.Path==peer).Id;
+  SetupChanges.AllowProgram(managed,app);check(ProgramPolicy.Category(managed,app)=="Allowed"&&!managed.WatchedPaths.Contains(app),"allow atomically removes watch and conflicting partial denies");
+  check(managed.Rules.Find(x=>x.Id==peerId)!=null,"program change preserves other program rules");
+  managed.Ask=true;SetupChanges.ProgramDefault(managed,app);check(ProgramPolicy.Category(managed,app)=="Blocked","reset to standard is still blocked in ask mode");
+  managed.Ask=false;check(ProgramPolicy.Category(managed,app)=="Default","program reset returns observer default");
+  narrow=rule();narrow.Path=app;narrow.ExpiresUtc=now.AddMinutes(-1);managed.Rules.Add(narrow);check(ProgramPolicy.Category(managed,app)=="Default","expired permissions never counted");
+  narrow.ExpiresUtc=null;narrow.Action="Block";check(ProgramPolicy.Category(managed,app)=="Limited","single endpoint deny not mistaken for full program block");
   return count;
  }
 }
+

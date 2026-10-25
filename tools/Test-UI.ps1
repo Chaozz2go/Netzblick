@@ -19,12 +19,13 @@ foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Upd
 function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\AccessMode.ps1')
+. (Join-Path $appRoot 'src\PermissionMode.ps1')
 [void][IO.Directory]::CreateDirectory($OutputDirectory)
 $testExe=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 [Netzblick.SetupClient]::Scenario($testExe,0)
 Initialize-AccessMode
 # Exercise review actions against UI fixtures only. FakeSetupClient rejects
-# every mutation, so marking/reviewing cannot accidentally change filters.
+# mutations operate only on in-memory fixture configuration, never native filters.
 . (Join-Path $appRoot 'src\UserModes.ps1')
 . (Join-Path $appRoot 'src\ReviewMode.ps1')
 $script:SmokeTest=$true;$script:policyReady=$true;$script:notifyObserved=$false
@@ -51,6 +52,36 @@ Save-ReviewDecision $testExe
 if($newPrograms.Count -ne 0 -or $setupStatus.Config.Rules.Count -ne $rulesBefore){throw 'Prüfmarkierung verändert Regeln oder lässt Eintrag stehen.'}
 $savedAfter=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
 if(@($savedAfter.Pending).Count -ne 0 -or $ui.UserNotice.Text -like '*nicht gespeichert*'){throw 'Erneutes Speichern der Prüfliste fehlgeschlagen.'}
+# Management must include saved, non-running apps, inspection/global gates,
+# independent review state, and refresh selections after atomic changes.
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+Set-PermissionProgram $testExe 'BlockProgram'
+if($ui.PermissionPrograms.Items.Count -ne 1 -or $ui.PermissionPrograms.Items[0].Category -ne 'Blocked'){throw 'Gespeicherte Programmsperre fehlt.'}
+$ui.PermissionFilter.SelectedIndex=1
+if($ui.PermissionPrograms.Items.Count -ne 1){throw 'Gesperrt-Filter fehlt.'}
+Set-PermissionProgram $testExe 'AllowProgram'
+if($ui.PermissionPrograms.Items.Count -ne 0){throw 'Erlaubtes Programm bleibt unter Gesperrt.'}
+$ui.PermissionFilter.SelectedIndex=3
+if($ui.PermissionPrograms.Items.Count -ne 1 -or $setupStatus.Config.Rules.Count -ne 2){throw 'Atomare Programmfreigabe fehlt.'}
+$setupStatus.Config.Ask=$true
+Set-PermissionProgram $testExe 'ProgramDefault'
+$ui.PermissionFilter.SelectedIndex=0
+if($ui.PermissionPrograms.Items[0].Category -ne 'Blocked'){throw 'Standard bei Nachfragen wird fälschlich als erlaubt gemeldet.'}
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+$setupStatus.Config.WatchedPaths.Add($testExe);Refresh-Permissions
+if($ui.PermissionPrograms.Items[0].Category -ne 'Blocked' -or @($ui.SetupRules.Items | Where-Object Kind -eq 'Watch').Count -ne 1){throw 'Prüfsperre fehlt in Verwaltung.'}
+Remove-PermissionEntry ($ui.SetupRules.Items | Where-Object Kind -eq 'Watch' | Select-Object -First 1);Refresh-Permissions
+if($setupStatus.Config.WatchedPaths.Count -ne 0){throw 'Prüfsperre kann nicht entfernt werden.'}
+$missing='C:\Fixture\NotRunning.exe';[Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,$missing);Refresh-Permissions
+if(@($ui.PermissionPrograms.Items | Where-Object Path -eq $missing).Count -ne 1){throw 'Nicht laufende gespeicherte App fehlt.'}
+$ui.PermissionSearch.Text='NotRunning';$ui.PermissionPrograms.SelectedIndex=0;Show-PermissionSelection
+if($ui.PermissionPrograms.Items.Count -ne 1 -or $ui.PermissionAllow.IsEnabled -or -not $ui.PermissionDefault.IsEnabled){throw 'Suche oder Bereinigung nicht vorhandener App fehlerhaft.'}
+Set-PermissionProgram $missing 'ProgramDefault'
+$ui.PermissionSearch.Text=''
+[Netzblick.SetupClient]::Scenario($testExe,3);Update-AccessMode
+if($ui.PermissionPrograms.Items[0].Category -ne 'Unknown' -or $ui.PermissionAllow.IsEnabled -or $ui.PermissionDefault.IsEnabled){throw 'Unbestätigter Dienst erlaubt Änderungen oder meldet Sperrwirkung.'}
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+Write-Output 'PASS: Sperren/Freigaben-Filter, atomare Programmfreigabe, Standard im Nachfragemodus, Prüfsperre, beendete Apps, Suche und unbestätigter Status.'
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
@@ -120,7 +151,7 @@ try{
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode
   if($scenario -eq 0 -and -not $ui.StartAccess.IsEnabled){throw 'Beobachten: Start fehlt.'}
   if($scenario -eq 1 -and -not $ui.TrySetupRule.IsEnabled){throw 'Blockversuch: Testfreigabe fehlt.'}
-  if($scenario -eq 2 -and ($ui.SetupRules.Items.Count -ne 1 -or $ui.RecoveryBanner.Visibility -ne 'Visible')){throw 'Regel oder Sicherheitsrückweg fehlt.'}
+  if($scenario -eq 2 -and ($ui.SetupRules.Items.Count -ne 2 -or $ui.RecoveryBanner.Visibility -ne 'Visible')){throw 'Regel oder Sicherheitsrückweg fehlt.'}
   if($scenario -eq 3 -and $ui.SaveSetupRule.IsEnabled){throw 'Unbestätigter Zustand erlaubt Änderungen.'}
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
@@ -129,8 +160,9 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
- foreach($panelName in @('Overview','Updates','World','Inspection')){
+ foreach($panelName in @('Overview','Updates','World','Inspection','Access')){
   foreach($n in @('Access','Overview','Updates','World','Inspection')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+  $ui.AccessViews.SelectedIndex=1
   $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0);$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
@@ -140,7 +172,7 @@ try{
   }
  }
  if($LogPreview){
-  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Overview-1280.png')))
+  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Access-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
  # Hide keeps both tray and process alive; complete quit closes the window.

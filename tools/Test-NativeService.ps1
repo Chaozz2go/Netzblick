@@ -58,6 +58,13 @@ try{
     if(-not (Connect-Fixture)){throw 'Rücknahme der Schnellsperre stellt die Baseline nicht wieder her.'}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
+    $allowed=Send-Control ([Netzblick.SetupCommand]@{Operation='AllowProgram';Path=$fixture})
+    if($allowed.Config.WatchedPaths.Count -or @($allowed.Config.Rules | Where-Object {$_.Path -eq $fixture -and $_.Action -eq 'Block'}).Count -or -not (Connect-Fixture)){throw 'Programm erlauben hebt Dienst-/Prüfsperren nicht vollständig auf.'}
+    $standard=Send-Control ([Netzblick.SetupCommand]@{Operation='ProgramDefault';Path=$fixture})
+    if(@($standard.Config.Rules | Where-Object {$_.Path -eq $fixture}).Count -or -not (Connect-Fixture)){throw 'Programmstandard entfernt eigene Freigaben nicht.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
+    if(Connect-Fixture){throw 'Erneutes Sperren nach Programmfreigabe wirkungslos.'}
+    Write-Output 'PASS: Programm erlauben entfernt Sperren und Prüfsperre atomar; Standard entfernt eigene Freigaben; erneute echte TCP-Sperre bestätigt.'
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'})
     if($fresh.Config.Ask -or $fresh.Config.Rules.Count -or $fresh.Config.WatchedPaths.Count -or $fresh.Attempts.Count){throw 'Reset lässt alte Regeln oder Ereignisse stehen.'}
     if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}

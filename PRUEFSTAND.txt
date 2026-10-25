@@ -1,4 +1,11 @@
-﻿Netzblick 0.10.1 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.11.0 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.11.0: Programmverwaltung mit getrennten Statusfiltern, Suche, gespeicherten
+beendeten Apps, Prüfsperren/globalem Modus und direkten Änderungen. Programmaktionen
+werden im Dienst als eine Konfigurationsänderung mit bisheriger Rücknahme bei
+Fehlern ausgeführt. Kernprüfungen decken Regelpriorität, Teilfreigaben, Ablauf,
+Nachfragemodus und die Erhaltung fremder Programmentscheidungen ab. WPF-Fixtures
+prüfen Filterwechsel, Suche, Prüfsperren und nicht bestätigten Dienststatus.
 
 WFP-Korrektur 0.10.1:
 - Kein pauschaler Abbruch bei gleicher angeforderter WFP-Priorität.
@@ -17,7 +24,7 @@ WFP-Korrektur 0.10.1:
 - Desktop-Pakete erfordern nun im selben Build auch Interaktions-
   und native Dienstprüfungen vor dem Anlegen des Releaseentwurfs.
 
-Interaktionskorrekturen 0.10.1:
+Interaktionskorrekturen 0.10.0:
 - Tatsächliche SocketRow-Einzelzeile plus ETW-Gegenstelle und Wechsel
   zwischen Programmen/Alle/keine Sockets im WPF-Fixture geprüft.
 - Mausrad-Zoom, Zoomgrenzen, Pan-Grenzen und Zoom zurücksetzen geprüft.
@@ -31,7 +38,7 @@ Interaktionskorrekturen 0.10.1:
 - Der konkrete unbestätigte Filterstatus auf einem Nutzergerät muss
   anhand der dort angezeigten Dienstfehlermeldung beurteilt werden.
 
-Neu in 0.10.1:
+Neu in 0.9.0:
 - Updatevergleich prüft numerische Version/Build, optionale Entwürfe und
   Testversionen, passende Windows-Pakete und feste GitHub-Release-URLs.
   Fixturetests senden keine Netzwerkabfragen und verwenden keine Tokens.
@@ -44,7 +51,7 @@ Neu in 0.10.1:
 - Privater GitHub-Zugriff muss mit einem eigenen Token auf dem Gerät
   eingerichtet werden; Live-Zugriff mit Nutzer-Token wurde nicht getestet.
 
-Korrektur 0.10.1:
+Korrektur 0.8.1:
 - PowerShell-HadErrors wird nicht mehr pauschal als Abbruchcode bewertet.
   Bewusst unterdrückte oder abgefangene Meldungen können das Flag setzen,
   obwohl der Auftrag erfolgreich abgeschlossen wurde.

@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.10.1'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.11.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -75,6 +75,7 @@ try {
     . (Join-Path $appRoot 'src\UserModes.ps1')
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
     . (Join-Path $appRoot 'src\AccessMode.ps1')
+    . (Join-Path $appRoot 'src\PermissionMode.ps1')
     . (Join-Path $appRoot 'src\TrayMode.ps1')
     . (Join-Path $appRoot 'src\ReviewMode.ps1')
     . (Join-Path $appRoot 'src\UpdatesMode.ps1')

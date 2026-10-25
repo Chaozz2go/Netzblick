@@ -34,7 +34,7 @@ jobs:
         shell: powershell
         run: |
           Remove-Item dist/Netzblick-Daten -Recurse -Force -ErrorAction SilentlyContinue
-          Compress-Archive -Path dist/Netzblick.exe,dist/Netzblick.exe.config,dist/README.md,dist/PRUEFSTAND.txt,dist/THIRD-PARTY-NOTICES.txt,dist/licenses -DestinationPath Netzblick-Portable-0.10.1-win-x64.zip
+          Compress-Archive -Path dist/Netzblick.exe,dist/Netzblick.exe.config,dist/README.md,dist/PRUEFSTAND.txt,dist/THIRD-PARTY-NOTICES.txt,dist/licenses -DestinationPath Netzblick-Portable-0.11.0-win-x64.zip
       - name: Compile installer
         shell: powershell
         run: |
@@ -53,15 +53,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: Netzblick-0.10.1-win-x64
+          name: Netzblick-0.11.0-win-x64
           path: |
-            Netzblick-Portable-0.10.1-win-x64.zip
-            dist-install/Netzblick-Setup-0.10.1-win-x64.exe
+            Netzblick-Portable-0.11.0-win-x64.zip
+            dist-install/Netzblick-Setup-0.11.0-win-x64.exe
       - name: Publish tested packages as draft
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = 'v0.10.1-build-${{ github.run_number }}'
-          gh release create $tag --draft --target '${{ github.sha }}' --title 'Netzblick 0.10.1 – EXE, portable und Setup' --notes 'Entwicklungsversion. Portable EXE mit Internetmarkierung sowie Installation, Update, Start und Deinstallation auf Windows geprüft. Weitere Firewall-Gerätetests siehe PRUEFSTAND.txt.' Netzblick-Portable-0.10.1-win-x64.zip dist-install/Netzblick-Setup-0.10.1-win-x64.exe
+          $tag = 'v0.11.0-build-${{ github.run_number }}'
+          gh release create $tag --draft --target '${{ github.sha }}' --title 'Netzblick 0.11.0 – EXE, portable und Setup' --notes 'Entwicklungsversion. Portable EXE mit Internetmarkierung sowie Installation, Update, Start und Deinstallation auf Windows geprüft. Weitere Firewall-Gerätetests siehe PRUEFSTAND.txt.' Netzblick-Portable-0.11.0-win-x64.zip dist-install/Netzblick-Setup-0.11.0-win-x64.exe
           if ($LASTEXITCODE -ne 0) { throw 'Pakete konnten nicht als Entwurf bereitgestellt werden.' }
