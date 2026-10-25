@@ -21,8 +21,8 @@ try{
  $marker=Join-Path $env:ProgramData 'Netzblick\update-preserves-data.txt'
  Set-Content -LiteralPath $marker -Value 'behalten'
  $report=Join-Path $env:TEMP 'netzblick-installed-report.txt'
- Run-Checked (Join-Path $installed 'Netzblick.exe') ('--installed --smoke-test --report "'+$report+'"')
- if((Get-Content -LiteralPath $report -Raw) -notmatch 'PASS: EXE host'){throw 'Installierte EXE nicht bestätigt.'}
+ Run-Checked (Join-Path $installed 'Netzblick.exe') ('--smoke-test --report "'+$report+'"')
+ if((Get-Content -LiteralPath $report -Raw) -notmatch 'PASS: EXE host; embedded assemblies; installed'){throw 'Installierte EXE nicht bestätigt.'}
  # Repeat installation exercises stopping and replacing an existing service.
  Run-Checked $setup '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
  if(-not(Test-Path -LiteralPath $marker)){throw 'Update hat Einstellungen entfernt.'}

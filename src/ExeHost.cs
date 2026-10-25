@@ -53,7 +53,9 @@ namespace Netzblick.Desktop {
     }
     if(!Environment.Is64BitProcess)throw new NotSupportedException("Netzblick benötigt Windows x64.");
     bool maintenance=Has(args,"--install")||Has(args,"--uninstall");
-    bool portable=!Has(args,"--installed")&&!maintenance;
+    string installedRoot=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Netzblick");
+    bool inInstalledFolder=String.Equals(Path.GetDirectoryName(Self.Location),installedRoot,StringComparison.OrdinalIgnoreCase);
+    bool portable=Has(args,"--portable")||(!Has(args,"--installed")&&!maintenance&&!inInstalledFolder);
     if(Has(args,"--portable")&&(Has(args,"--installed")||maintenance))throw new ArgumentException("Portable und installierte Betriebsart dürfen nicht kombiniert werden.");
     if(Has(args,"--install")&&Has(args,"--uninstall"))throw new ArgumentException("Installation und Deinstallation dürfen nicht kombiniert werden.");
     if(portable&&!check){
