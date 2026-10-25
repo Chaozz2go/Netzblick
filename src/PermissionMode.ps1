@@ -59,7 +59,9 @@ function Refresh-Permissions {
     Show-PermissionSelection
 }
 function Show-PermissionSelection {
-    $p=$ui.PermissionPrograms.SelectedItem;$ready=$p -and $script:setupStatus -and $setupStatus.Verified
+    $p=$ui.PermissionPrograms.SelectedItem
+    if(-not $p -or -not $script:setupStatus -or -not $setupStatus.Verified -or $script:permissionNoticeKey -ne $p.Key){$ui.PermissionNotice.Text=''}
+    $ready=$p -and $script:setupStatus -and $setupStatus.Verified
     $exists=$p -and [IO.File]::Exists($p.Path)
     $protected=$p -and (Is-Protected $p.Path)
     $ui.PermissionAllow.IsEnabled=[bool]($ready -and $exists -and -not $protected -and -not $p.Legacy)
@@ -89,6 +91,7 @@ function Set-PermissionProgram([string]$path,[string]$operation){
     if($operation -ne 'ProgramDefault' -and (Is-Protected $path)){throw 'System-Sammelprozess über einzelne Verbindungen verwalten.'}
     [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation=$operation;Path=$path}))
     Update-AccessMode;Refresh-Overview
+    $script:permissionNoticeKey=[Netzblick.ProcessLineage]::Normalize($path)
     $ui.PermissionNotice.Text=([IO.Path]::GetFileName($path)+': '+(Get-PermissionStatus $path).Status+' · Änderung bestätigt.')
 }
 function Remove-PermissionEntry($entry){

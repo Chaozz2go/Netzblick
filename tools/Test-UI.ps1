@@ -155,6 +155,7 @@ try{
   if($scenario -eq 3 -and $ui.SaveSetupRule.IsEnabled){throw 'Unbestätigter Zustand erlaubt Änderungen.'}
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
+   if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
@@ -162,10 +163,18 @@ try{
  }
  foreach($panelName in @('Overview','Updates','World','Inspection','Access')){
   foreach($n in @('Access','Overview','Updates','World','Inspection')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+  if($panelName -eq 'Access'){
+   [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+   [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')
+   [Netzblick.SetupChanges]::AllowProgram($setupStatus.Config,'C:\Beispiel\Erlaubte-App.exe')
+   $partial=New-Object Netzblick.SetupRule;$partial.Id=[guid]::NewGuid().ToString();$partial.Name='Ein Ziel gesperrt';$partial.Path='C:\Beispiel\Teilweise-App.exe';$partial.Direction='Ausgehend';$partial.Address='10.0.0.10';$partial.Protocol=6;$partial.Port=443;$partial.Action='Block';$setupStatus.Config.Rules.Add($partial)
+   Refresh-Permissions
+  }
   $ui.AccessViews.SelectedIndex=1
   $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0);$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
+   if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ($panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
@@ -183,6 +192,6 @@ try{
  $trayQuitItem.PerformClick()
  if(-not $script:exitNetzblick -or $tray.Visible){throw 'Vollständig beenden lässt das Tray offen.'}
  Write-Output 'PASS: Fenster schließen erhält das Tray; vollständig beenden entfernt es.'
- Write-Output 'PASS: vier UI-Zustände; acht Renderings. Nur Fakes, keine WFP-/Firewall-/Audit-Änderungen.'
+ Write-Output 'PASS: vier UI-Zustände und fünf gerenderte Ansichten. Nur Fakes, keine WFP-/Firewall-/Audit-Änderungen.'
 }finally{$accessTimer.Stop();$window.Close();Remove-Item -LiteralPath $userStateDirectory -Recurse -Force -ErrorAction SilentlyContinue}
 
