@@ -10,8 +10,8 @@ $compiler=Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.ex
 function Compile([string[]]$options){& $compiler /nologo /optimize+ /platform:x64 @options;if($LASTEXITCODE -ne 0){throw 'EXE-Kompilierung fehlgeschlagen.'}}
 & (Join-Path $PSScriptRoot 'Build-Service.ps1')
 $core=Join-Path $work 'Netzblick.Core.dll'
-$sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','SetupTransport.cs','ServiceHost.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}
-Compile (@('/target:library',"/out:$core",'/r:System.dll','/r:System.Core.dll','/r:System.Xml.dll','/r:System.Web.Extensions.dll','/r:System.ServiceProcess.dll')+$sources)
+$sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','SetupTransport.cs','ServiceHost.cs','ReleaseUpdates.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}
+Compile (@('/target:library',"/out:$core",'/r:System.dll','/r:System.Core.dll','/r:System.Xml.dll','/r:System.Web.Extensions.dll','/r:System.ServiceProcess.dll','/r:System.Security.dll')+$sources)
 $payload=Join-Path $work 'payload'
 if(Test-Path -LiteralPath $payload){Remove-Item -LiteralPath $payload -Recurse -Force}
 [void][IO.Directory]::CreateDirectory((Join-Path $payload 'src'))
@@ -27,7 +27,10 @@ if(Test-Path -LiteralPath $zip){Remove-Item -LiteralPath $zip}
 $exe=Join-Path $OutputDirectory 'Netzblick.exe'
 $references=@('/target:winexe',"/out:$exe",('/win32manifest:'+(Join-Path $root 'src\Netzblick.manifest')),('/r:'+([psobject].Assembly.Location)),"/r:$core",'/r:System.dll','/r:System.Core.dll','/r:System.Windows.Forms.dll','/r:System.ServiceProcess.dll','/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll',"/resource:$zip,Netzblick.Payload","/resource:$core,Netzblick.Library.Netzblick.Core.dll")
 foreach($dll in Get-ChildItem -LiteralPath (Join-Path $root 'lib') -Filter '*.dll' -File){$references+=('/resource:'+$dll.FullName+',Netzblick.Library.'+$dll.Name)}
-Compile ($references+@(Join-Path $root 'src\ExeHost.cs'))
+$stamp=Join-Path $work 'BuildStamp.cs'
+$buildNumber=if($env:GITHUB_RUN_NUMBER -match '^\d+$'){$env:GITHUB_RUN_NUMBER}else{'0'}
+[IO.File]::WriteAllText($stamp,('[assembly: System.Reflection.AssemblyInformationalVersion("0.11.1+build.'+$buildNumber+'") ]'))
+Compile ($references+@(Join-Path $root 'src\ExeHost.cs')+@($stamp))
 # No loadFromRemoteSources switch: libraries come from the EXE's own resources.
 @'
 <?xml version="1.0" encoding="utf-8"?>

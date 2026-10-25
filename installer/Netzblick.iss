@@ -1,4 +1,4 @@
-#define Version "0.8.0"
+#define Version "0.11.1"
 [Setup]
 AppId=Netzblick.Desktop
 AppName=Netzblick
@@ -37,6 +37,14 @@ Name: "{group}\Netzblick deinstallieren"; Filename: "{uninstallexe}"
 Filename: "{app}\Netzblick.exe"; Parameters: "--installed"; Description: "Netzblick öffnen"; Flags: nowait postinstall skipifsilent runascurrentuser
 
 [Code]
+function SetupFailure(const Prefix, LogPath: String; Code: Integer): String;
+var Text: AnsiString;
+begin
+  Result := Prefix + ' Fehlercode: ' + IntToStr(Code) + #13#10 + 'Protokoll: ' + LogPath;
+  if LoadStringFromFile(LogPath, Text) then
+    Result := Result + #13#10#13#10 + Copy(UTF8Decode(Text), 1, 1800);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var Code: Integer;
 begin
@@ -52,7 +60,7 @@ begin
   if CurStep = ssPostInstall then begin
     if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--install --no-tray --report "' + ExpandConstant('{commonappdata}\Netzblick-Setup.log') + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) then
       RaiseException('Netzblick-Dienst konnte nicht eingerichtet werden.');
-    if Code <> 0 then RaiseException('Netzblick-Dienstinstallation fehlgeschlagen. Fehlercode: ' + IntToStr(Code));
+    if Code <> 0 then RaiseException(SetupFailure('Netzblick-Dienstinstallation fehlgeschlagen.', ExpandConstant('{commonappdata}\Netzblick-Setup.log'), Code));
   end;
 end;
 
@@ -62,6 +70,6 @@ begin
   if CurUninstallStep = usUninstall then begin
     if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--uninstall --no-tray --report "' + ExpandConstant('{commonappdata}\Netzblick-Uninstall.log') + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) then
       RaiseException('Netzblick-Dienst konnte nicht entfernt werden.');
-    if Code <> 0 then RaiseException('Netzblick-Dienstentfernung fehlgeschlagen. Fehlercode: ' + IntToStr(Code));
+    if Code <> 0 then RaiseException(SetupFailure('Netzblick-Dienstentfernung fehlgeschlagen.', ExpandConstant('{commonappdata}\Netzblick-Uninstall.log'), Code));
   end;
 end;

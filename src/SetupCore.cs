@@ -9,6 +9,24 @@ namespace Netzblick {
   public SetupChangeFailure(string text,bool restored,Exception inner):base(text,inner){Restored=restored;}
  }
  public static class SetupChanges {
+  public static void BlockProgram(SetupConfig config,string path){
+   if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
+   string name=System.IO.Path.GetFileName(path);
+   foreach(string direction in new[]{"Ausgehend","Eingehend"})Upsert(config,new SetupRule{Id=Guid.NewGuid().ToString(),Name="Gesperrt: "+name.Substring(0,Math.Min(70,name.Length)),Path=path,Direction=direction,Address="*",Protocol=0,Port=0,Action="Block"});
+   config.Validate();
+  }
+  public static void ProgramDefault(SetupConfig config,string path){
+   if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
+   string key=ProcessLineage.Normalize(path);
+   config.WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==key);
+   config.Rules.RemoveAll(r=>ProcessLineage.Normalize(r.Path)==key);
+  }
+  public static void AllowProgram(SetupConfig config,string path){
+   ProgramDefault(config,path);
+   string name=System.IO.Path.GetFileName(path);
+   foreach(string direction in new[]{"Ausgehend","Eingehend"})Upsert(config,new SetupRule{Id=Guid.NewGuid().ToString(),Name="Erlaubt: "+name.Substring(0,Math.Min(70,name.Length)),Path=path,Direction=direction,Address="*",Protocol=0,Port=0,Action="Allow"});
+   config.Validate();
+  }
   public static void Upsert(SetupConfig config,SetupRule rule){
    rule.Validate();var keep=config.Rules.Where(r=>!(r.Covers(rule)&&rule.Covers(r))).ToList();
    var conflict=keep.FirstOrDefault(r=>r.Action=="Block"&&r.Covers(rule));
@@ -22,6 +40,23 @@ namespace Netzblick {
     try{apply(before);}catch(Exception restore){throw new SetupChangeFailure(original.Message+" Regelzustand unbestätigt: "+restore.Message,false,original);}
     throw new SetupChangeFailure(original.Message+" Vorherige Filter wiederhergestellt.",true,original);
    }
+  }
+ }
+ // Describes only Netzblick's configured external traffic policy, never a promise
+ // about Windows/third-party filters or already established connections.
+ public static class ProgramPolicy {
+  public static string Category(SetupConfig config,string path){
+   string key=ProcessLineage.Normalize(path);
+   var rules=config.Rules.Where(r=>(!r.ExpiresUtc.HasValue||r.ExpiresUtc.Value>DateTime.UtcNow)&&(r.Path=="*"||ProcessLineage.Normalize(r.Path)==key)).ToList();
+   Func<string,string,bool> full=(action,direction)=>rules.Any(r=>r.Action==action&&r.Direction==direction&&r.Address=="*"&&r.Protocol==0&&r.Port==0);
+   bool deny=rules.Any(r=>r.Action=="Block"),allow=rules.Any(r=>r.Action=="Allow");
+   if(full("Block","Ausgehend")&&full("Block","Eingehend"))return "Blocked";
+   bool gated=config.Ask||config.WatchedPaths.Any(p=>ProcessLineage.Normalize(p)==key);
+   if(gated&&!allow)return "Blocked";
+   if(deny)return "Limited";
+   if(full("Allow","Ausgehend")&&full("Allow","Eingehend"))return "Allowed";
+   if(gated||allow)return "Limited";
+   return "Default";
   }
  }
  public sealed class SetupRule {
@@ -73,6 +108,7 @@ namespace Netzblick {
  public sealed class SetupQueue {
   readonly Dictionary<string,SetupAttempt> items=new Dictionary<string,SetupAttempt>(StringComparer.OrdinalIgnoreCase);
   public long Dropped {get;private set;} public long Unknown {get;private set;}
+  public void Clear(){items.Clear();Dropped=0;Unknown=0;}
   public void Observe(BlockEvent e,bool own){
    if(e.Direction!="Ausgehend"&&e.Direction!="Eingehend"){Unknown++;return;}
    IPAddress ip;string raw=e.Target;
@@ -99,3 +135,4 @@ namespace Netzblick {
   public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
  }
 }
+

@@ -1,4 +1,72 @@
-﻿Netzblick 0.8.0 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.11.1 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.11.1: Ampelpunkte direkt bei Programmnamen in Aktivität und Programme.
+Öffentliche Updateabfragen verwenden keine gespeicherten privaten Tokens.
+Releasepipeline prüft Quellen/Verlauf auf bekannte Zugangsdatenmuster und
+veröffentlicht nur vom öffentlichen main reguläre Releases samt SHA256SUMS.
+Die Mustersuche ersetzt keine vollständige manuelle Sicherheitsprüfung.
+
+Neu 0.11.0: Programmverwaltung mit getrennten Statusfiltern, Suche, gespeicherten
+beendeten Apps, Prüfsperren/globalem Modus und direkten Änderungen. Programmaktionen
+werden im Dienst als eine Konfigurationsänderung mit bisheriger Rücknahme bei
+Fehlern ausgeführt. Kernprüfungen decken Regelpriorität, Teilfreigaben, Ablauf,
+Nachfragemodus und die Erhaltung fremder Programmentscheidungen ab. WPF-Fixtures
+prüfen Filterwechsel, Suche, Prüfsperren und nicht bestätigten Dienststatus.
+
+WFP-Korrektur 0.10.1:
+- Kein pauschaler Abbruch bei gleicher angeforderter WFP-Priorität.
+  Der von BFE tatsächlich zugewiesene freie Gewichtswert wird gelesen
+  und anschließend auf Veränderungen geprüft.
+- Prüfung aktiver Fremdfilter nur für die betroffenen ALE-Ebenen:
+  Hard Permits werden vor Installation auf mögliche Überschneidung
+  geprüft, bekannte EXE-/Protokoll-/Port-/Adressunterschiede getrennt.
+  Nicht eindeutig auswertbare Bedingungen gelten nicht als disjunkt.
+- Dynamische Callout-Entscheidungen werden als nicht vollständig
+  prüfbar gekennzeichnet; keine Behauptung vollständiger Koexistenz.
+- Native Fixture mit gleicher höchster Priorität, Soft Permit und
+  Hard Permit für andere EXE; echte TCP-Sperre und Freigabe. Ein
+  passendes Hard Permit muss ohne neue eigene Sperre abgewiesen werden.
+- Peer-Regeln müssen unverändert bleiben; Cleanup ist sitzungsbezogen.
+- Desktop-Pakete erfordern nun im selben Build auch Interaktions-
+  und native Dienstprüfungen vor dem Anlegen des Releaseentwurfs.
+
+Interaktionskorrekturen 0.10.0:
+- Tatsächliche SocketRow-Einzelzeile plus ETW-Gegenstelle und Wechsel
+  zwischen Programmen/Alle/keine Sockets im WPF-Fixture geprüft.
+- Mausrad-Zoom, Zoomgrenzen, Pan-Grenzen und Zoom zurücksetzen geprüft.
+- Dateiauswahl/Metadaten: Vorabsperre ist mit bestätigtem Dienst aktiv;
+  bei unbestätigtem Dienst deaktiviert mit erklärtem Grund; Retry geprüft.
+- Reset der Entscheidungen/Regeln, erneute Prüfung aktueller Programme
+  und Sicherungsdatei in Fixtures; nativer Reset/Recheck/TCP-Test.
+- Tray-Fenster ausblenden behält Icon; vollständiges Beenden entfernt es.
+- Vollständiger Exit stoppt im Installer-Test den tatsächlichen Dienst;
+  erneuter installierter EXE-Start muss den Dienst wieder starten.
+- Der konkrete unbestätigte Filterstatus auf einem Nutzergerät muss
+  anhand der dort angezeigten Dienstfehlermeldung beurteilt werden.
+
+Neu in 0.9.0:
+- Updatevergleich prüft numerische Version/Build, optionale Entwürfe und
+  Testversionen, passende Windows-Pakete und feste GitHub-Release-URLs.
+  Fixturetests senden keine Netzwerkabfragen und verwenden keine Tokens.
+- WPF-Fixtures prüfen neue App/Gegenstellen, direkten Anzeigenweg,
+  Speicherung offener Prüfungen und Markierung ohne Regeländerung.
+  Aktivität und Updates werden in 1480x920 und 1280x800 gerendert.
+- Native Dienstprüfung erweitert um atomare Schnellsperre für beide
+  Richtungen, tatsächlichen IPv4/TCP-Verbindungsversuch und Rücknahme.
+- EXE-/Installer-/Update-/Deinstallationsprüfungen bleiben aktiv.
+- Privater GitHub-Zugriff muss mit einem eigenen Token auf dem Gerät
+  eingerichtet werden; Live-Zugriff mit Nutzer-Token wurde nicht getestet.
+
+Korrektur 0.8.1:
+- PowerShell-HadErrors wird nicht mehr pauschal als Abbruchcode bewertet.
+  Bewusst unterdrückte oder abgefangene Meldungen können das Flag setzen,
+  obwohl der Auftrag erfolgreich abgeschlossen wurde.
+- Installations-/Deinstallationsskript muss seinen letzten Erfolgsmarker
+  liefern. Echte ausgegebene/terminierende Fehler bleiben Fehler.
+- Protokolle enthalten Fehlerdetails, Skriptposition, Zustand und Kultur.
+- Host-Regression prüft unterdrückte, abgefangene und echte Fehler sowie
+  einen fehlenden Erfolgsmarker mit der tatsächlich verwendeten PS-Engine.
+- Setup-Prüfung verwendet zusätzlich die deutsche Benutzerkultur de-DE.
 
 Neue Windows-Prüfungen im Workflow windows-desktop.yml:
 - Windows-x64-EXE und Hintergrunddienst kompilieren.

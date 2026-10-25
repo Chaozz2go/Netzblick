@@ -4,15 +4,10 @@
     $ui.ChooseInspection.Add_Click({
         $dialog=New-Object Microsoft.Win32.OpenFileDialog;$dialog.Filter='Windows-Programme (*.exe)|*.exe';$dialog.CheckFileExists=$true
         if(-not $dialog.ShowDialog($window)){return}
-        try{
-            $path=[Netzblick.WfpGate]::CanonicalPath([IO.Path]::GetFullPath($dialog.FileName))
-            if(-not [Netzblick.AccessQueue]::CanAllow($path) -or -not [IO.File]::Exists($path)){throw 'Eine vorhandene lokale EXE auswählen.'}
-            if(Is-Protected $path){throw 'Windows-Sammelprozesse nicht mit der Einzelprogramm-Prüfung sperren.'}
-            $script:inspectionPath=$path;$script:inspection=@{Path=$path};$script:inspectionMetadata=$null;$script:inspectionActive=$false
-            $ui.InspectionPath.Text=$path;$ui.InspectionMetadata.Text='Dateiangaben und SHA-256 werden gelesen …';$ui.StartInspection.IsEnabled=$false
-            $script:inspectionMetadataTask=[Netzblick.InspectionFile]::Start($path)
-        }catch{Show-Error $_.Exception.GetBaseException().Message}
+        try{Select-InspectionPath $dialog.FileName}catch{Show-Error $_.Exception.GetBaseException().Message}
     })
+    $ui.RetryInspectionControl.Add_Click({Retry-InspectionControl})
+    $ui.ShowInspectionControl.Add_Click({Show-Panel 'AccessPanel'})
     $ui.StartInspection.Add_Click({Start-Inspection});$ui.StopInspection.Add_Click({Stop-Inspection})
     $ui.ReleaseInspection.Add_Click({
         if([Windows.MessageBox]::Show($window,'Prüfsperre für diesen EXE-Pfad entfernen? Weitere Regeln und der globale Nachfragemodus bleiben maßgeblich.','Prüfsperre entfernen','YesNo','Question') -ne 'Yes'){return}
@@ -47,6 +42,8 @@ function Update-Inspection {
     $ready=$setupStatus -and $setupStatus.Verified
     $watched=$ready -and $setupStatus.Config.WatchedPaths -contains $inspectionPath
     $ui.ChooseInspection.IsEnabled=-not $inspectionActive;$ui.StartInspection.IsEnabled=$ready -and $inspectionMetadata -and -not $inspectionMetadata.Error -and -not $inspectionActive
+    $reason=if(-not $ready){if($setupStatus -and $setupStatus.Error){$setupStatus.Error}elseif($script:accessProblem){$script:accessProblem}else{'Dienst oder Filter noch nicht bestätigt. Erneut prüfen oder Dienstfehler anzeigen.'}}elseif(-not $inspectionPath){'Zuerst eine EXE auswählen.'}elseif(-not $inspectionMetadata){'Dateiangaben werden noch gelesen …'}elseif($inspectionMetadata.Error){$inspectionMetadata.Error}elseif($inspectionActive){'Prüfsperre aktiv. Das Programm jetzt selbst starten.'}else{''}
+    $ui.InspectionBlockReason.Text=$reason;$ui.StartInspection.ToolTip=$reason
     $ui.StopInspection.IsEnabled=$inspectionActive;$ui.ReleaseInspection.IsEnabled=$watched
     $script:inspectionRows=if($setupStatus){@($setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq [Netzblick.ProcessLineage]::Normalize($inspectionPath)})}else{@()}
     $ui.InspectionEvents.ItemsSource=$inspectionRows;$ui.SaveInspectionReport.IsEnabled=$inspectionRows.Count -gt 0
@@ -56,6 +53,26 @@ function Update-Inspection {
 function Save-InspectionReport {
     $dialog=New-Object Microsoft.Win32.SaveFileDialog;$dialog.Filter='JSON-Bericht (*.json)|*.json';$dialog.FileName='Netzblick-Pruefung.json'
     if($dialog.ShowDialog($window)){
-        try{$report=@{Version='0.7.0';ProgramPath=$inspectionPath;Metadata=$inspectionMetadata;CheckedUtc=[datetime]::UtcNow;ServiceVerified=$setupStatus.Verified;Warning=$setupStatus.Warning;Attempts=$inspectionRows;Scope='Ausgewählter EXE-Pfad; keine Sandbox, keine automatische Hilfsprozesssperre.'};[IO.File]::WriteAllText($dialog.FileName,($report | ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($true)))}catch{Show-Error $_.Exception.Message}
+        try{$report=@{Version='0.10.1';ProgramPath=$inspectionPath;Metadata=$inspectionMetadata;CheckedUtc=[datetime]::UtcNow;ServiceVerified=$setupStatus.Verified;Warning=$setupStatus.Warning;Attempts=$inspectionRows;Scope='Ausgewählter EXE-Pfad; keine Sandbox, keine automatische Hilfsprozesssperre.'};[IO.File]::WriteAllText($dialog.FileName,($report | ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($true)))}catch{Show-Error $_.Exception.Message}
     }
+}
+
+
+function Retry-InspectionControl {
+    try{
+        if(-not $Portable){Ensure-InstalledControl}
+        $reply=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Recheck'})
+        $script:setupStatus=$reply
+        if(-not $reply.Ok){throw $reply.Error}
+        Update-AccessMode
+    }catch{$script:accessProblem=$_.Exception.GetBaseException().Message;$ui.InspectionBlockReason.Text=$script:accessProblem;Update-Inspection}
+}
+
+function Select-InspectionPath([string]$selectedPath){
+    $path=[Netzblick.WfpGate]::CanonicalPath([IO.Path]::GetFullPath($selectedPath))
+    if(-not [Netzblick.AccessQueue]::CanAllow($path) -or -not [IO.File]::Exists($path)){throw 'Eine vorhandene lokale EXE auswählen.'}
+    if(Is-Protected $path){throw 'Windows-Sammelprozesse nicht mit der Einzelprogramm-Prüfung sperren.'}
+    $script:inspectionPath=$path;$script:inspection=@{Path=$path};$script:inspectionMetadata=$null;$script:inspectionActive=$false
+    $ui.InspectionPath.Text=$path;$ui.InspectionMetadata.Text='Dateiangaben und SHA-256 werden gelesen …';$ui.StartInspection.IsEnabled=$false
+    $script:inspectionMetadataTask=[Netzblick.InspectionFile]::Start($path)
 }

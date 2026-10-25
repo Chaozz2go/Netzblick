@@ -23,6 +23,7 @@ function Initialize-VisualModes {
         if($country){$ui.OriginCountry.SelectedItem=$country}else{$ui.OriginCountry.SelectedIndex=0}
     } catch {$script:geoError=$_.Exception.Message;$ui.WorldSummary.Text='Geo-Daten nicht verfügbar: '+$geoError}
     Initialize-WorldCanvas $ui.WorldMap $ui.WorldOverlay
+    Initialize-WorldNavigation
     Initialize-WorldCanvas $ui.RouteMap $ui.RouteOverlay
     $ui.WorldPrograms.Add_SelectionChanged({if(-not $script:worldRefreshing){Refresh-World}})
     $ui.OriginCountry.Add_SelectionChanged({
@@ -142,6 +143,9 @@ function Draw-Origin($overlay) {
     if($origin){Add-CountryMarker $overlay $origin ('Start: '+$origin.Code) ('Manuell gewähltes Ausgangsland: '+$origin.Name+' · keine automatische Standortmessung') '#087F8C'}
 }
 function Refresh-World([switch]$Rebuild) {
+    try{Update-WorldCore -Rebuild:$Rebuild}catch{$ui.WorldSummary.Text='Kartenansicht konnte nicht aktualisiert werden: '+$_.Exception.GetBaseException().Message}finally{$script:worldRefreshing=$false}
+}
+function Update-WorldCore([switch]$Rebuild) {
     if($Rebuild){
         $old=$ui.WorldPrograms.SelectedItem
         $key=if($old){$old.Key}else{'*'}
@@ -156,7 +160,7 @@ function Refresh-World([switch]$Rebuild) {
     $source=$ui.WorldPrograms.SelectedItem
     $selected=$ui.WorldPeers.SelectedItem
     $selectedKey=if($selected){$selected.Key}else{''}
-    $sockets=if($source){@($source.Rows)}else{@()}
+    $sockets=@(if($source){$source.Rows})
     foreach($peer in @($trafficPeers | Where-Object {$source -and ($source.Key -eq '*' -or [Netzblick.ProcessLineage]::Normalize($_.Path) -eq $source.Key)})){$sockets+=@([pscustomobject]@{Path=$peer.Path;Program=$peer.Name;Pid=0;Address=$peer.Address;Remote=($peer.Address+':'+$peer.Port);Protocol=$peer.Protocol;State='ETW beobachtet'})}
     $peers=@($sockets | Where-Object {$_.Address} | Group-Object {$(if($_.Path){$_.Path.ToUpperInvariant()}else{'PID:'+$_.Pid})+'|'+$_.Address} | ForEach-Object {
         $first=$_.Group[0];$location=Geo-Location $first.Address
@@ -272,4 +276,5 @@ function Draw-Latency {
         }else{Add-VisualLine $canvas ($x-3) 97 ($x+3) 103 '#AF3B4B' 2;Add-VisualLine $canvas ($x-3) 103 ($x+3) 97 '#AF3B4B' 2;$last=$null}
     }
 }
+
 

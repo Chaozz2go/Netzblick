@@ -13,3 +13,14 @@ tools/ui-preview/
 dist/
 dist-install/
 Netzblick-Portable-*.zip
+
+# Local runtime data and credentials must never enter a public checkout.
+Netzblick-Daten/
+*.reset-*.bak
+user-state.json
+control.json
+github-token.bin
+*.pfx
+*.p12
+.env
+.env.*

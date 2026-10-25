@@ -51,17 +51,35 @@ namespace Netzblick {
     if(gate==null)throw new InvalidOperationException(problem);
     var next=Clone(config);if(next.Expire(DateTime.UtcNow)>0){Apply(next);Log("Zeitlich begrenzte Freigabe abgelaufen");}
     if(recovery.HasValue&&DateTime.UtcNow>=recovery.Value){var previous=Clone(rollback);previous.Expire(DateTime.UtcNow);Apply(previous);ClearRecovery();Log("Sicherheitsrückweg: vorherige Regeln wiederhergestellt");}
-    if((DateTime.UtcNow-checkedUtc).TotalSeconds>=2){gate.Verify();verified=true;checkedUtc=DateTime.UtcNow;}
+    if((DateTime.UtcNow-checkedUtc).TotalSeconds>=2){gate.Verify();verified=true;problem="";checkedUtc=DateTime.UtcNow;}
    }catch(Exception e){verified=false;problem=e.Message;}
    if(!NeedsWatch(config)&&watch!=null){try{watch.Dispose();watch=null;}catch(Exception e){warning="Audit-Wiederherstellung: "+e.Message;}}
    warning=watch==null&&NeedsWatch(config)?"Ereignisanzeige nicht verfügbar; Dienst neu starten und Audit prüfen.":"";
    if(watch!=null){watch.VerifyAudit();if(!watch.Healthy)warning=watch.Warning;}
    if(queue.Unknown>0||queue.Dropped>0)warning+=" Nicht zugeordnete Ereignisse: "+queue.Unknown+"; nicht gelistete Versuche: "+queue.Dropped+".";
   }
-  SetupStatus Status(bool ok,string error){return new SetupStatus{Ok=ok,Error=error,Verified=verified,Warning=warning,Config=config,Attempts=queue.Snapshot(),History=new List<string>(history),CheckedUtc=checkedUtc,StartedUtc=started,RecoveryUtc=recovery};}
+  SetupStatus Status(bool ok,string error){return new SetupStatus{Ok=ok,Error=error,Verified=verified,Warning=warning+(gate!=null&&!String.IsNullOrEmpty(gate.CompatibilityWarning)?" "+gate.CompatibilityWarning:""),Config=config,Attempts=queue.Snapshot(),History=new List<string>(history),CheckedUtc=checkedUtc,StartedUtc=started,RecoveryUtc=recovery};}
   SetupStatus Execute(SetupCommand command){
    if(command==null)throw new ArgumentException("Leerer Befehl.");
    if(command.Operation=="Status")return Status(true,problem);
+   if(command.Operation=="Recheck"){
+    try{
+     if(gate==null)gate=WfpGate.StartConfig(config);else gate.Verify();
+     if(NeedsWatch(config))EnsureWatch();verified=true;problem="";checkedUtc=DateTime.UtcNow;Log("Dienst und Filter erneut bestätigt");
+    }catch(WfpStartFailure e){gate=e.RecoveryGate;verified=false;problem=e.Message;Log(problem);throw;}
+    catch(Exception e){verified=false;problem=e.Message;Log(problem);throw;}
+    return Status(true,problem);
+   }
+   if(command.Operation=="Reset"){
+    string path=ConfigPath;Directory.CreateDirectory(Path.GetDirectoryName(path));
+    string backup=path+".reset-"+DateTime.UtcNow.ToString("yyyyMMddHHmmssfff")+".bak";
+    if(File.Exists(path))File.Copy(path,backup,false);
+    var empty=new SetupConfig();
+    if(gate!=null)Apply(empty);else{Save(empty);config=empty;verified=false;}
+    ClearRecovery();queue.Clear();history.Clear();
+    if(watch!=null){try{watch.Dispose();watch=null;warning="";}catch(Exception e){warning="Audit-Wiederherstellung: "+e.Message;}}
+    Log("Regeln und Prüfungen zurückgesetzt; Beobachten ist Standard");return Status(true,problem);
+   }
    if(command.Operation=="ConfirmRecovery"){if(!verified)throw new InvalidOperationException("Einrichtung nicht bestätigt: Filterstatus unbekannt.");ClearRecovery();Log("Einrichtung bestätigt; Sicherheitsrückweg aufgehoben");return Status(true,problem);}
    if(!verified)throw new InvalidOperationException("Keine neue Änderung bei unbestätigtem Filterstatus: "+problem);
    var next=Clone(config);
@@ -88,12 +106,19 @@ namespace Netzblick {
      if(command.Rule.ExpiresUtc.HasValue&&(command.Rule.ExpiresUtc<=DateTime.UtcNow||command.Rule.ExpiresUtc>DateTime.UtcNow.AddHours(24)))throw new ArgumentException("Temporäre Regel muss innerhalb der nächsten 24 Stunden ablaufen.");
      if(next.Rules.Any(r=>r.Id==command.Rule.Id))throw new InvalidOperationException("Regel-ID ist bereits vorhanden.");
      if(command.Rule.Action=="Block")EnsureWatch();SetupChanges.Upsert(next,command.Rule);break;
+    case "BlockProgram":
+     if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);EnsureWatch();SetupChanges.BlockProgram(next,command.Path);break;
+    case "AllowProgram":
+     if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);SetupChanges.AllowProgram(next,command.Path);break;
+    case "ProgramDefault":SetupChanges.ProgramDefault(next,command.Path);break;
     case "Remove":if(next.Rules.RemoveAll(r=>r.Id==command.RuleId)==0)throw new ArgumentException("Regel nicht gefunden.");break;
     default:throw new ArgumentException("Unbekannter Befehl.");
    }
    try{Apply(next);}catch{if(command.Operation=="Ask"&&verified)ClearRecovery();throw;}
    if(command.Operation=="Ask"&&!command.Enabled)ClearRecovery();
-   Log(command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
+   Log(command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
    return Status(true,problem);
   }
   static PipeSecurity Security(){var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid,null),PipeAccessRights.FullControl,AccessControlType.Deny));foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid,null),PipeAccessRights.FullControl,AccessControlType.Allow));return security;}
@@ -105,7 +130,8 @@ namespace Netzblick {
      }
      if(File.Exists(ConfigPath)){var info=new FileInfo(ConfigPath);if(info.Length>1048576)throw new InvalidDataException("Regeldatei zu groß.");config=SetupWire.Json().Deserialize<SetupConfig>(File.ReadAllText(ConfigPath));config.Validate();config.Expire(DateTime.UtcNow);}
      gate=WfpGate.StartConfig(config);verified=true;checkedUtc=DateTime.UtcNow;
-    }catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
+    }catch(WfpStartFailure e){gate=e.RecoveryGate;problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
+    catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
     if(NeedsWatch(config))try{EnsureWatch();}catch(Exception e){warning="Ereignisanzeige nicht verfügbar: "+e.Message;}
     while(!stop.WaitOne(0)){
      try{
