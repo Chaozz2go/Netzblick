@@ -1,7 +1,9 @@
 ﻿Netzblick 0.10.1 – EXE-Pakete (Entwicklungsversion)
 
 WFP-Korrektur 0.10.1:
-- Kein pauschaler Abbruch bei gleichrangigen fremden WFP-Ebenen.
+- Kein pauschaler Abbruch bei gleicher angeforderter WFP-Priorität.
+  Der von BFE tatsächlich zugewiesene freie Gewichtswert wird gelesen
+  und anschließend auf Veränderungen geprüft.
 - Prüfung aktiver Fremdfilter nur für die betroffenen ALE-Ebenen:
   Hard Permits werden vor Installation auf mögliche Überschneidung
   geprüft, bekannte EXE-/Protokoll-/Port-/Adressunterschiede getrennt.

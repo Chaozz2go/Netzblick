@@ -4,11 +4,11 @@
 
 ## Netzwerkfilter gemeinsam verwenden (0.10.1)
 
-Eine weitere WFP-Ebene mit derselben Priorität deaktiviert Netzblick nicht mehr pauschal. Netzblick prüft seine eigenen Filter weiter vollständig zurück und untersucht bei geplanten Sperren die passenden aktiven Filter auf den betroffenen ALE-Ebenen.
+Eine weitere WFP-Ebene mit derselben angeforderten Priorität deaktiviert Netzblick nicht mehr pauschal. Windows kann den nächstfreien Prioritätswert vergeben; Netzblick liest diesen nach dem Anlegen seiner leeren Ebene zurück und prüft danach gegen diesen tatsächlichen Wert. Netzblick prüft seine eigenen Filter weiter vollständig zurück und untersucht bei geplanten Sperren die passenden aktiven Filter auf den betroffenen ALE-Ebenen.
 
 Normale parallele Freigaben und eindeutig andere EXE-Pfade verhindern die Prüfung nicht. Eine statische, nicht übersteuerbare Fremdfreigabe, die sich von der geplanten Sperre nicht eindeutig trennen lässt, wird vor der Änderung mit Ebene und Filtername gemeldet. Unbekannte Bedingungen werden konservativ als mögliche Überschneidung behandelt. Bei dynamischen Treiberentscheidungen bleibt ein Hinweis sichtbar; diese lassen sich ohne eigenen Treiber nicht vollständig vorhersagen. Fremde Regeln werden weder verändert noch entfernt. „Bestätigt“ bezeichnet die eingerichteten und zurückgelesenen Netzblick-Regeln, keine Garantie für jeden fremden Netzwerk-Stack.
 
-Die Windows-Prüfung erzeugt isoliert eine zweite dynamische WFP-Ebene mit maximaler Priorität: leerer Peer, parallele Soft-Permit-Regel, Hard-Permit-Regel für eine andere EXE, echte TCP-Sperre/Freigabe sowie Zurückweisen eines überlappenden Hard Permit. Danach werden unveränderte Peer-Filter und deren eigener Sitzungsabbau geprüft. Release-Pakete werden erst nach den Interaktions- und nativen Diensttests in demselben Build bereitgestellt.
+Die Windows-Prüfung erzeugt isoliert eine zweite dynamische WFP-Ebene mit derselben maximal angeforderten Priorität: leerer Peer, parallele Soft-Permit-Regel, Hard-Permit-Regel für eine andere EXE, echte TCP-Sperre/Freigabe sowie Zurückweisen eines überlappenden Hard Permit. Danach werden unveränderte Peer-Filter und deren eigener Sitzungsabbau geprüft. Release-Pakete werden erst nach den Interaktions- und nativen Diensttests in demselben Build bereitgestellt.
 
 ## Neu anfangen, Karte und Tray
 

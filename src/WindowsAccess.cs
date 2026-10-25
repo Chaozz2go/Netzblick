@@ -86,7 +86,7 @@ namespace Netzblick {
    public void Dispose(){for(int i=pointers.Count-1;i>=0;i--)Marshal.FreeHGlobal(pointers[i]);}
   }
   const uint Block=0x1001,Permit=0x1002;
-  Engine engine;readonly Guid subLayer=Guid.NewGuid();
+  Engine engine;readonly Guid subLayer=Guid.NewGuid();ushort layerWeight;
   readonly List<Expected> expected=new List<Expected>();
   readonly Dictionary<string,List<Expected>> allowed=new Dictionary<string,List<Expected>>(StringComparer.OrdinalIgnoreCase);
   bool closed;
@@ -105,14 +105,18 @@ namespace Netzblick {
    try {
     var session=new Session{Key=Guid.NewGuid(),Display=new Display{Name="Netzblick Kontrollmodus",Description="Nur solange Netzblick läuft"},Flags=1,Timeout=5000};
     IntPtr handle;Check(FwpmEngineOpen0(null,10,IntPtr.Zero,ref session,out handle),"WFP öffnen");gate.engine=new Engine(handle);
-    var plan=gate.Plan(config);gate.CheckCompatibility(plan);
+    var plan=gate.Plan(config);
+    // BFE chooses the closest free sublayer weight when the requested one
+    // is occupied. Register an empty private layer, read that assignment,
+    // then assess relevant higher/equal peers before installing any blocks.
+    var layer=new SubLayer{Key=gate.subLayer,Display=new Display{Name="Netzblick Sitzung"},Weight=65535};
+    Check(FwpmSubLayerAdd0(gate.engine,ref layer,IntPtr.Zero),"Sitzungsebene anlegen");
+    IntPtr assigned;Guid own=gate.subLayer;Check(FwpmSubLayerGetByKey0(gate.engine,ref own,out assigned),"Zugewiesene WFP-Priorität lesen");
+    try{var actual=(SubLayer)Marshal.PtrToStructure(assigned,typeof(SubLayer));if(actual.Key!=own)throw new InvalidOperationException("WFP-Ebene nicht bestätigt.");gate.layerWeight=actual.Weight;}finally{FwpmFreeMemory0(ref assigned);}
+    gate.CheckCompatibility(plan);
     Check(FwpmTransactionBegin0(gate.engine,0),"Sperrtransaktion starten");
-    try{
-     var layer=new SubLayer{Key=gate.subLayer,Display=new Display{Name="Netzblick Sitzung"},Weight=65535};
-     Check(FwpmSubLayerAdd0(gate.engine,ref layer,IntPtr.Zero),"Sitzungsebene anlegen");
-     gate.expected.AddRange(gate.InstallPlan(plan));
-     Check(FwpmTransactionCommit0(gate.engine),"Sperrtransaktion bestätigen");
-    }catch{FwpmTransactionAbort0(gate.engine);throw;}
+    try{gate.expected.AddRange(gate.InstallPlan(plan));Check(FwpmTransactionCommit0(gate.engine),"Sperrtransaktion bestätigen");}
+    catch{FwpmTransactionAbort0(gate.engine);throw;}
     gate.Verify();return gate;
    }catch(Exception initial){if(gate.engine!=null)try{gate.Dispose();}catch(Exception cleanup){throw new WfpStartFailure(initial.Message+" Sitzungsende nicht bestätigt: "+cleanup.Message,gate,initial);}throw;}
   }
@@ -121,7 +125,7 @@ namespace Netzblick {
    IntPtr handle;Check(FwpmSubLayerCreateEnumHandle0(engine,IntPtr.Zero,out handle),"WFP-Prioritäten lesen");
    try{int total=0;while(true){
     IntPtr entries;uint count;Check(FwpmSubLayerEnum0(engine,handle,128,out entries,out count),"WFP-Prioritäten lesen");
-    try{for(int i=0;i<count;i++){var layer=(SubLayer)Marshal.PtrToStructure(Marshal.ReadIntPtr(entries,i*IntPtr.Size),typeof(SubLayer));if(layer.Key!=subLayer && layer.Weight==65535)peers[layer.Key]=layer.Display.Name??layer.Key.ToString();}}
+    try{for(int i=0;i<count;i++){var layer=(SubLayer)Marshal.PtrToStructure(Marshal.ReadIntPtr(entries,i*IntPtr.Size),typeof(SubLayer));if(layer.Key!=subLayer && layer.Weight>=layerWeight)peers[layer.Key]=layer.Display.Name??layer.Key.ToString();}}
     finally{if(entries!=IntPtr.Zero)FwpmFreeMemory0(ref entries);}
     total+=(int)count;if(total>16384)throw new InvalidOperationException("Zu viele WFP-Ebenen für eine vollständige Prüfung.");
     if(count==0)break;
@@ -281,7 +285,7 @@ namespace Netzblick {
   void VerifyOwnFilters(){
    if(closed || engine==null || engine.IsInvalid || engine.IsClosed)throw new InvalidOperationException("WFP-Sitzung ist nicht mehr aktiv.");
    IntPtr memory;Guid key=subLayer;Check(FwpmSubLayerGetByKey0(engine,ref key,out memory),"Sitzungsebene überprüfen");
-   try{var layer=(SubLayer)Marshal.PtrToStructure(memory,typeof(SubLayer));if(layer.Key!=subLayer || layer.Weight!=65535)throw new InvalidOperationException("WFP-Ebene wurde verändert.");}
+   try{var layer=(SubLayer)Marshal.PtrToStructure(memory,typeof(SubLayer));if(layer.Key!=subLayer || layer.Weight!=layerWeight)throw new InvalidOperationException("WFP-Ebene wurde verändert: Gewicht="+layer.Weight+"; erwartet="+layerWeight);}
    finally{FwpmFreeMemory0(ref memory);}
    foreach(var wanted in expected){
     Check(FwpmFilterGetById0(engine,wanted.Id,out memory),"Sperr-/Freigabefilter überprüfen");
