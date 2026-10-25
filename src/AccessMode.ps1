@@ -70,7 +70,8 @@ function Save-SetupRule([switch]$Temporary,[switch]$Block) {
 }
 function Update-AccessMode {
     try{
-        $script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'});$script:accessVerified=$setupStatus.Verified;$script:accessActive=$setupStatus.Config.Ask
+        if(-not $script:ruleError){$observation=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=(@($script:ownRules | Where-Object {$_.Enabled -and $_.Action -eq 0}).Count -gt 0)})}
+        $script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'});if($observation -and -not $observation.Ok){$setupStatus.Warning+=' Blockanzeige: '+$observation.Error};$script:accessVerified=$setupStatus.Verified;$script:accessActive=$setupStatus.Config.Ask
         $ui.InstallControlService.Visibility='Collapsed';$ui.StartAccess.IsEnabled=$accessVerified -and -not $accessActive;$ui.StopAccess.IsEnabled=$accessVerified -and $accessActive
         $ui.AccessHeadline.Text=if(-not $accessVerified){'Filterstatus nicht bestätigt'}elseif($accessActive){'Nachfragen aktiv · unbekannte Zugriffe zunächst gesperrt'}else{'Beobachten · gezielte Einzelregeln bleiben aktiv'}
         $ui.AccessExplanation.Text=if(-not $accessVerified){$setupStatus.Error}elseif($Portable){'Portable Filtersteuerung läuft bis zum vollständigen Beenden von Netzblick. Loopback bleibt ausgenommen.'}else{'Der Hintergrunddienst arbeitet auch bei geschlossenem Fenster. Kommunikation auf diesem PC bleibt ausgenommen.'}
@@ -89,7 +90,7 @@ function Update-AccessMode {
     }catch{
         $script:accessProblem=$_.Exception.GetBaseException().Message;$script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
         $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
-    };if(-not $script:setupStatus){Refresh-Permissions};Refresh-ProgramSignals;Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
+    };if(-not $script:setupStatus){Refresh-Permissions};if($script:programCatalogReady){Refresh-Programs}else{Refresh-ProgramSignals};Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
 }
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()
