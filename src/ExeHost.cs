@@ -40,7 +40,10 @@ namespace Netzblick.Desktop {
    AppDomain.CurrentDomain.AssemblyResolve+=Resolve;
    try{
     report=Option(args,"--report");
-    if(args.Any(a=>!new[]{"--portable","--installed","--tray","--check","--smoke-test","--install","--uninstall","--no-tray","--report",report}.Contains(a)))throw new ArgumentException("Unbekannter Startparameter.");
+    for(int i=0;i<args.Length;i++){
+     if(String.Equals(args[i],"--report",StringComparison.OrdinalIgnoreCase)){i++;continue;}
+     if(!new[]{"--portable","--installed","--tray","--check","--smoke-test","--install","--uninstall","--no-tray"}.Any(flag=>String.Equals(flag,args[i],StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Unbekannter Startparameter: "+args[i]);
+    }
     bool check=Has(args,"--check"),smoke=Has(args,"--smoke-test");
     using(var id=WindowsIdentity.GetCurrent()){
      if(!new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator)){
@@ -141,7 +144,7 @@ namespace Netzblick.Desktop {
         if(ps.HadErrors)throw new InvalidOperationException(String.Join(Environment.NewLine,ps.Streams.Error.Select(e=>e.ToString())));
         if((check||smoke)&&!text.Contains(check?"OK: XAML":"PASS: full WPF/tray"))throw new InvalidOperationException("Startprüfung lieferte keine Erfolgsbestätigung. "+text);
         if(smoke){
-         if(portable){var status=Netzblick.SetupClient.Send(new Netzblick.SetupCommand{Operation="Status"});if(!status.Ok||!status.Verified)throw new InvalidOperationException("Portable Filtersteuerung nicht bereit: "+status.Error);}
+         var status=Netzblick.SetupClient.Send(new Netzblick.SetupCommand{Operation="Status"});if(!status.Ok||!status.Verified)throw new InvalidOperationException("Filtersteuerung nicht bereit: "+status.Error);
         }
         WriteReport(text+Environment.NewLine+"PASS: EXE host; embedded assemblies; "+(portable?"portable":"installed")+".");return 0;
        }
