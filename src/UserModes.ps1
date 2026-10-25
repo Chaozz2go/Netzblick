@@ -194,7 +194,7 @@ function Refresh-Overview {
     foreach($program in @($script:allProgramItems)){
         $sample=$trafficSamples[$program.Key]
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;Status=$(if($script:setupStatus -and @($setupStatus.Config.Rules | Where-Object {$_.Action -eq 'Block' -and $_.Address -eq '*' -and $_.Protocol -eq 0 -and ([Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key)}).Count -ge 2){'Extern gesperrt (Dienst)'}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $oldKey=if($ui.PendingPrograms.SelectedItem){$ui.PendingPrograms.SelectedItem.Key}else{''}
     $ui.PendingPrograms.ItemsSource=@($newPrograms.Values | Sort-Object FirstUtc -Descending)
@@ -202,6 +202,7 @@ function Refresh-Overview {
     if($selected){$ui.PendingPrograms.SelectedItem=$selected}elseif($ui.PendingPrograms.Items.Count){$ui.PendingPrograms.SelectedIndex=0}
     if(Get-Command Refresh-ReviewSelection -ErrorAction SilentlyContinue){Refresh-ReviewSelection}
     $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
+    if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
     $ui.OverviewNew.Text=[string]$newPrograms.Count
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
     $ui.OverviewStatus.Foreground=if($trafficProblem){'#9C650A'}else{'#57677B'}
