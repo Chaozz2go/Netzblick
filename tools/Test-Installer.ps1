@@ -2,7 +2,7 @@
 param([string]$ExpectedCulture)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.11.1-win-x64.exe'
+$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.11.2-win-x64.exe'
 $installed=Join-Path $env:ProgramFiles 'Netzblick'
 function Run-Checked([string]$exe,[string]$arguments){
  $p=Start-Process -FilePath $exe -ArgumentList $arguments -PassThru

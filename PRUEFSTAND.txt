@@ -1,4 +1,17 @@
-﻿Netzblick 0.11.1 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.11.2 – EXE-Pakete (Entwicklungsversion)
+
+Korrektur 0.11.2: Programmquelle vereinigt sichtbare Sockets, ETW-Messungen,
+Prüfliste, gespeicherte Dienst-/Windows-Regeln und erfasste Blockversuche.
+Gespeicherte Regeln allein erfinden weder einen laufenden Prozess noch einen
+Netzwerkversuch. Blockzähler und letzte Zeit erscheinen bei der App; konkrete
+Ziele und Protokolle in den Details. Live-Dienststatus aktualisiert die Ansicht
+auch bei pausierter Socket-Messung. Alte eigene Windows-Regeln aktivieren
+zusätzlich die Blockereignisbeobachtung, ohne neue Filter einzurichten.
+Tests: gesperrte/geprüfte App ohne Sockets/Bytes/Prüflisteneintrag; mehrere
+Gegenstellen und Pfadschreibweisen; Freigabe erhält historische Versuche;
+nativer Diensttest verknüpft ein echtes WFP-Blockereignis ohne Socket mit dem
+Programm-Datenmodell. Audit-Warnungen bleiben sichtbar; leere Ereignislisten
+beweisen keine fehlenden Zugriffsversuche.
 
 Neu 0.11.1: Ampelpunkte direkt bei Programmnamen in Aktivität und Programme.
 Öffentliche Updateabfragen verwenden keine gespeicherten privaten Tokens.

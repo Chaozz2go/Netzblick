@@ -28,7 +28,7 @@ namespace Netzblick {
    public void Dispose(){if(service==null)return;try{service.OnStop();}finally{service.Dispose();service=null;}}
   }
   SetupConfig config=new SetupConfig();readonly SetupQueue queue=new SetupQueue();readonly List<string> history=new List<string>();
-  WfpGate gate;AccessWatch watch;string problem="",warning="";bool verified;DateTime started=DateTime.UtcNow,checkedUtc;DateTime? recovery;
+  WfpGate gate;AccessWatch watch;bool observeWindowsBlocks;string problem="",warning="";bool verified;DateTime started=DateTime.UtcNow,checkedUtc;DateTime? recovery;
   public sealed class Recovery {public SetupConfig Before {get;set;} public DateTime UntilUtc {get;set;}}
   static string RecoveryPath {get{return ConfigPath+".recovery";}}
   SetupConfig rollback;
@@ -43,7 +43,7 @@ namespace Netzblick {
    try{SetupChanges.Commit(config,next,gate.Replace,Save);config=next;verified=true;problem="";}
    catch(SetupChangeFailure e){verified=e.Restored;if(!verified)problem=e.Message;throw;}
   }
-  bool NeedsWatch(SetupConfig value){return value.Ask||value.WatchedPaths.Count>0||value.Rules.Any(r=>r.Action=="Block");}
+  bool NeedsWatch(SetupConfig value){return observeWindowsBlocks||value.Ask||value.WatchedPaths.Count>0||value.Rules.Any(r=>r.Action=="Block");}
   void EnsureWatch(){if(watch==null)watch=AccessWatch.Start();if(!watch.Healthy)throw new InvalidOperationException(watch.Warning);}
   void Tick(){
    if(watch!=null){foreach(var e in watch.Drain())queue.Observe(e,gate!=null&&gate.OwnBlock(e.FilterId));}
@@ -61,6 +61,10 @@ namespace Netzblick {
   SetupStatus Status(bool ok,string error){return new SetupStatus{Ok=ok,Error=error,Verified=verified,Warning=warning+(gate!=null&&!String.IsNullOrEmpty(gate.CompatibilityWarning)?" "+gate.CompatibilityWarning:""),Config=config,Attempts=queue.Snapshot(),History=new List<string>(history),CheckedUtc=checkedUtc,StartedUtc=started,RecoveryUtc=recovery};}
   SetupStatus Execute(SetupCommand command){
    if(command==null)throw new ArgumentException("Leerer Befehl.");
+   if(command.Operation=="ObserveBlocks"){
+    if(command.Enabled)EnsureWatch();observeWindowsBlocks=command.Enabled;
+    return Status(true,problem);
+   }
    if(command.Operation=="Status")return Status(true,problem);
    if(command.Operation=="Recheck"){
     try{

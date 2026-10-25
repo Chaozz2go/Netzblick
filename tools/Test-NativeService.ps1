@@ -43,6 +43,13 @@ try{
     $evidence=$null
     for($i=0;$i -lt 20;$i++){$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});$evidence=$status.Attempts | Where-Object {$_.Path -eq $fixture -and $_.OwnBlock -and $_.Address -eq '1.1.1.1'} | Select-Object -First 1;if($evidence){break};Start-Sleep -Milliseconds 500}
     if(-not $evidence){throw 'Keine passende echte WFP-Blockmeldung angekommen.'}
+    . (Join-Path $root 'src\ProgramCatalog.ps1')
+    $blockedCatalog=@(Get-ProgramCatalog @() @() @() $status @())
+    $blockedProgram=$blockedCatalog | Where-Object {$_.Path -eq $fixture} | Select-Object -First 1
+    $blockedRows=@(Get-ProgramBlockRows $fixture $status)
+    if(-not $blockedProgram -or $blockedProgram.Rows.Count -or $blockedProgram.BlockCount -lt 1 -or $blockedRows.Count -lt 1 -or $blockedRows[0].State -notlike '*Blockiert*'){throw 'Echte gesperrte Verbindung fehlt ohne Socket in der Programmansicht.'}
+    Write-Output 'PASS: echter WFP-Blockversuch ohne Socket als sichtbares Programm mit Ziel, Zähler und Zeitpunkt.'
+
     $rule=New-Object Netzblick.SetupRule;$rule.Id=[guid]::NewGuid().ToString();$rule.Name='CI TCP-Fixture';$rule.Path=$fixture;$rule.Direction='Ausgehend';$rule.Address='1.1.1.1';$rule.Protocol=6;$rule.Port=443;$rule.Action='Allow';$rule.ExpiresUtc=[datetime]::UtcNow.AddMinutes(2)
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Rule';Rule=$rule}))
     if(-not (Connect-Fixture)){throw 'Gezielte TCP-Freigabe stellt die Baseline-Verbindung nicht wieder her.'}
@@ -70,6 +77,10 @@ try{
     if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'})
     if(-not $fresh.Verified){throw 'Erneute Filterprüfung nach Reset nicht bestätigt.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=$true}))
+    $observed=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    if($observed.Config.Ask -or $observed.Config.Rules.Count -or $observed.Config.WatchedPaths.Count -or $observed.Warning -like '*Ereignisanzeige nicht verfügbar*'){throw 'Blockbeobachtung verändert Filter oder startet nicht.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=$false}))
     # An overlapping hard permit must still be rejected, while unrelated
     # app permits and a peer soft permit must not disable Netzblick.
     $hard=$peer.AddPermit($fixture,$true)

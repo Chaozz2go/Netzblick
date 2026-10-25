@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.11.1'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.11.2'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -76,6 +76,7 @@ try {
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
     . (Join-Path $appRoot 'src\AccessMode.ps1')
     . (Join-Path $appRoot 'src\PermissionMode.ps1')
+    . (Join-Path $appRoot 'src\ProgramCatalog.ps1')
     . (Join-Path $appRoot 'src\TrayMode.ps1')
     . (Join-Path $appRoot 'src\ReviewMode.ps1')
     . (Join-Path $appRoot 'src\UpdatesMode.ps1')
@@ -175,7 +176,7 @@ try {
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
         $displayRows=@($program.Rows)
         foreach($peer in @($trafficPeers | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('ETW|'+$peer.Protocol+'|'+$peer.Address+'|'+$peer.Port);Pid='aggregiert';Protocol=$peer.Protocol;Local='— (ETW)';Remote=($peer.Address+':'+$peer.Port);Address=$peer.Address;Port=$peer.Port;State='ETW beobachtet'})}
-        if($script:setupStatus){foreach($attempt in @($setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('BLOCK|'+$attempt.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($attempt.Protocol);Local=$attempt.Direction;Remote=$attempt.Target;Address=$attempt.Address;Port=$attempt.Port;State=$attempt.Evidence})}}
+        $displayRows+=@(Get-ProgramBlockRows $program.Path $script:setupStatus)
         $endpointIndex=0
         $displayRows=@($displayRows | ForEach-Object {
             $endpointIndex++
@@ -199,19 +200,11 @@ try {
     }
     function Refresh-Programs {
         $selected=$ui.Programs.SelectedItem;$selectedKey=if($selected){$selected.Key}else{''}
-        $map=@{}
-        foreach($g in @($rows | Group-Object {if($_.Path){$_.Path.ToUpperInvariant()}else{'PID:'+$_.Pid}})){
-            $first=$g.Group[0];$map[$g.Name]=[pscustomobject]@{Key=$g.Name;Name=$first.Program;Path=$first.Path;Summary=($g.Count.ToString()+' Sockets');Rows=@($g.Group)}
-        }
-        foreach($sample in @($trafficSamples.Values)){
-            if(-not $map.ContainsKey($sample.Key)){$map[$sample.Key]=[pscustomobject]@{Key=$sample.Key;Name=$sample.Name;Path=$sample.Path;Summary='In dieser Sitzung gemessen';Rows=@()}}
-        }
-        foreach($pending in @($script:newPrograms.Values)){if(-not $map.ContainsKey($pending.Key)){$map[$pending.Key]=[pscustomobject]@{Key=$pending.Key;Name=$pending.Name;Path=$pending.Path;Summary='Noch zu prüfen';Rows=@()}}}
-        $script:allProgramItems=@($map.Values | Sort-Object Name)
+        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) @($script:newPrograms.Values) $script:setupStatus $script:ownRules | Sort-Object Name)
         foreach($p in $allProgramItems){Set-ProgramSignal $p}
-        Track-ObservedPrograms $allProgramItems
+        Track-ObservedPrograms @($allProgramItems | Where-Object Observed)
         $term=$ui.Search.Text.Trim()
-        $items=@($allProgramItems | Where-Object {-not $term -or $_.Name.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.Path.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or @($_.Rows | Where-Object {$_.Remote.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.Local.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or [string]$_.Pid -eq $term}).Count -gt 0})
+        $items=@($allProgramItems | Where-Object {-not $term -or $_.Name.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.Path.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or @($_.Rows | Where-Object {$_.Remote.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.Local.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or [string]$_.Pid -eq $term}).Count -gt 0 -or $_.BlockedTargets.IndexOf($term,[StringComparison]::OrdinalIgnoreCase) -ge 0})
         $script:refreshing=$true;$ui.Programs.ItemsSource=$items
         $match=$items | Where-Object {$_.Key -eq $selectedKey} | Select-Object -First 1
         if($match){$ui.Programs.SelectedItem=$match}elseif($items.Count){$ui.Programs.SelectedIndex=0}
@@ -335,6 +328,7 @@ try {
     Initialize-UserModes
     Initialize-EndpointNames
     Initialize-InspectionMode
+    $script:programCatalogReady=$true
     Initialize-AccessMode
     Initialize-ReviewMode
     Initialize-Updates
