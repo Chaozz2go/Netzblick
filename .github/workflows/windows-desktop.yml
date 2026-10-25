@@ -74,10 +74,10 @@ jobs:
           [IO.File]::WriteAllLines((Join-Path $PWD 'SHA256SUMS.txt'), $checksums, [Text.UTF8Encoding]::new($false))
           $private = gh api 'repos/Chaozz2go/Netzblick' --jq '.private'
           if ($LASTEXITCODE -ne 0) { throw 'Sichtbarkeit konnte nicht geprüft werden.' }
-          $options = if ('${{ github.ref }}' -eq 'refs/heads/main' -and $private.Trim() -eq 'false') { @('--latest') } else { @('--draft') }
-          gh release create $tag @options --target '${{ github.sha }}' --title 'Netzblick 0.11.1 – EXE, portable und Setup' --notes-file docs/Release-0.11.1.md Netzblick-Portable-0.11.1-win-x64.zip dist-install/Netzblick-Setup-0.11.1-win-x64.exe SHA256SUMS.txt
+          [string[]]$releaseOptions = @(if ('${{ github.ref }}' -eq 'refs/heads/main' -and $private.Trim() -eq 'false') { '--latest' } else { '--draft' })
+          gh release create $tag @releaseOptions --target '${{ github.sha }}' --title 'Netzblick 0.11.1 – EXE, portable und Setup' --notes-file docs/Release-0.11.1.md Netzblick-Portable-0.11.1-win-x64.zip dist-install/Netzblick-Setup-0.11.1-win-x64.exe SHA256SUMS.txt
           if ($LASTEXITCODE -ne 0) { throw 'Release-Pakete konnten nicht bereitgestellt werden.' }
-          if ($options -contains '--latest') { 'public_release=true' >> $env:GITHUB_OUTPUT }
+          if ($releaseOptions -contains '--latest') { 'public_release=true' >> $env:GITHUB_OUTPUT }
       - name: Verify anonymous public update discovery
         if: steps.publish.outputs.public_release == 'true'
         shell: powershell
