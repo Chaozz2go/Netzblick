@@ -43,13 +43,17 @@ namespace Netzblick {
    public Guid Layer,SubLayer;public Value Weight;public uint Count;public IntPtr Conditions;
    public Action Action;public Context Context;public IntPtr Reserved;public ulong Id;public Value EffectiveWeight;
   }
+  [StructLayout(LayoutKind.Sequential)] struct FilterEnumTemplate {
+   public IntPtr Provider;public Guid Layer;public uint EnumType,Flags;public IntPtr ProviderContext;
+   public uint Count;public IntPtr Conditions;public uint ActionMask;public IntPtr Callout;
+  }
   sealed class Engine : SafeHandleZeroOrMinusOneIsInvalid {
    public Engine(IntPtr value):base(true){SetHandle(value);}
    protected override bool ReleaseHandle(){return FwpmEngineClose0(handle)==0;}
    public void CloseChecked(){uint error=FwpmEngineClose0(handle);Check(error,"WFP-Sitzung beenden");SetHandleAsInvalid();}
   }
   sealed class Expected {
-   public ulong Id,Weight;public Guid Layer;public uint Action;public List<Spec> Specs;
+   public ulong Id,Weight;public Guid Layer;public uint Action;public List<Spec> Specs;public string Name;
   }
   [DllImport("fwpuclnt.dll",CharSet=CharSet.Unicode)] static extern uint FwpmEngineOpen0(string server,uint authentication,IntPtr identity,ref Session session,out IntPtr engine);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmEngineClose0(IntPtr engine);
@@ -61,6 +65,9 @@ namespace Netzblick {
   [DllImport("fwpuclnt.dll")] static extern uint FwpmSubLayerCreateEnumHandle0(Engine engine,IntPtr template,out IntPtr handle);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmSubLayerEnum0(Engine engine,IntPtr handle,uint requested,out IntPtr entries,out uint returned);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmSubLayerDestroyEnumHandle0(Engine engine,IntPtr handle);
+  [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterCreateEnumHandle0(Engine engine,ref FilterEnumTemplate template,out IntPtr handle);
+  [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterEnum0(Engine engine,IntPtr handle,uint requested,out IntPtr entries,out uint returned);
+  [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterDestroyEnumHandle0(Engine engine,IntPtr handle);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterAdd0(Engine engine,ref Filter filter,IntPtr security,out ulong id);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterDeleteById0(Engine engine,ulong id);
   [DllImport("fwpuclnt.dll")] static extern uint FwpmFilterGetById0(Engine engine,ulong id,out IntPtr filter);
@@ -83,11 +90,12 @@ namespace Netzblick {
   readonly List<Expected> expected=new List<Expected>();
   readonly Dictionary<string,List<Expected>> allowed=new Dictionary<string,List<Expected>>(StringComparer.OrdinalIgnoreCase);
   bool closed;
+  public string CompatibilityWarning {get;private set;}
   static void Check(uint code,string operation){if(code!=0)throw new Win32Exception(unchecked((int)code),operation+" fehlgeschlagen (0x"+code.ToString("X8")+").");}
   public static void ValidateLayout(){
    if(IntPtr.Size!=8)throw new PlatformNotSupportedException("Der Kontrollmodus benötigt 64-Bit-Windows-PowerShell.");
    if(Marshal.SizeOf(typeof(Filter))!=200 || Marshal.SizeOf(typeof(Condition))!=40 ||
-      Marshal.SizeOf(typeof(Session))!=72 || Marshal.SizeOf(typeof(SubLayer))!=72 ||
+      Marshal.SizeOf(typeof(Session))!=72 || Marshal.SizeOf(typeof(SubLayer))!=72 || Marshal.SizeOf(typeof(FilterEnumTemplate))!=72 ||
       Marshal.OffsetOf(typeof(Filter),"Context").ToInt32()!=152)
     throw new PlatformNotSupportedException("WFP-Strukturlayout konnte nicht bestätigt werden.");
   }
@@ -97,26 +105,72 @@ namespace Netzblick {
    try {
     var session=new Session{Key=Guid.NewGuid(),Display=new Display{Name="Netzblick Kontrollmodus",Description="Nur solange Netzblick läuft"},Flags=1,Timeout=5000};
     IntPtr handle;Check(FwpmEngineOpen0(null,10,IntPtr.Zero,ref session,out handle),"WFP öffnen");gate.engine=new Engine(handle);
-    gate.CheckPriority();
+    var plan=gate.Plan(config);gate.CheckCompatibility(plan);
     Check(FwpmTransactionBegin0(gate.engine,0),"Sperrtransaktion starten");
     try{
      var layer=new SubLayer{Key=gate.subLayer,Display=new Display{Name="Netzblick Sitzung"},Weight=65535};
      Check(FwpmSubLayerAdd0(gate.engine,ref layer,IntPtr.Zero),"Sitzungsebene anlegen");
-     gate.expected.AddRange(gate.Build(config));
+     gate.expected.AddRange(gate.InstallPlan(plan));
      Check(FwpmTransactionCommit0(gate.engine),"Sperrtransaktion bestätigen");
     }catch{FwpmTransactionAbort0(gate.engine);throw;}
     gate.Verify();return gate;
    }catch(Exception initial){if(gate.engine!=null)try{gate.Dispose();}catch(Exception cleanup){throw new WfpStartFailure(initial.Message+" Sitzungsende nicht bestätigt: "+cleanup.Message,gate,initial);}throw;}
   }
-  void CheckPriority(){
+  Dictionary<Guid,string> PeerLayers(){
+   var peers=new Dictionary<Guid,string>();
    IntPtr handle;Check(FwpmSubLayerCreateEnumHandle0(engine,IntPtr.Zero,out handle),"WFP-Prioritäten lesen");
    try{int total=0;while(true){
     IntPtr entries;uint count;Check(FwpmSubLayerEnum0(engine,handle,128,out entries,out count),"WFP-Prioritäten lesen");
-    try{for(int i=0;i<count;i++){var layer=(SubLayer)Marshal.PtrToStructure(Marshal.ReadIntPtr(entries,i*IntPtr.Size),typeof(SubLayer));if(layer.Key!=subLayer && layer.Weight==65535)throw new InvalidOperationException("Eine andere WFP-Ebene besitzt dieselbe höchste Priorität. Kontrollmodus nicht bestätigt; keine neuen Sperren aktiviert.");}}
+    try{for(int i=0;i<count;i++){var layer=(SubLayer)Marshal.PtrToStructure(Marshal.ReadIntPtr(entries,i*IntPtr.Size),typeof(SubLayer));if(layer.Key!=subLayer && layer.Weight==65535)peers[layer.Key]=layer.Display.Name??layer.Key.ToString();}}
     finally{if(entries!=IntPtr.Zero)FwpmFreeMemory0(ref entries);}
     total+=(int)count;if(total>16384)throw new InvalidOperationException("Zu viele WFP-Ebenen für eine vollständige Prüfung.");
     if(count==0)break;
    }}finally{FwpmSubLayerDestroyEnumHandle0(engine,handle);}
+   return peers;
+  }
+  // Equal sublayer weights alone do not prove interference. Inspect only
+  // active filters on ALE layers used by our requested blocks. A static hard
+  // permit that cannot be proven disjoint is rejected before installing them.
+  // Driver callouts can make dynamic decisions; report this limit explicitly.
+  bool MayOverlap(Expected block,Filter peer){
+   if(block.Layer!=peer.Layer)return false;
+   if(peer.Count>256||(peer.Count>0&&peer.Conditions==IntPtr.Zero))throw new InvalidOperationException("Fremde Filterbedingungen konnten nicht vollständig gelesen werden.");
+   for(int i=0;i<peer.Count;i++){
+    var c=(Condition)Marshal.PtrToStructure(IntPtr.Add(peer.Conditions,i*Marshal.SizeOf(typeof(Condition))),typeof(Condition));
+    // Our higher-weight loopback exception intentionally permits local traffic.
+    if(c.Field==FlagsField&&c.Value.Type==3&&((c.Match==6&&(c.Value.Data.UInt&1)!=0)||(c.Match==7&&c.Value.Data.UInt==1)||(c.Match==0&&(c.Value.Data.UInt&1)!=0)))return false;
+    var own=block.Specs.FirstOrDefault(x=>x.Field==c.Field);if(own==null)continue;
+    if(c.Field==AppField&&c.Value.Type==12&&(c.Match==0||c.Match==1)){
+     bool same=Same(ReadBlob(c.Value.Data.Pointer),own.Bytes);if(c.Match==0&&!same||c.Match==1&&same)return false;
+    }else if(c.Match==0&&c.Value.Type==own.Type){
+     if(c.Value.Type==1&&c.Value.Data.Byte!=own.UInt)return false;
+     if(c.Value.Type==2&&c.Value.Data.UShort!=own.UInt)return false;
+     if(c.Value.Type==3&&c.Field!=FlagsField&&c.Value.Data.UInt!=own.UInt)return false;
+     if(c.Value.Type==11){if(c.Value.Data.Pointer==IntPtr.Zero)throw new InvalidOperationException("Fremde IPv6-Bedingung fehlt.");var bytes=new byte[16];Marshal.Copy(c.Value.Data.Pointer,bytes,0,16);if(!Same(bytes,own.Bytes))return false;}
+    }
+   }
+   return true;
+  }
+  void CheckCompatibility(List<Expected> plan){
+   CompatibilityWarning="";var blocks=plan.Where(p=>p.Action==Block).ToList();if(blocks.Count==0)return;
+   var peers=PeerLayers();if(peers.Count==0)return;var drivers=new HashSet<string>();
+   foreach(var layer in blocks.Select(b=>b.Layer).Distinct()){
+    var template=new FilterEnumTemplate{Layer=layer,ActionMask=UInt32.MaxValue};IntPtr handle;
+    Check(FwpmFilterCreateEnumHandle0(engine,ref template,out handle),"Parallele Filter lesen");
+    try{int total=0;while(true){
+     IntPtr entries;uint count;Check(FwpmFilterEnum0(engine,handle,128,out entries,out count),"Parallele Filter aufzählen");
+     try{for(int i=0;i<count;i++){
+      var peer=(Filter)Marshal.PtrToStructure(Marshal.ReadIntPtr(entries,i*IntPtr.Size),typeof(Filter));
+      if(!peers.ContainsKey(peer.SubLayer)||(peer.Flags&32)!=0)continue;
+      bool hard=peer.Action.Type==Permit&&(peer.Flags&8)!=0,callout=(peer.Action.Type&0x4000)!=0;
+      if((!hard&&!callout)||!blocks.Any(b=>MayOverlap(b,peer)))continue;
+      if(hard)throw new InvalidOperationException("Diese Sperre kann nicht bestätigt werden: Eine nicht übersteuerbare Freigabe eines parallelen Netzwerkfilters könnte sie umgehen. Anbieter/Ebene: "+peers[peer.SubLayer]+"; Filter: "+(peer.Display.Name??peer.Key.ToString())+". Es werden keine fremden Regeln verändert.");
+      drivers.Add(peers[peer.SubLayer]);
+     }}finally{if(entries!=IntPtr.Zero)FwpmFreeMemory0(ref entries);}
+     total+=(int)count;if(total>65536)throw new InvalidOperationException("Zu viele parallele Filter für eine vollständige Prüfung.");if(count==0)break;
+    }}finally{FwpmFilterDestroyEnumHandle0(engine,handle);}
+   }
+   if(drivers.Count>0)CompatibilityWarning="Weitere Netzwerksoftware aktiv: "+String.Join(", ",drivers.Take(3))+". Die Netzblick-Regeln sind eingerichtet; zusätzliche Entscheidungen dieser Software lassen sich hier nicht vollständig prüfen.";
   }
   Expected Add(Guid layer,uint action,ulong weight,int kind,IntPtr appBlob,byte[] app) {
    var specs=new List<Spec>();
@@ -138,19 +192,21 @@ namespace Netzblick {
      Marshal.StructureToPtr(new Condition{Field=spec.Field,Match=spec.Field==FlagsField?6u:0u,Value=val},IntPtr.Add(filter.Conditions,i*stride),false);
     }
     ulong id;Check(FwpmFilterAdd0(engine,ref filter,IntPtr.Zero,out id),"WFP-Filter hinzufügen");
-    return new Expected{Id=id,Layer=layer,Action=action,Weight=weight,Specs=specs};
+    return new Expected{Id=id,Layer=layer,Action=action,Weight=weight,Specs=specs,Name=name};
    }
   }
   byte[] AppId(string path){if(File.Exists(path))path=CanonicalPath(path);IntPtr blob=IntPtr.Zero;try{Check(FwpmGetAppIdFromFileName0(path,out blob),"Programm-ID lesen");return ReadBlob(blob);}finally{if(blob!=IntPtr.Zero)FwpmFreeMemory0(ref blob);}}
-  List<Expected> Build(SetupConfig config){
+  static Expected Planned(Guid layer,uint action,ulong weight,List<Spec> specs,string name){return new Expected{Layer=layer,Action=action,Weight=weight,Specs=specs,Name=name};}
+  List<Expected> InstallPlan(List<Expected> plan){return plan.Select(p=>AddSpecs(p.Layer,p.Action,p.Weight,p.Specs,p.Name)).ToList();}
+  List<Expected> Plan(SetupConfig config){
    config.Validate();var result=new List<Expected>();
    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6}){
-    if(config.Ask)result.Add(AddSpecs(target,Block,1,new List<Spec>(),"ohne Freigabe blockieren"));
-    result.Add(Add(target,Permit,200,1,IntPtr.Zero,null));
+    if(config.Ask)result.Add(Planned(target,Block,1,new List<Spec>(),"ohne Freigabe blockieren"));
+    result.Add(Planned(target,Permit,200,new List<Spec>{new Spec{Field=FlagsField,Type=3,UInt=1}},"Kommunikation auf diesem PC"));
    }
    foreach(string path in config.WatchedPaths){
     var specs=new List<Spec>{new Spec{Field=AppField,Type=12,Bytes=AppId(path)}};
-    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6})result.Add(AddSpecs(target,Block,10,specs,"Programmprüfung"));
+    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6})result.Add(Planned(target,Block,10,specs,"Programmprüfung"));
    }
    foreach(SetupRule r in config.Rules){
     if(r.ExpiresUtc.HasValue&&r.ExpiresUtc.Value<=DateTime.UtcNow)continue;
@@ -168,16 +224,16 @@ namespace Netzblick {
      if(ip!=null&&(ip.GetAddressBytes().Length==16)!=v6)continue;
      if((r.Protocol==1&&v6)||(r.Protocol==58&&!v6))continue;
      Guid layer=outbound?(v6?Connect6:Connect4):(v6?Receive6:Receive4);
-     result.Add(AddSpecs(layer,r.Action=="Allow"?Permit:Block,r.Action=="Allow"?100ul:150ul,specs,r.Name));
+     result.Add(Planned(layer,r.Action=="Allow"?Permit:Block,r.Action=="Allow"?100ul:150ul,specs,r.Name));
     }
    }
    return result;
   }
   public void Replace(SetupConfig config){
-   Verify();Check(FwpmTransactionBegin0(engine,0),"Regeländerung starten");List<Expected> next;
+   VerifyOwnFilters();var plan=Plan(config);CheckCompatibility(plan);Check(FwpmTransactionBegin0(engine,0),"Regeländerung starten");List<Expected> next;
    try{
     foreach(var item in expected)Check(FwpmFilterDeleteById0(engine,item.Id),"Alten Sitzungsfilter entfernen");
-    next=Build(config);Check(FwpmTransactionCommit0(engine),"Regeländerung bestätigen");
+    next=InstallPlan(plan);Check(FwpmTransactionCommit0(engine),"Regeländerung bestätigen");
    }catch{FwpmTransactionAbort0(engine);throw;}
    expected.Clear();expected.AddRange(next);allowed.Clear();Verify();
   }
@@ -221,12 +277,12 @@ namespace Netzblick {
   // INDEXED only changes lookup performance. A returned CLEAR_ACTION_RIGHT
   // on a block remains restrictive; it is never accepted on our soft permits.
   public static bool ValidReturnedFlags(uint flags,bool block){return (flags & ~(64u|(block?8u:0u)))==0;}
-  public void Verify(){
+  public void Verify(){VerifyOwnFilters();CheckCompatibility(expected);}
+  void VerifyOwnFilters(){
    if(closed || engine==null || engine.IsInvalid || engine.IsClosed)throw new InvalidOperationException("WFP-Sitzung ist nicht mehr aktiv.");
    IntPtr memory;Guid key=subLayer;Check(FwpmSubLayerGetByKey0(engine,ref key,out memory),"Sitzungsebene überprüfen");
    try{var layer=(SubLayer)Marshal.PtrToStructure(memory,typeof(SubLayer));if(layer.Key!=subLayer || layer.Weight!=65535)throw new InvalidOperationException("WFP-Ebene wurde verändert.");}
    finally{FwpmFreeMemory0(ref memory);}
-   CheckPriority();
    foreach(var wanted in expected){
     Check(FwpmFilterGetById0(engine,wanted.Id,out memory),"Sperr-/Freigabefilter überprüfen");
     try{
@@ -247,3 +303,4 @@ namespace Netzblick {
   public void Dispose(){if(closed)return;if(engine!=null){engine.CloseChecked();engine.Dispose();}closed=true;}
  }
 }
+

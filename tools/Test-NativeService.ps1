@@ -9,6 +9,7 @@ if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrat
 $root=Split-Path $PSScriptRoot -Parent
 if(Get-Service NetzblickControl -ErrorAction SilentlyContinue){throw 'Ein vorhandener Dienst wird vom Test nicht verändert.'}
 $sources=@('InspectionCore.cs','WindowsInspection.cs','AccessCore.cs','SetupCore.cs','SetupTransport.cs','WindowsAccess.cs') | ForEach-Object {Join-Path $root ('src\'+$_)}
+$sources+=Join-Path $PSScriptRoot 'WfpPeerFixture.cs'
 Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll') -Path $sources
 $directory=Join-Path $env:TEMP ('NetzblickCheck-'+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($directory)
 $fixture=Join-Path $directory 'ConnectFixture.exe'
@@ -24,14 +25,18 @@ function Connect-Fixture {
 function Send-Control($command){$r=[Netzblick.SetupClient]::Send($command);if(-not $r.Ok){throw $r.Error};return $r}
 $fixture=[Netzblick.WfpGate]::CanonicalPath($fixture)
 $auditBefore=[Netzblick.WindowsAudit]::Query()
-$installed=$false
+$installed=$false;$peer=$null
 try{
+    $peer=[WfpPeerFixture]::Start()
     & (Join-Path $root 'Install-Netzblick.ps1') -NoTray
     $installed=$true
     if($LASTEXITCODE -ne 0){throw 'Dienstinstallation fehlgeschlagen.'}
     $status=$null;$lastFailure=''
     for($i=0;$i -lt 20;$i++){try{$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});break}catch{$lastFailure=$_.Exception.GetBaseException().Message;Start-Sleep -Milliseconds 500}}
     if(-not $status -or -not $status.Verified -or $status.Config.Ask){throw ('Dienst nicht bereit. Status: '+($status | ConvertTo-Json -Depth 4 -Compress)+'; letzter Verbindungsfehler: '+$lastFailure)}
+    Write-Output 'PASS: Dienststart neben leerer WFP-Ebene mit gleicher höchster Priorität.'
+    [void]$peer.AddPermit($fixture,$false)
+    [void]$peer.AddPermit((Join-Path $env:SystemRoot 'System32\where.exe'),$true)
     if(-not (Connect-Fixture)){Write-Warning 'SKIP: Baseline-TCP zu 1.1.1.1:443 nicht verfügbar. Dienst-/Pipe-Start bestanden; echte Sperr-/Freigabeprüfung nicht durchgeführt.';return}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
     if(Connect-Fixture){throw 'Vorab gesperrte Fixture kann weiterhin verbinden.'}
@@ -58,6 +63,18 @@ try{
     if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'})
     if(-not $fresh.Verified){throw 'Erneute Filterprüfung nach Reset nicht bestätigt.'}
+    # An overlapping hard permit must still be rejected, while unrelated
+    # app permits and a peer soft permit must not disable Netzblick.
+    $hard=$peer.AddPermit($fixture,$true)
+    $rejected=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture})
+    if($rejected.Ok -or $rejected.Error -notlike '*nicht übersteuerbare Freigabe*' -or $rejected.Config.WatchedPaths.Count){throw 'Passende fremde Hard-Permit-Regel wurde nicht vor Installation zurückgewiesen.'}
+    $peer.Remove($hard)
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'}))
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
+    if(Connect-Fixture){throw 'Sperre nach Entfernen des Konflikts wirkt nicht.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'}))
+    $peer.Verify()
+    Write-Output 'PASS: gleiche WFP-Priorität mit Soft Permit und fremdem App-Hard-Permit; echte Sperre/Freigabe; passende Hard-Permit-Regel zurückgewiesen; Peer-Filter unverändert.'
     Write-Output 'PASS: Dienst-Reset entfernt Regeln, Prüfungen und Ereignisse; Recheck und Baseline-Verbindung bestätigt.'
     Write-Output 'PASS: atomare Programm-Schnellsperre für beide Richtungen, echte IPv4/TCP-Sperrwirkung und Rücknahme.'
     Write-Output 'PASS: echter Dienststart, Pipe, pfadbezogene WFP-Sperre, Security-Blockereignis, gezielte IPv4/TCP-Freigabe und Rücknahme. Kein globaler Nachfragemodus aktiviert.'
@@ -67,6 +84,7 @@ try{
     Get-Service NetzblickControl -ErrorAction SilentlyContinue | Format-List Name,Status | Out-String | Write-Host
     if($installed -or (Get-Service NetzblickControl -ErrorAction SilentlyContinue)){& (Join-Path $root 'Install-Netzblick.ps1') -Uninstall -NoTray}
     if([Netzblick.WindowsAudit]::Query() -ne $auditBefore){throw 'Audit-Ausgangszustand nach Dienstende nicht wiederhergestellt.'}
+    if($peer){$peer.Dispose()}
     Remove-Item -LiteralPath $directory -Recurse -Force
 }
 

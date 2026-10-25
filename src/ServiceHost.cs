@@ -51,14 +51,14 @@ namespace Netzblick {
     if(gate==null)throw new InvalidOperationException(problem);
     var next=Clone(config);if(next.Expire(DateTime.UtcNow)>0){Apply(next);Log("Zeitlich begrenzte Freigabe abgelaufen");}
     if(recovery.HasValue&&DateTime.UtcNow>=recovery.Value){var previous=Clone(rollback);previous.Expire(DateTime.UtcNow);Apply(previous);ClearRecovery();Log("Sicherheitsrückweg: vorherige Regeln wiederhergestellt");}
-    if((DateTime.UtcNow-checkedUtc).TotalSeconds>=2){gate.Verify();verified=true;checkedUtc=DateTime.UtcNow;}
+    if((DateTime.UtcNow-checkedUtc).TotalSeconds>=2){gate.Verify();verified=true;problem="";checkedUtc=DateTime.UtcNow;}
    }catch(Exception e){verified=false;problem=e.Message;}
    if(!NeedsWatch(config)&&watch!=null){try{watch.Dispose();watch=null;}catch(Exception e){warning="Audit-Wiederherstellung: "+e.Message;}}
    warning=watch==null&&NeedsWatch(config)?"Ereignisanzeige nicht verfügbar; Dienst neu starten und Audit prüfen.":"";
    if(watch!=null){watch.VerifyAudit();if(!watch.Healthy)warning=watch.Warning;}
    if(queue.Unknown>0||queue.Dropped>0)warning+=" Nicht zugeordnete Ereignisse: "+queue.Unknown+"; nicht gelistete Versuche: "+queue.Dropped+".";
   }
-  SetupStatus Status(bool ok,string error){return new SetupStatus{Ok=ok,Error=error,Verified=verified,Warning=warning,Config=config,Attempts=queue.Snapshot(),History=new List<string>(history),CheckedUtc=checkedUtc,StartedUtc=started,RecoveryUtc=recovery};}
+  SetupStatus Status(bool ok,string error){return new SetupStatus{Ok=ok,Error=error,Verified=verified,Warning=warning+(gate!=null&&!String.IsNullOrEmpty(gate.CompatibilityWarning)?" "+gate.CompatibilityWarning:""),Config=config,Attempts=queue.Snapshot(),History=new List<string>(history),CheckedUtc=checkedUtc,StartedUtc=started,RecoveryUtc=recovery};}
   SetupStatus Execute(SetupCommand command){
    if(command==null)throw new ArgumentException("Leerer Befehl.");
    if(command.Operation=="Status")return Status(true,problem);

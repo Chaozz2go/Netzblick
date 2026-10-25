@@ -53,7 +53,7 @@ function Update-Inspection {
 function Save-InspectionReport {
     $dialog=New-Object Microsoft.Win32.SaveFileDialog;$dialog.Filter='JSON-Bericht (*.json)|*.json';$dialog.FileName='Netzblick-Pruefung.json'
     if($dialog.ShowDialog($window)){
-        try{$report=@{Version='0.10.0';ProgramPath=$inspectionPath;Metadata=$inspectionMetadata;CheckedUtc=[datetime]::UtcNow;ServiceVerified=$setupStatus.Verified;Warning=$setupStatus.Warning;Attempts=$inspectionRows;Scope='Ausgewählter EXE-Pfad; keine Sandbox, keine automatische Hilfsprozesssperre.'};[IO.File]::WriteAllText($dialog.FileName,($report | ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($true)))}catch{Show-Error $_.Exception.Message}
+        try{$report=@{Version='0.10.1';ProgramPath=$inspectionPath;Metadata=$inspectionMetadata;CheckedUtc=[datetime]::UtcNow;ServiceVerified=$setupStatus.Verified;Warning=$setupStatus.Warning;Attempts=$inspectionRows;Scope='Ausgewählter EXE-Pfad; keine Sandbox, keine automatische Hilfsprozesssperre.'};[IO.File]::WriteAllText($dialog.FileName,($report | ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($true)))}catch{Show-Error $_.Exception.Message}
     }
 }
 

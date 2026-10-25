@@ -1,6 +1,21 @@
-﻿Netzblick 0.10.0 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.10.1 – EXE-Pakete (Entwicklungsversion)
 
-Interaktionskorrekturen 0.10.0:
+WFP-Korrektur 0.10.1:
+- Kein pauschaler Abbruch bei gleichrangigen fremden WFP-Ebenen.
+- Prüfung aktiver Fremdfilter nur für die betroffenen ALE-Ebenen:
+  Hard Permits werden vor Installation auf mögliche Überschneidung
+  geprüft, bekannte EXE-/Protokoll-/Port-/Adressunterschiede getrennt.
+  Nicht eindeutig auswertbare Bedingungen gelten nicht als disjunkt.
+- Dynamische Callout-Entscheidungen werden als nicht vollständig
+  prüfbar gekennzeichnet; keine Behauptung vollständiger Koexistenz.
+- Native Fixture mit gleicher höchster Priorität, Soft Permit und
+  Hard Permit für andere EXE; echte TCP-Sperre und Freigabe. Ein
+  passendes Hard Permit muss ohne neue eigene Sperre abgewiesen werden.
+- Peer-Regeln müssen unverändert bleiben; Cleanup ist sitzungsbezogen.
+- Desktop-Pakete erfordern nun im selben Build auch Interaktions-
+  und native Dienstprüfungen vor dem Anlegen des Releaseentwurfs.
+
+Interaktionskorrekturen 0.10.1:
 - Tatsächliche SocketRow-Einzelzeile plus ETW-Gegenstelle und Wechsel
   zwischen Programmen/Alle/keine Sockets im WPF-Fixture geprüft.
 - Mausrad-Zoom, Zoomgrenzen, Pan-Grenzen und Zoom zurücksetzen geprüft.
@@ -14,7 +29,7 @@ Interaktionskorrekturen 0.10.0:
 - Der konkrete unbestätigte Filterstatus auf einem Nutzergerät muss
   anhand der dort angezeigten Dienstfehlermeldung beurteilt werden.
 
-Neu in 0.10.0:
+Neu in 0.10.1:
 - Updatevergleich prüft numerische Version/Build, optionale Entwürfe und
   Testversionen, passende Windows-Pakete und feste GitHub-Release-URLs.
   Fixturetests senden keine Netzwerkabfragen und verwenden keine Tokens.
@@ -27,7 +42,7 @@ Neu in 0.10.0:
 - Privater GitHub-Zugriff muss mit einem eigenen Token auf dem Gerät
   eingerichtet werden; Live-Zugriff mit Nutzer-Token wurde nicht getestet.
 
-Korrektur 0.10.0:
+Korrektur 0.10.1:
 - PowerShell-HadErrors wird nicht mehr pauschal als Abbruchcode bewertet.
   Bewusst unterdrückte oder abgefangene Meldungen können das Flag setzen,
   obwohl der Auftrag erfolgreich abgeschlossen wurde.
