@@ -7,7 +7,10 @@ function Run-Checked([string]$exe,[string]$arguments){
  $p=Start-Process -FilePath $exe -ArgumentList $arguments -PassThru
  $null=$p.Handle
  if(-not $p.WaitForExit(90000)){$p.Kill();throw ('Zeitüberschreitung: '+$exe)}
- if($p.ExitCode -ne 0){throw ('Fehlercode '+$p.ExitCode+': '+$exe)}
+ if($p.ExitCode -ne 0){
+  foreach($log in @('Netzblick-Setup.log','Netzblick-Uninstall.log')){$path=Join-Path $env:ProgramData $log;if(Test-Path -LiteralPath $path){Write-Host (Get-Content -LiteralPath $path -Raw)}}
+  throw ('Fehlercode '+$p.ExitCode+': '+$exe)
+ }
 }
 try{
  Run-Checked $setup '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'

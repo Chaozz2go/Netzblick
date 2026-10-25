@@ -50,7 +50,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var Code: Integer;
 begin
   if CurStep = ssPostInstall then begin
-    if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--install --no-tray', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--install --no-tray --report "' + ExpandConstant('{commonappdata}\Netzblick-Setup.log') + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) then
       RaiseException('Netzblick-Dienst konnte nicht eingerichtet werden.');
     if Code <> 0 then RaiseException('Netzblick-Dienstinstallation fehlgeschlagen. Fehlercode: ' + IntToStr(Code));
   end;
@@ -60,7 +60,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var Code: Integer;
 begin
   if CurUninstallStep = usUninstall then begin
-    if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--uninstall --no-tray', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    if not Exec(ExpandConstant('{app}\Netzblick.exe'), '--uninstall --no-tray --report "' + ExpandConstant('{commonappdata}\Netzblick-Uninstall.log') + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) then
       RaiseException('Netzblick-Dienst konnte nicht entfernt werden.');
     if Code <> 0 then RaiseException('Netzblick-Dienstentfernung fehlgeschlagen. Fehlercode: ' + IntToStr(Code));
   end;

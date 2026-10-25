@@ -9,7 +9,7 @@ using System.Web.Script.Serialization;
 namespace Netzblick {
  public static class SetupWire {
   public static string PipeName="Netzblick.Control.v1";
-  internal static uint PortablePid;
+  internal static uint PortablePid=0;
   public static JavaScriptSerializer Json(){return new JavaScriptSerializer{MaxJsonLength=2097152,RecursionLimit=24};}
   static void Exact(Stream stream,byte[] buffer){int offset=0;while(offset<buffer.Length){var ar=stream.BeginRead(buffer,offset,buffer.Length-offset,null,null);int n;using(ar.AsyncWaitHandle){if(!ar.AsyncWaitHandle.WaitOne(1500)){stream.Dispose();throw new System.TimeoutException("Dienstantwort nicht rechtzeitig erhalten.");}n=stream.EndRead(ar);}if(n==0)throw new EndOfStreamException();offset+=n;}}
   public static string Read(Stream stream){var head=new byte[4];Exact(stream,head);int size=BitConverter.ToInt32(head,0);if(size<1||size>2097152)throw new InvalidDataException("Nachricht zu groß oder leer.");var data=new byte[size];Exact(stream,data);return Encoding.UTF8.GetString(data);}

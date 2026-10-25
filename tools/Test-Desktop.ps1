@@ -5,7 +5,9 @@ $exe=Join-Path $root 'dist\Netzblick.exe'
 function Run-Exe([string]$arguments){
  $report=Join-Path $env:TEMP ('netzblick-exe-'+[guid]::NewGuid().ToString('N')+'.txt')
  try{
-  $p=Start-Process -FilePath $exe -ArgumentList ($arguments+' --report "'+$report+'"') -PassThru
+  $info=New-Object Diagnostics.ProcessStartInfo
+  $info.FileName=$exe;$info.Arguments=$arguments+' --report "'+$report+'"';$info.UseShellExecute=$false
+  $p=[Diagnostics.Process]::Start($info)
   $null=$p.Handle
   if(-not $p.WaitForExit(45000)){$p.Kill();throw ('EXE-Start hängt: '+$arguments)}
   $text=if(Test-Path -LiteralPath $report){Get-Content -LiteralPath $report -Raw}else{'Kein Prüfbericht'}

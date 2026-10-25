@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: netzblick-desktop-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   desktop:
     runs-on: windows-latest
@@ -15,6 +18,7 @@ jobs:
         shell: powershell
         run: ./tools/Build-Desktop.ps1
       - name: Download-marked portable EXE startup and capture
+        timeout-minutes: 3
         shell: powershell
         run: ./tools/Test-Desktop.ps1
       - name: Package portable version
