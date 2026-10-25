@@ -1,6 +1,16 @@
-﻿# Netzblick 0.9.0 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.10.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
+
+## Neu anfangen, Karte und Tray
+
+**Aktivität → Alles neu prüfen …** zeigt vorab, was zurückgesetzt wird: eigene Netzblick-Freigaben und Sperren, Programm-Prüfsperren, Nachfragemodus, Prüfliste, gemerkter Programmbestand und Sitzungsmessung. Bestätigen erstellt Sicherungen (`control.json.reset-*.bak` beim Dienst; `reset-*.json` bei den Benutzereinstellungen). Danach gilt Beobachten/Zulassen, und auch alle aktuell erfassten Programme kommen erneut in die Prüfliste. Andere Windows-Firewallregeln, Exporte und der GitHub-Zugang bleiben erhalten. Der Reset ist kein Ersatz für eine Fehlerbehebung am Filterdienst; ein unbestätigter Dienststatus wird weiter angezeigt.
+
+**Programm prüfen:** Der Startknopf ist nur bei vorhandenen Dateiangaben und bestätigtem Filterstatus aktiv. Ein gesperrter Start zeigt jetzt den konkreten Grund. **Dienst und Filter erneut prüfen** startet einen gestoppten installierten Dienst und fordert eine erneute native Filterprüfung an. Echte Filterkonflikte werden nicht durch blindes Aktivieren des Knopfs übergangen.
+
+**Weltkarte:** Mausrad zoomt am Mauszeiger von 100 bis 800 Prozent. Bei vergrößerter Karte mit gedrückter linker Maustaste verschieben; **Zoom zurücksetzen** zeigt wieder die ganze Karte. Der Fehler beim Wechsel zu einem Programm mit genau einem Socket und zusätzlichen ETW-Gegenstellen ist korrigiert. Darstellungsfehler werden in der Kartenansicht angezeigt und beenden die App nicht.
+
+**Tray:** **Fenster schließen · im Tray weiter** blendet nur das Fenster aus; Erfassung, Hinweise und Filtersteuerung laufen weiter. **Netzblick vollständig beenden** entfernt auch das Tray und stoppt bei der installierten Version den Dienst. Bei aktiven Regeln wird nachgefragt. Dynamische Netzblick-Filter enden dabei; gespeicherte Regeln werden beim nächsten App-Start wieder geladen. Der installierte Dienst wird beim nächsten Start bei Bedarf wieder gestartet. Der konfigurierte Autostart bleibt bestehen.
 
 ## Schnell bewerten
 
@@ -24,14 +34,14 @@ Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldun
 
 Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-- **Portabel:** `Netzblick-Portable-0.9.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
-- **Installiert:** `Netzblick-Setup-0.9.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
+- **Portabel:** `Netzblick-Portable-0.10.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.10.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
 Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
 
 Die EXE enthält ihre verwalteten DLLs und lädt diese aus eigenen Ressourcen in den Speicher. XAML, UI-Skripte, Geodaten und die native ETW-Komponente werden für die Laufzeit in einen geschützten Ordner unter `%ProgramData%\Netzblick.Runtime` geschrieben und nach Möglichkeit beim Beenden entfernt. Die Internetmarkierung der heruntergeladenen EXE muss dafür nicht entfernt werden. Windows kann für unsignierte neue EXE-Dateien weiterhin SmartScreen anzeigen; eine Codesignatur ist noch nicht vorhanden.
 
-Fenster schließen/minimieren blendet ins Tray aus. **Installiert:** „Oberfläche beenden“ lässt den Dienst weiterlaufen. **Portabel:** „Netzblick beenden“ beendet auch die portable Filtersteuerung. Ohne angemeldeten Benutzer zeigt die installierte Version keine Tray-Meldungen, der Dienst sammelt weiter Blockereignisse.
+Fenster schließen/minimieren blendet ins Tray aus. **Fenster schließen** lässt die Sitzung im Tray weiterlaufen. **Netzblick vollständig beenden** beendet auch die Filtersteuerung und stoppt den installierten Dienst. Ohne angemeldeten Benutzer zeigt die installierte Version keine Tray-Meldungen, der Dienst sammelt weiter Blockereignisse.
 
 Die alten `.ps1`/`.cmd`-Dateien sind nur noch Entwicklungs- und Kompatibilitätseinstiege im Quellrepository, nicht der Startweg der neuen Pakete. Für Entwicklung: `tools/Build-Desktop.ps1`, danach Inno Setup 6 mit `installer/Netzblick.iss` kompilieren. Der Workflow „Windows EXE and installer“ prüft beide Pakete und legt bei Erfolg einen GitHub-Releaseentwurf mit Downloads an.
 

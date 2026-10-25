@@ -10,8 +10,11 @@ function Initialize-TrayMode {
     $open=$menu.Items.Add('Netzblick öffnen');$open.Add_Click({Show-NetzblickWindow})
     $requests=$menu.Items.Add('Blockierte Versuche');$requests.Add_Click({Show-NetzblickWindow;Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=0})
     [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-    $quit=$menu.Items.Add($(if($Portable){'Netzblick beenden · portable Filter enden'}else{'Oberfläche beenden · Dienst läuft weiter'}))
-    $quit.Add_Click({$script:exitNetzblick=$true;$window.Close()})
+    $hide=$menu.Items.Add('Fenster schließen · im Tray weiter')
+    $hide.Add_Click({Hide-NetzblickWindow})
+    $quit=$menu.Items.Add('Netzblick vollständig beenden')
+    $quit.Add_Click({Stop-NetzblickCompletely})
+    $script:trayHideItem=$hide;$script:trayQuitItem=$quit
     $tray.ContextMenuStrip=$menu
     $tray.Add_DoubleClick({Show-NetzblickWindow})
     $tray.Add_BalloonTipClicked({Show-NetzblickWindow;Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=0;if($script:setupNoticeTarget -and $setupStatus){$ui.AccessRequests.SelectedItem=$setupStatus.Attempts | Where-Object {$_.Key -eq $setupNoticeTarget.Key} | Select-Object -First 1}})

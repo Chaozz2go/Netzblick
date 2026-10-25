@@ -55,6 +55,62 @@ if(@($savedAfter.Pending).Count -ne 0 -or $ui.UserNotice.Text -like '*nicht gesp
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
 Write-Output 'PASS: neue App, Gegenstellen, direkter Anzeigenweg, gespeicherte Prüfliste und Markierung ohne Filteränderung.'
+# Reproduce a single real SocketRow plus ETW peer when switching maps.
+. (Join-Path $appRoot 'src\VisualModes.ps1')
+. (Join-Path $appRoot 'src\WorldNavigation.ps1')
+. (Join-Path $appRoot 'src\InspectionMode.ps1')
+. (Join-Path $appRoot 'src\SessionMode.ps1')
+$script:Portable=$true
+Initialize-VisualModes
+$socket=New-Object Netzblick.SocketRow;$socket.Path=$testExe;$socket.Program='Neue Test-App';$socket.Protocol='TCPv4';$socket.Address='8.8.8.8';$socket.Remote='8.8.8.8:443';$socket.Local='127.0.0.1:50000';$socket.State='Verbunden'
+$script:rows=@($socket)
+$single=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Ein Socket';Rows=@($socket)}
+$empty=[pscustomobject]@{Key='EMPTY';Path='C:\Fixture\empty.exe';Name='Keine Sockets';Rows=@()}
+$script:allProgramItems=@($single,$empty)
+Refresh-World -Rebuild
+foreach($selection in @($single.Key,'EMPTY','*',$single.Key)){
+ $ui.WorldPrograms.SelectedItem=$ui.WorldPrograms.Items | Where-Object {$_.Key -eq $selection} | Select-Object -First 1
+ Refresh-World
+ if($ui.WorldSummary.Text -like '*konnte nicht*'){throw ('Kartenwechsel fehlgeschlagen: '+$ui.WorldSummary.Text)}
+}
+if($ui.WorldPeers.Items.Count -lt 1){throw 'Einzel-Socket/ETW-Gegenstelle fehlt auf der Karte.'}
+Zoom-World 120 500 250
+if($worldScale -le 1 -or $ui.WorldMap.RenderTransform.Matrix.M11 -le 1){throw 'Mausrad-Zoom verändert die Karte nicht.'}
+Zoom-World 12000 500 250
+if($worldScale -ne 8){throw 'Zoom-Obergrenze fehlt.'}
+Set-WorldTransform 2 -99999 99999
+if($worldOffsetX -ne -1000 -or $worldOffsetY -ne 0){throw 'Kartengrenzen beim Verschieben falsch.'}
+Set-WorldTransform 1 0 0
+if(-not $ui.WorldMap.RenderTransform.Matrix.IsIdentity){throw 'Zoom zurücksetzen nicht identisch.'}
+# The inspection button must be enabled only with metadata and verified filters.
+Initialize-InspectionMode
+[Netzblick.SetupClient]::Scenario($testExe,0);$script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'})
+$inspectionFixture=Join-Path $userStateDirectory 'NotRunningFixture.exe'
+Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') -Destination $inspectionFixture
+Select-InspectionPath $inspectionFixture
+$clock=[Diagnostics.Stopwatch]::StartNew()
+while($inspectionMetadataTask -and -not $inspectionMetadataTask.IsCompleted -and $clock.ElapsedMilliseconds -lt 5000){Start-Sleep -Milliseconds 40}
+Update-Inspection
+if(-not $ui.StartInspection.IsEnabled){throw ('Gesunde Prüfsperre bleibt deaktiviert: '+$ui.InspectionBlockReason.Text)}
+Start-Inspection
+if(-not $inspectionActive -or -not($setupStatus.Config.WatchedPaths -contains $inspectionPath)){throw 'Prüfsperre wurde nicht angefordert.'}
+Stop-Inspection
+[Netzblick.SetupClient]::Scenario($testExe,3);$script:setupStatus=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='Status'});Update-Inspection
+if($ui.StartInspection.IsEnabled -or $ui.InspectionBlockReason.Text -notlike '*Filterprüfung fehlgeschlagen*'){throw 'Unbestätigte Filter werden nicht erklärt oder erlauben Prüfstart.'}
+[Netzblick.SetupClient]::Scenario($testExe,0);Retry-InspectionControl
+if(-not $ui.StartInspection.IsEnabled){throw 'Erneute Dienstprüfung aktiviert gesunden Prüfstart nicht.'}
+# Reset all review decisions, without native filters in this fixture.
+function Refresh-Rules {$script:ruleError='';$script:ownRules=@()}
+function Refresh-Programs {Track-ObservedPrograms $script:allProgramItems;Refresh-Overview}
+$script:events=New-Object 'System.Collections.Generic.List[object]';$events.Add([pscustomobject]@{Event='alt'})
+$script:seen=New-Object 'System.Collections.Generic.HashSet[string]';[void]$seen.Add('alt')
+$changes.Add([pscustomobject]@{Path=$testExe})
+Reset-NetzblickState
+if($setupStatus.Config.Ask -or $setupStatus.Config.Rules.Count -or $setupStatus.Config.WatchedPaths.Count -or $changes.Count -or $events.Count){throw 'Zurücksetzen lässt Regeln oder Entscheidungen stehen.'}
+if($newPrograms.Count -ne $allProgramItems.Count){throw 'Zurücksetzen prüft laufende Programme nicht erneut.'}
+if(@(Get-ChildItem -LiteralPath $userStateDirectory -Filter 'reset-*.json').Count -lt 1){throw 'Zurücksetzen hat keine Sicherung erzeugt.'}
+$script:trafficProblem='';Refresh-Overview
+Write-Output 'PASS: Einzel-Socket-Kartenwechsel, Zoom/Pan-Grenzen, Prüfsperre bei bestätigtem Dienst, erklärter Sperrgrund, erneute Prüfung und frischer Reset.'
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -73,8 +129,8 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
- foreach($panelName in @('Overview','Updates')){
-  foreach($n in @('Access','Overview','Updates')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+ foreach($panelName in @('Overview','Updates','World','Inspection')){
+  foreach($n in @('Access','Overview','Updates','World','Inspection')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
   $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0);$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
@@ -87,6 +143,14 @@ try{
   $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Overview-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
+ # Hide keeps both tray and process alive; complete quit closes the window.
+ . (Join-Path $appRoot 'src\TrayMode.ps1')
+ $script:setupStatus=$null;Initialize-TrayMode;$window.Show()
+ $trayHideItem.PerformClick()
+ if($window.IsVisible -or -not $tray.Visible -or $script:exitNetzblick){throw 'Fenster schließen beendet die Tray-Sitzung.'}
+ $trayQuitItem.PerformClick()
+ if(-not $script:exitNetzblick -or $tray.Visible){throw 'Vollständig beenden lässt das Tray offen.'}
+ Write-Output 'PASS: Fenster schließen erhält das Tray; vollständig beenden entfernt es.'
  Write-Output 'PASS: vier UI-Zustände; acht Renderings. Nur Fakes, keine WFP-/Firewall-/Audit-Änderungen.'
 }finally{$accessTimer.Stop();$window.Close();Remove-Item -LiteralPath $userStateDirectory -Recurse -Force -ErrorAction SilentlyContinue}
 

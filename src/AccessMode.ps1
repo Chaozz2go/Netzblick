@@ -84,11 +84,11 @@ function Update-AccessMode {
         $ui.SetupHistory.ItemsSource=@($setupStatus.History)
         $ui.AccessEmpty.Text=if($setupStatus.Attempts.Count){'Pro Programm, Gegenstelle und Dienst gesammelt. '+$setupStatus.Attempts.Count+' Einträge seit Dienststart.'}else{'Noch keine Blockereignisse angezeigt. Eine leere Liste beweist keinen fehlenden Netzwerkzugriff.'}
         if($script:policyReady -and (Get-Command Track-ObservedPrograms -ErrorAction SilentlyContinue)){$blocked=@($setupStatus.Attempts | Where-Object {[Netzblick.AccessQueue]::CanAllow($_.Path)} | ForEach-Object {[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($_.Path);Name=$_.Program;Path=$_.Path}});Track-ObservedPrograms $blocked -AlwaysReview}
-        Update-SetupNotifications;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection}
+        Update-SetupNotifications
     }catch{
-        $script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
+        $script:accessProblem=$_.Exception.GetBaseException().Message;$script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
         $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
-    };Show-AccessRequest;if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
+    };Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
 }
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()

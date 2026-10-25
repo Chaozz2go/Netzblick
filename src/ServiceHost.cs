@@ -62,6 +62,24 @@ namespace Netzblick {
   SetupStatus Execute(SetupCommand command){
    if(command==null)throw new ArgumentException("Leerer Befehl.");
    if(command.Operation=="Status")return Status(true,problem);
+   if(command.Operation=="Recheck"){
+    try{
+     if(gate==null)gate=WfpGate.StartConfig(config);else gate.Verify();
+     if(NeedsWatch(config))EnsureWatch();verified=true;problem="";checkedUtc=DateTime.UtcNow;Log("Dienst und Filter erneut bestätigt");
+    }catch(WfpStartFailure e){gate=e.RecoveryGate;verified=false;problem=e.Message;Log(problem);throw;}
+    catch(Exception e){verified=false;problem=e.Message;Log(problem);throw;}
+    return Status(true,problem);
+   }
+   if(command.Operation=="Reset"){
+    string path=ConfigPath;Directory.CreateDirectory(Path.GetDirectoryName(path));
+    string backup=path+".reset-"+DateTime.UtcNow.ToString("yyyyMMddHHmmssfff")+".bak";
+    if(File.Exists(path))File.Copy(path,backup,false);
+    var empty=new SetupConfig();
+    if(gate!=null)Apply(empty);else{Save(empty);config=empty;verified=false;}
+    ClearRecovery();queue.Clear();history.Clear();
+    if(watch!=null){try{watch.Dispose();watch=null;warning="";}catch(Exception e){warning="Audit-Wiederherstellung: "+e.Message;}}
+    Log("Regeln und Prüfungen zurückgesetzt; Beobachten ist Standard");return Status(true,problem);
+   }
    if(command.Operation=="ConfirmRecovery"){if(!verified)throw new InvalidOperationException("Einrichtung nicht bestätigt: Filterstatus unbekannt.");ClearRecovery();Log("Einrichtung bestätigt; Sicherheitsrückweg aufgehoben");return Status(true,problem);}
    if(!verified)throw new InvalidOperationException("Keine neue Änderung bei unbestätigtem Filterstatus: "+problem);
    var next=Clone(config);
@@ -108,7 +126,8 @@ namespace Netzblick {
      }
      if(File.Exists(ConfigPath)){var info=new FileInfo(ConfigPath);if(info.Length>1048576)throw new InvalidDataException("Regeldatei zu groß.");config=SetupWire.Json().Deserialize<SetupConfig>(File.ReadAllText(ConfigPath));config.Validate();config.Expire(DateTime.UtcNow);}
      gate=WfpGate.StartConfig(config);verified=true;checkedUtc=DateTime.UtcNow;
-    }catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
+    }catch(WfpStartFailure e){gate=e.RecoveryGate;problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
+    catch(Exception e){problem="Dienstfilter nicht bereit: "+e.Message;verified=false;Log(problem);}
     if(NeedsWatch(config))try{EnsureWatch();}catch(Exception e){warning="Ereignisanzeige nicht verfügbar: "+e.Message;}
     while(!stop.WaitOne(0)){
      try{

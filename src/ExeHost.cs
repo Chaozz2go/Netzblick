@@ -14,8 +14,8 @@ using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Netzblick")]
-[assembly: AssemblyVersion("0.9.0.0")]
-[assembly: AssemblyFileVersion("0.9.0.0")]
+[assembly: AssemblyVersion("0.10.0.0")]
+[assembly: AssemblyFileVersion("0.10.0.0")]
 
 namespace Netzblick.Desktop {
  // No downloads, external PowerShell process, runtime compiler or LoadFrom.
@@ -121,6 +121,15 @@ namespace Netzblick.Desktop {
      string state=null;
      IDisposable worker=null;
      try{
+      if(!portable&&!check&&!maintenance){
+       using(var service=new System.ServiceProcess.ServiceController("NetzblickControl")){
+        try{
+         if(service.Status==System.ServiceProcess.ServiceControllerStatus.StopPending)service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(20));
+         service.Refresh();if(service.Status==System.ServiceProcess.ServiceControllerStatus.Stopped)service.Start();
+         service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running,TimeSpan.FromSeconds(20));
+        }catch(InvalidOperationException){/* Keep the UI available for diagnostics if the service is missing. */}
+       }
+      }
       if(portable&&!check){
        state=Path.Combine(Path.GetDirectoryName(Self.Location),"Netzblick-Daten");SecureDirectory(state);
        worker=Netzblick.ControlService.StartPortable(state);

@@ -79,6 +79,7 @@ namespace Netzblick {
  public sealed class SetupQueue {
   readonly Dictionary<string,SetupAttempt> items=new Dictionary<string,SetupAttempt>(StringComparer.OrdinalIgnoreCase);
   public long Dropped {get;private set;} public long Unknown {get;private set;}
+  public void Clear(){items.Clear();Dropped=0;Unknown=0;}
   public void Observe(BlockEvent e,bool own){
    if(e.Direction!="Ausgehend"&&e.Direction!="Eingehend"){Unknown++;return;}
    IPAddress ip;string raw=e.Target;

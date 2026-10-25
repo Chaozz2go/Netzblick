@@ -2,7 +2,7 @@
  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
  <Border Background="White" Padding="22" CornerRadius="12" Margin="0,0,0,14"><StackPanel><TextBlock Text="Programm prüfen" FontSize="27" FontWeight="SemiBold"/><TextBlock Text="Erst sperren, dann selbst starten und die Verbindungsversuche ansehen." Foreground="#57677B" Margin="0,8,0,14"/>
   <WrapPanel><Button x:Name="ChooseInspection" Content="1 · EXE auswählen"/><Button x:Name="StartInspection" Content="2 · Vor dem Start sperren" IsEnabled="False" Background="#087F8C" Foreground="White"/><Button x:Name="StopInspection" Content="Prüfung beenden · Sperre behalten" IsEnabled="False"/><Button x:Name="ReleaseInspection" Content="Prüfsperre entfernen" IsEnabled="False"/></WrapPanel>
-  <TextBox x:Name="InspectionPath" IsReadOnly="True" Margin="0,12,0,8"/>
+  <WrapPanel><Button x:Name="RetryInspectionControl" Content="Dienst und Filter erneut prüfen"/><Button x:Name="ShowInspectionControl" Content="Dienstfehler anzeigen"/></WrapPanel><TextBlock x:Name="InspectionBlockReason" TextWrapping="Wrap" Foreground="#A4680B" Margin="0,8"/><TextBox x:Name="InspectionPath" IsReadOnly="True" Margin="0,12,0,8"/>
   <TextBlock x:Name="InspectionMetadata" Text="Wähle eine lokale EXE. Netzblick startet sie nicht mit Administratorrechten." TextWrapping="Wrap" Foreground="#57677B"/>
  </StackPanel></Border>
  <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
@@ -10,3 +10,4 @@
   <Border Grid.Column="1" Background="White" CornerRadius="10" Padding="18"><StackPanel><TextBlock Text="Gezielt entscheiden" FontSize="19" FontWeight="SemiBold"/><TextBlock Text="Doppelklick auf einen Versuch öffnet dessen Freigabe. Die Voreinstellung gilt nur für diese IP und diesen Dienst." TextWrapping="Wrap" Margin="0,10,0,14"/><Button x:Name="InspectionToSetup" Content="Versuche prüfen und freigeben"/><Button x:Name="SaveInspectionReport" Content="Prüfbericht speichern" IsEnabled="False"/><Separator Margin="0,14"/><TextBlock Text="Keine Sandbox" FontWeight="SemiBold"/><TextBlock Text="Die Prüfung beschränkt den ausgewählten EXE-Pfad. Hilfsprogramme, Installer oder weiterleitende Dienste sind dadurch nicht automatisch gesperrt. Für neue Hilfsprogramme zusätzlich den globalen Nachfragemodus verwenden. Lokale Dateizugriffe bleiben möglich." TextWrapping="Wrap" Foreground="#57677B" Margin="0,8"/><TextBlock Text="Keine Einträge bedeutet nicht: kein Netzwerkzugriff. Fehlende Ereignisse oder ein ausgefallener Dienst werden ausdrücklich angezeigt." TextWrapping="Wrap" Foreground="#A4680B" Margin="0,14"/></StackPanel></Border>
  </Grid>
 </Grid>
+

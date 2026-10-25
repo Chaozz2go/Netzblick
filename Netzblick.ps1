@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.9.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.10.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -78,6 +78,8 @@ try {
     . (Join-Path $appRoot 'src\TrayMode.ps1')
     . (Join-Path $appRoot 'src\ReviewMode.ps1')
     . (Join-Path $appRoot 'src\UpdatesMode.ps1')
+    . (Join-Path $appRoot 'src\SessionMode.ps1')
+    . (Join-Path $appRoot 'src\WorldNavigation.ps1')
 
     function Show-Error([string]$message) {
         [void][Windows.MessageBox]::Show($window,$message,'Netzblick','OK','Error')
@@ -273,7 +275,7 @@ try {
     $ui.Search.Add_TextChanged({Refresh-Programs})
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
-        $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel')
+        $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(42)}
         $ui.SummaryMetrics.Visibility=if($compact){'Collapsed'}else{'Visible'}
@@ -333,6 +335,7 @@ try {
     Initialize-AccessMode
     Initialize-ReviewMode
     Initialize-Updates
+    $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})
     Initialize-TrayMode
     Show-Panel 'OverviewPanel'
     $timer=New-Object Windows.Threading.DispatcherTimer

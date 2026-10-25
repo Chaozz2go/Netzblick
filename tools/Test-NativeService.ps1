@@ -51,6 +51,14 @@ try{
     if($blocks.Count -ne 2 -or @($blocks.Direction | Select-Object -Unique).Count -ne 2){throw 'Schnellsperre hat nicht beide Richtungen gespeichert.'}
     foreach($block in $blocks){[void](Send-Control ([Netzblick.SetupCommand]@{Operation='Remove';RuleId=$block.Id}))}
     if(-not (Connect-Fixture)){throw 'Rücknahme der Schnellsperre stellt die Baseline nicht wieder her.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
+    $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'})
+    if($fresh.Config.Ask -or $fresh.Config.Rules.Count -or $fresh.Config.WatchedPaths.Count -or $fresh.Attempts.Count){throw 'Reset lässt alte Regeln oder Ereignisse stehen.'}
+    if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}
+    $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'})
+    if(-not $fresh.Verified){throw 'Erneute Filterprüfung nach Reset nicht bestätigt.'}
+    Write-Output 'PASS: Dienst-Reset entfernt Regeln, Prüfungen und Ereignisse; Recheck und Baseline-Verbindung bestätigt.'
     Write-Output 'PASS: atomare Programm-Schnellsperre für beide Richtungen, echte IPv4/TCP-Sperrwirkung und Rücknahme.'
     Write-Output 'PASS: echter Dienststart, Pipe, pfadbezogene WFP-Sperre, Security-Blockereignis, gezielte IPv4/TCP-Freigabe und Rücknahme. Kein globaler Nachfragemodus aktiviert.'
 }finally{
