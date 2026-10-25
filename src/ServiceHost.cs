@@ -15,7 +15,18 @@ namespace Netzblick {
   protected override void OnStart(string[] args){worker=new Thread(Run){IsBackground=true,Name="Netzblick Control"};worker.Start();}
   protected override void OnStop(){stop.Set();if(worker!=null&&!worker.Join(12000))throw new System.TimeoutException("Netzblick-Regeln konnten nicht geordnet beendet werden.");}
   protected override void OnShutdown(){OnStop();}
-  static string ConfigPath {get{return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Netzblick","control.json");}}
+  static string portableDirectory;
+  static string ConfigPath {get{return portableDirectory==null?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Netzblick","control.json"):Path.Combine(portableDirectory,"control.json");}}
+  public static IDisposable StartPortable(string directory){
+   portableDirectory=directory;SetupWire.PortablePid=(uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+   SetupWire.PipeName="Netzblick.Portable."+SetupWire.PortablePid+"."+Guid.NewGuid().ToString("N");
+   var service=new ControlService();service.OnStart(new string[0]);return new PortableLease(service);
+  }
+  sealed class PortableLease : IDisposable {
+   ControlService service;
+   public PortableLease(ControlService value){service=value;}
+   public void Dispose(){if(service==null)return;try{service.OnStop();}finally{service.Dispose();service=null;}}
+  }
   SetupConfig config=new SetupConfig();readonly SetupQueue queue=new SetupQueue();readonly List<string> history=new List<string>();
   WfpGate gate;AccessWatch watch;string problem="",warning="";bool verified;DateTime started=DateTime.UtcNow,checkedUtc;DateTime? recovery;
   public sealed class Recovery {public SetupConfig Before {get;set;} public DateTime UntilUtc {get;set;}}
@@ -115,3 +126,4 @@ namespace Netzblick {
   public static void Main(){if(Environment.UserInteractive)throw new InvalidOperationException("Mit Install-Netzblick.cmd als Windows-Dienst installieren.");ServiceBase.Run(new ControlService());}
  }
 }
+

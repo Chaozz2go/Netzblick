@@ -7,10 +7,12 @@ function Initialize-AccessMode {
     $script:setupSelection='';$script:setupNotifiedPrograms=New-Object 'System.Collections.Generic.HashSet[string]'
     $script:setupNotifiedTargets=New-Object 'System.Collections.Generic.HashSet[string]';$script:setupLastNotice=[datetime]::MinValue
     $script:setupPreferencesPath=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Netzblick\notifications.json'
+    if($StateDirectory){$script:setupPreferencesPath=Join-Path $StateDirectory 'notifications.json'}
     try{if(Test-Path -LiteralPath $setupPreferencesPath){$p=Get-Content -LiteralPath $setupPreferencesPath -Raw | ConvertFrom-Json;$ui.NotifyAttempts.IsChecked=[bool]$p.Enabled;$ui.NotifyTargets.IsChecked=[bool]$p.Targets}}catch{}
     foreach($n in @('NotifyAttempts','NotifyTargets')){$ui[$n].Add_Click({Save-SetupPreferences})}
     $ui.StartAccess.Add_Click({Start-AccessMode});$ui.StopAccess.Add_Click({[void](Stop-AccessMode)})
     $ui.InstallControlService.Add_Click({try{Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $appRoot 'Install-Netzblick.ps1')+'"')}catch{Show-Error $_.Exception.Message}})
+    if($Embedded){$ui.InstallControlService.Visibility='Collapsed'}
     $ui.ConfirmSetup.Add_Click({try{[void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='ConfirmRecovery'}));Update-AccessMode}catch{Show-Error $_.Exception.GetBaseException().Message}})
     $ui.AccessRequests.Add_SelectionChanged({Show-AccessRequest});$ui.SetupRuleScope.Add_SelectionChanged({Update-SetupDecisionButtons});$ui.SetupHostIcmp.Add_Click({Update-SetupDecisionButtons})
     $ui.TrySetupRule.Add_Click({Save-SetupRule -Temporary});$ui.SaveSetupRule.Add_Click({Save-SetupRule});$ui.KeepAccessBlocked.Add_Click({Save-SetupRule -Block})
@@ -93,3 +95,4 @@ function Update-SetupNotifications {
     if($fresh.Count -and $ui.NotifyAttempts.IsChecked){$script:setupPendingNotice=$fresh[-1]}
     if($script:setupPendingNotice -and $ui.NotifyAttempts.IsChecked -and ([datetime]::UtcNow-$setupLastNotice).TotalSeconds -ge 15){$a=$script:setupPendingNotice;$tray.BalloonTipTitle='Netzblick · blockierter Verbindungsversuch';$tray.BalloonTipText=$a.Program+' → '+$a.Target+'. Zum Prüfen anklicken.';$script:setupNoticeTarget=$a;$tray.ShowBalloonTip(6000);$script:setupLastNotice=[datetime]::UtcNow;$script:setupPendingNotice=$null}
 }
+

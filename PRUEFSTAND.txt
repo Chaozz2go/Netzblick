@@ -1,4 +1,25 @@
-﻿Netzblick 0.7.0 – Entwicklungsversion
+﻿Netzblick 0.8.0 – EXE-Pakete (Entwicklungsversion)
+
+Neue Windows-Prüfungen im Workflow windows-desktop.yml:
+- Windows-x64-EXE und Hintergrunddienst kompilieren.
+- Portable EXE mit gesetzter Internetmarkierung (ZoneId=3) starten,
+  ohne Unblock-File oder loadFromRemoteSources; XAML/Geo-Startcheck.
+- Tatsächliche WPF-/Tray- und ETW-Initialisierung der EXE.
+- Portable Filtersteuerung und bestätigter Status; kein installierter
+  Dienst oder Autostart nach dem Beenden.
+- Inno-Setup-EXE kompilieren; stille Installation, EXE-Autostart,
+  installierten EXE-Start, erneute Installation/Update und Deinstallation
+  prüfen; gespeicherte Daten müssen erhalten bleiben.
+
+Die konkreten Ergebnisse sind im zugehörigen GitHub-Actions-Lauf
+nachzulesen. Pakete werden nur nach erfolgreichen Desktop-Prüfungen als
+Releaseentwurf bereitgestellt. Diese Start-/Paketprüfungen ersetzen
+keine Tests der gesamten Firewall-Sperrwirkung auf einem eigenen Gerät.
+Keine Codesignatur: SmartScreen-Rückfragen sind weiterhin möglich.
+
+Bisheriger Prüfstand der Firewallfunktionen (0.7.0):
+
+Netzblick 0.7.0 – Entwicklungsversion
 
 In dieser Linux-Entwicklungsumgebung bestanden:
 - 2.287 Kernprüfungen unter .NET 8, einschließlich 31 neuer Prüfungen
@@ -55,3 +76,4 @@ Gerätetest auf einem lokal bedienten Windows-Testrechner:
 
 Die neue Version ist erst nach diesen Gerätetests als verlässlicher
 Sicherheitsgewinn zu bewerten. Keine Sandbox, keine TLS-Inhaltsprüfung.
+

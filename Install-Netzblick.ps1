@@ -11,6 +11,8 @@ if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrat
 }
 if(-not [Environment]::Is64BitProcess){throw '64-Bit-Windows-PowerShell verwenden.'}
 $target=Join-Path $env:ProgramFiles 'Netzblick'
+$distribution=if($NetzblickDistributionRoot){$NetzblickDistributionRoot}else{$PSScriptRoot}
+$exeDistribution=Test-Path -LiteralPath (Join-Path $distribution 'Netzblick.exe')
 $data=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Netzblick'
 $taskName='Netzblick Tray '+$identity.User.Value
 function Invoke-Sc([string[]]$arguments){& "$env:SystemRoot\System32\sc.exe" @arguments | Write-Host;if($LASTEXITCODE -ne 0){throw ('Dienstverwaltung fehlgeschlagen: '+($arguments -join ' '))}}
@@ -35,12 +37,13 @@ try{
         if($service){Invoke-Sc @('delete','NetzblickControl')}
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
         Write-Host 'Dienst und Tray-Autostart entfernt. Regeldatei und installierte Dateien bleiben als Sicherung erhalten. Frühere Windows-Firewallregeln werden nicht gelöscht.'
-        exit 0
+        if($NetzblickDistributionRoot){return}else{exit 0}
     }
     Protect-Directory $target;Protect-Directory $data
-    if([IO.Path]::GetFullPath($PSScriptRoot) -ne [IO.Path]::GetFullPath($target)){
-        foreach($name in @('Netzblick.ps1','Start-Netzblick.cmd','Install-Netzblick.ps1','Install-Netzblick.cmd','README.md','PRUEFSTAND.txt','THIRD-PARTY-NOTICES.txt','src','lib','data','docs')){
-            Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $target -Recurse -Force
+    if([IO.Path]::GetFullPath($distribution) -ne [IO.Path]::GetFullPath($target)){
+        $files=if($exeDistribution){@('Netzblick.exe','Netzblick.exe.config','README.md','PRUEFSTAND.txt','THIRD-PARTY-NOTICES.txt','lib','licenses')}else{@('Netzblick.ps1','Start-Netzblick.cmd','Install-Netzblick.ps1','Install-Netzblick.cmd','README.md','PRUEFSTAND.txt','THIRD-PARTY-NOTICES.txt','src','lib','data','docs')}
+        foreach($name in $files){
+            Copy-Item -LiteralPath (Join-Path $distribution $name) -Destination $target -Recurse -Force
         }
     }
     foreach($item in @(Get-ChildItem -LiteralPath $target -Recurse -Force)+@(Get-ChildItem -LiteralPath $data -Recurse -Force)){
@@ -51,13 +54,15 @@ try{
     if(-not $service){Invoke-Sc @('create','NetzblickControl','binPath=',('"'+(Join-Path $target 'lib\Netzblick.Service.exe')+'"'),'start=','auto','depend=','BFE','DisplayName=','Netzblick Netzwerksteuerung')}
     Invoke-Sc @('failure','NetzblickControl','reset=','86400','actions=','restart/2000/restart/5000/restart/10000')
     Start-Service NetzblickControl
-    if(-not $NoTray){
-    $action=New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+(Join-Path $target 'Netzblick.ps1')+'" -Tray')
+    $action=if($exeDistribution){New-ScheduledTaskAction -Execute (Join-Path $target 'Netzblick.exe') -Argument '--installed --tray'}else{New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+(Join-Path $target 'Netzblick.ps1')+'" -Tray')}
     $trigger=New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
     $taskPrincipal=New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Highest
     $settings=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([timespan]::Zero) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $taskPrincipal -Settings $settings -Force | Out-Null
-    Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList ('-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+(Join-Path $target 'Netzblick.ps1')+'"')
+    if(-not $NoTray){
+        if($exeDistribution){Start-Process -FilePath (Join-Path $target 'Netzblick.exe') -ArgumentList '--installed'}
+        else{Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList ('-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+(Join-Path $target 'Netzblick.ps1')+'"')}
     }
     Write-Host 'Netzblick installiert. Der Kontrollmodus wird erst nach deiner Entscheidung aktiviert.'
 }catch{Write-Error $_;exit 1}
+

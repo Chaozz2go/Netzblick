@@ -95,6 +95,7 @@ function Initialize-UserModes {
     $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow
     $script:sessionStartedUtc=[datetime]::UtcNow;$script:userBaseline=$false
     $script:userStateDirectory=Join-Path $env:LOCALAPPDATA 'Netzblick';$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
+    if($StateDirectory){$script:userStateDirectory=$StateDirectory;$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'}
     try{
         if([IO.File]::Exists($userStateFile) -and (Get-Item -LiteralPath $userStateFile).Length -lt 2000000){
             $saved=Get-Content -LiteralPath $userStateFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -105,8 +106,11 @@ function Initialize-UserModes {
     }catch{$ui.UserNotice.Text='Gespeicherter Zustand konnte nicht gelesen werden: '+$_.Exception.Message}
     $ui.UndoNetwork.IsEnabled=$changes.Count -gt 0
     try{
-        [Netzblick.RuntimeDependencies]::Install((Join-Path $appRoot 'lib'))
-        [void][Reflection.Assembly]::LoadFrom((Join-Path $appRoot 'lib\Netzblick.Capture.dll'))
+        if($Embedded){[void][Reflection.Assembly]::Load('Netzblick.Capture')}
+        else{
+            [Netzblick.RuntimeDependencies]::Install((Join-Path $appRoot 'lib'))
+            [void][Reflection.Assembly]::LoadFrom((Join-Path $appRoot 'lib\Netzblick.Capture.dll'))
+        }
         $script:traffic=[Netzblick.Capture.NetworkCapture]::Start()
     }catch{$script:trafficProblem=$_.Exception.GetBaseException().Message}
     $ui.ModeDefault.Add_Click({Apply-SelectedMode 'Default'})
@@ -192,4 +196,5 @@ function Refresh-Overview {
     $ui.AcknowledgeNew.IsEnabled=$newPrograms.Count -gt 0
     $ui.LastNetworkChange.Text=if($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}
 }
+
 

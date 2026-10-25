@@ -10,7 +10,7 @@ function Initialize-TrayMode {
     $open=$menu.Items.Add('Netzblick öffnen');$open.Add_Click({Show-NetzblickWindow})
     $requests=$menu.Items.Add('Blockierte Versuche');$requests.Add_Click({Show-NetzblickWindow;Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=0})
     [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-    $quit=$menu.Items.Add('Oberfläche beenden · Dienst läuft weiter')
+    $quit=$menu.Items.Add($(if($Portable){'Netzblick beenden · portable Filter enden'}else{'Oberfläche beenden · Dienst läuft weiter'}))
     $quit.Add_Click({$script:exitNetzblick=$true;$window.Close()})
     $tray.ContextMenuStrip=$menu
     $tray.Add_DoubleClick({Show-NetzblickWindow})
@@ -20,3 +20,4 @@ function Initialize-TrayMode {
     $window.Add_Closed({$tray.Visible=$false;$tray.Dispose()})
     if($script:startInTray){$window.Add_ContentRendered({$window.Hide()})}
 }
+

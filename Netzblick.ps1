@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$Check,[Alias('Tray')][switch]$LaunchInTray,[switch]$SmokeTest)
+param([switch]$Check,[Alias('Tray')][switch]$LaunchInTray,[switch]$SmokeTest,[switch]$Embedded,[switch]$Portable,[string]$StateDirectory)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 
@@ -23,10 +23,13 @@ try {
     }
     # Windows PowerShell 5.1 does not reference System.Xml automatically.
     $coreReferences = @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.ServiceProcess.dll')
-    Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'),(Join-Path $appRoot 'src\SetupCore.cs'),(Join-Path $appRoot 'src\SetupTransport.cs'))
+    if(-not $Embedded){
+        Add-Type -ReferencedAssemblies $coreReferences -Path @((Join-Path $appRoot 'src\NetworkReader.cs'),(Join-Path $appRoot 'src\GeoDatabase.cs'),(Join-Path $appRoot 'src\ProbeSession.cs'),(Join-Path $appRoot 'src\InspectionCore.cs'),(Join-Path $appRoot 'src\WindowsInspection.cs'),(Join-Path $appRoot 'src\NetworkPolicyCore.cs'),(Join-Path $appRoot 'src\EndpointInfo.cs'),(Join-Path $appRoot 'src\AccessCore.cs'),(Join-Path $appRoot 'src\WindowsAccess.cs'),(Join-Path $appRoot 'src\AccessWatch.cs'),(Join-Path $appRoot 'src\SetupCore.cs'),(Join-Path $appRoot 'src\SetupTransport.cs'))
+    }
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
+    $window.Title='Netzblick 0.8.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -52,7 +55,7 @@ try {
         if([Netzblick.InspectionAuditFlags]::WithFailure(1) -ne 3){throw 'Audit-Logiktest fehlgeschlagen.'}
         if ($ui.get_Count() -lt 65) { throw 'UI-Elemente fehlen.' }
         Write-Output ('OK: XAML geladen, C# kompiliert, {0} Sockets, {1} Adapter. Keine Firewalländerung.' -f $snapshot.Rows.Count,$snapshot.Adapters.Count)
-        exit 0
+        if($Embedded){return}else{exit 0}
     }
     $script:policy = New-Object -ComObject HNetCfg.FwPolicy2
     $script:rows = @()
@@ -375,7 +378,11 @@ try {
     $script:application=New-Object Windows.Application
     $application.ShutdownMode='OnMainWindowClose'
     [void]$application.Run($window)
-    if($SmokeTest){Write-Output 'PASS: full WPF/tray initialization and orderly close.';exit 0}
+    if($SmokeTest){
+        if($Embedded -and $script:trafficProblem){throw ('Datenmessung: '+$script:trafficProblem)}
+        Write-Output 'PASS: full WPF/tray initialization and orderly close.'
+        if($Embedded){return}else{exit 0}
+    }
 } catch {
     $message=$_.Exception.Message
     if($Check -or $SmokeTest){Write-Error ($message+[Environment]::NewLine+$_.ScriptStackTrace);exit 1}
@@ -383,4 +390,5 @@ try {
     Write-Error $message
     exit 1
 }
+
 

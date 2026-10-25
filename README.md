@@ -1,14 +1,21 @@
-﻿# Netzblick 0.7.0 – Einrichten, testen und entscheiden
+﻿# Netzblick 0.8.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
 
 ## Installation und Start
 
-Windows x64, Windows PowerShell 5.1, .NET Framework 4.8 und Administratorrechte. ZIP vollständig entpacken und **Install-Netzblick.cmd** starten. Der Installer kopiert die Laufzeitdateien nach `%ProgramFiles%\Netzblick`, richtet den automatisch startenden Dienst `NetzblickControl` ein und legt einen Tray-Autostart für das installierende Administratorkonto an. Es werden keine Zugangsdaten gespeichert. Erstinstallation startet im Beobachtungsmodus; die globale Sperre wird nicht automatisch aktiviert.
+Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-Die installierte Oberfläche öffnen: `%ProgramFiles%\Netzblick\Start-Netzblick.cmd`. Das Schließen oder Minimieren blendet sie ins Tray aus. Im Tray: öffnen, blockierte Versuche oder **Oberfläche beenden – Dienst läuft weiter**. Änderungen bleiben beim Ausblenden aktiv. Ohne angemeldeten Benutzer gibt es keine Tray-Meldungen, der laufende Dienst sammelt weiter Blockereignisse.
+- **Portabel:** `Netzblick-Portable-0.8.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.8.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
-Ohne Installation lassen sich die bisherigen passiven Ansichten öffnen; die neuen Prüf-/Freigabefunktionen benötigen den Dienst. Die GUI benötigt derzeit weiterhin Administratorrechte. Bei einem Update bestehende GUI über das Tray beenden, dann den neuen Installer ausführen.
+Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
+
+Die EXE enthält ihre verwalteten DLLs und lädt diese aus eigenen Ressourcen in den Speicher. XAML, UI-Skripte, Geodaten und die native ETW-Komponente werden für die Laufzeit in einen geschützten Ordner unter `%ProgramData%\Netzblick.Runtime` geschrieben und nach Möglichkeit beim Beenden entfernt. Die Internetmarkierung der heruntergeladenen EXE muss dafür nicht entfernt werden. Windows kann für unsignierte neue EXE-Dateien weiterhin SmartScreen anzeigen; eine Codesignatur ist noch nicht vorhanden.
+
+Fenster schließen/minimieren blendet ins Tray aus. **Installiert:** „Oberfläche beenden“ lässt den Dienst weiterlaufen. **Portabel:** „Netzblick beenden“ beendet auch die portable Filtersteuerung. Ohne angemeldeten Benutzer zeigt die installierte Version keine Tray-Meldungen, der Dienst sammelt weiter Blockereignisse.
+
+Die alten `.ps1`/`.cmd`-Dateien sind nur noch Entwicklungs- und Kompatibilitätseinstiege im Quellrepository, nicht der Startweg der neuen Pakete. Für Entwicklung: `tools/Build-Desktop.ps1`, danach Inno Setup 6 mit `installer/Netzblick.iss` kompilieren. Der Workflow „Windows EXE and installer“ prüft beide Pakete und legt bei Erfolg einen GitHub-Releaseentwurf mit Downloads an.
 
 ## Die beiden Prüfabläufe
 
@@ -85,3 +92,4 @@ GitHub: https://github.com/Chaozz2go/Netzblick. Frühere Stände und zusätzlich
 - GitHub Actions führt diese Windows-Prüfungen zusätzlich aus. Auf dem isolierten Runner kommt ein Dienst-/IPv4-TCP-Test mit einer eigenen Fixture hinzu: vorab sperren, Blockereignis, gezielt erlauben, zurücknehmen. Ohne erreichbare Baseline wird dieser Netzwerktest ausdrücklich übersprungen. Der globale Nachfragemodus wird dabei nicht aktiviert. Das ersetzt weder IPv6-/UDP-/ICMP-Tests noch den Gerätetest.
 
 Genauer aktueller Prüfstand und Gerätetest: PRUEFSTAND.txt. Frühere Versionsdokumente sind historische Beschreibungen.
+
