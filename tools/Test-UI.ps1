@@ -138,6 +138,7 @@ $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Norm
 $ui.Programs.ItemsSource=$allProgramItems
 Write-Output 'PASS: gespeicherte gesperrte App und echte Blockereignis-Fixtures ohne Socket in Aktivität/Programme; Ziel, Anzahl, Zeitpunkt, keine erfundenen Verbindungen.'
 # Central-list filtering and saved theme preference are separate from policy.
+Save-ReviewDecision $testExe
 $ui.OverviewFilter.SelectedIndex=2;Refresh-Overview
 if($ui.OverviewPrograms.Items.Count){throw 'Zu-prüfen-Filter enthält bereits geprüfte App.'}
 $ui.OverviewFilter.SelectedIndex=0;$ui.OverviewSearch.Text='does-not-exist';Refresh-Overview
@@ -163,6 +164,9 @@ if((Get-ProgramActivityReview $testExe).NewBlocks -ne 2 -or (Get-TargetReviewLab
 $other=[Netzblick.SetupAttempt]@{Key='review-two';Path=$testExe;Address='8.8.8.8';Protocol=17;Port=53;Count=1;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow}
 $setupStatus.Attempts.Add($other);Update-ActivityLedger
 if((Get-ProgramActivityReview $testExe).NewTargets -ne 1 -or (Get-TargetReviewLabel $testExe $other) -ne 'Neues Ziel'){throw 'Neues Ziel nach Prüfung nicht hervorgehoben.'}
+Refresh-Overview;$ui.OverviewFilter.SelectedIndex=2;Refresh-Overview
+if($ui.OverviewPrograms.Items.Count -ne 1){throw 'Bekanntes Programm mit neuem Ziel fehlt unter Zu prüfen.'}
+$ui.OverviewFilter.SelectedIndex=0;Refresh-Overview
 Save-UserState
 $activityState=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
 if(@($activityState.Targets).Count -ne 2 -or @($activityState.BlockBaselines).Count -ne 1){throw 'Prüfmarken nicht gespeichert.'}

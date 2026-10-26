@@ -204,10 +204,11 @@ function Refresh-Overview {
     foreach($program in @($script:allProgramItems)){
         $sample=$trafficSamples[$program.Key]
         $reviewActivity=Get-ProgramActivityReview $program.Path
+        $needsReview=$newPrograms.ContainsKey($program.Key) -or $reviewActivity.NewTargets -gt 0 -or $reviewActivity.NewBlocks -gt 0
         $signal=Get-PermissionStatus $program.Path
         $activity=Get-ProgramActivity $program $sample
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NeedsReview=$needsReview;NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $oldKey=if($ui.PendingPrograms.SelectedItem){$ui.PendingPrograms.SelectedItem.Key}else{''}
     $ui.PendingPrograms.ItemsSource=@($newPrograms.Values | Sort-Object FirstUtc -Descending)
@@ -218,10 +219,10 @@ function Refresh-Overview {
     $allCount=$items.Count
     $query=$ui.OverviewSearch.Text.Trim()
     $filter=$ui.OverviewFilter.SelectedIndex
-    $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.New) -or ($filter -eq 3 -and $_.Active)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
+    $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.NeedsReview) -or ($filter -eq 3 -and $_.Active)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
     $ui.ProgramListCounts.Text=$items.Count.ToString()+' von '+$allCount+' Programmen'
     $ui.ProgramListEmpty.Text=if(-not $items.Count){'Keine Programme in dieser Auswahl. Filter oder Suche ändern.'}else{''}
-    $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
+    $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='NeedsReview';Descending=$true},@{Expression='Volume';Descending=$true})
     if($overviewKey){$ui.OverviewPrograms.SelectedItem=$ui.OverviewPrograms.Items | Where-Object {$_.Key -eq $overviewKey} | Select-Object -First 1}
     if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
     Update-QuickActions
