@@ -22,7 +22,7 @@ function Network-ModeLabel([string]$mode) {
     switch($mode){'Default'{'Windows-Standard'} 'Blocked'{'Netzwerk gesperrt'} 'Private'{'Auf private Netze beschränkt'} default{'Eigene Regeln extern verändert'}}
 }
 function Get-NetworkFingerprint($rules) {
-    $normalized=@($rules | Sort-Object -Property @('Name') | ForEach-Object {
+    $normalized=@($rules | Sort-Object { (Rule-Base $_.Path)+$(if($_.Direction -eq 1){'.In'}else{'.Out'}) } | ForEach-Object {
         $scope=try{[Netzblick.NetworkPolicy]::CanonicalScope($_.RemoteAddresses)}catch{$_.Exception.Message}
         [ordered]@{Name=((Rule-Base $_.Path)+$(if($_.Direction -eq 1){'.In'}else{'.Out'}));Path=[Netzblick.ProcessLineage]::Normalize($_.Path);Direction=$_.Direction;Action=$_.Action;Enabled=$_.Enabled;Profiles=$_.Profiles;Protocol=$_.Protocol;Remote=$scope;Local=$_.LocalAddresses;LocalPorts=$_.LocalPorts;RemotePorts=$_.RemotePorts;InterfaceTypes=$_.InterfaceTypes;Service=$_.ServiceName;Edge=$_.EdgeTraversal;Interfaces=$_.Interfaces}
     })
