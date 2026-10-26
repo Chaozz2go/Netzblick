@@ -20,6 +20,7 @@ foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Upd
 function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
+. (Join-Path $appRoot 'src\DesignMode.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
 . (Join-Path $appRoot 'src\ActivityReview.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
@@ -276,6 +277,41 @@ if($newPrograms.Count -ne $allProgramItems.Count){throw 'Zurücksetzen prüft la
 if(@(Get-ChildItem -LiteralPath $userStateDirectory -Filter 'reset-*.json').Count -lt 1){throw 'Zurücksetzen hat keine Sicherung erzeugt.'}
 $script:trafficProblem='';Refresh-Overview
 Write-Output 'PASS: Einzel-Socket-Kartenwechsel, Zoom/Pan-Grenzen, Prüfsperre bei bestätigtem Dienst, erklärter Sperrgrund, erneute Prüfung und frischer Reset.'
+# Design choice is independent of brightness, selection and firewall permissions.
+$script:activePanel='OverviewPanel';$script:designStyle='Clean'
+Initialize-DesignMode
+$ui.Programs.ItemsSource=$allProgramItems
+Invoke-Expression $detailFunction.Extent.Text
+function Draw-Map($program,$displayRows){Draw-FutureProgramMap $program $displayRows}
+$serializer=New-Object System.Web.Script.Serialization.JavaScriptSerializer
+$configurationBefore=$serializer.Serialize($setupStatus.Config)
+foreach($design in @('Future','Clean','Future','Clean')){
+ Set-DesignStyle $design
+ foreach($dark in @($true,$false)){
+  Set-NetzblickTheme $dark;Refresh-Overview;Refresh-Detail
+  if($serializer.Serialize($setupStatus.Config) -ne $configurationBefore){throw 'Designwechsel ändert Firewallregeln.'}
+  foreach($name in @('OverviewTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+   $button=$ui[$name];$bg=Get-TestLuminance $button.Background.Color;$fg=Get-TestLuminance $button.Foreground.Color
+   if(([math]::Max($bg,$fg)+0.05)/([math]::Min($bg,$fg)+0.05) -lt 4.5){throw ('Design-Kontrast zu niedrig: '+$design+' / '+$name)}
+  }
+  if($design -eq 'Future' -and ($ui.OverviewPanel.Visibility -ne 'Visible' -or $ui.LivePanel.Visibility -ne 'Visible' -or $ui.WorkspaceSplitter.Visibility -ne 'Visible')){throw 'Future zeigt Liste und Details nicht nebeneinander.'}
+  if($design -eq 'Clean' -and $ui.LivePanel.Visibility -ne 'Collapsed'){throw 'Clean erhält keine eigene Programmübersicht.'}
+ }
+}
+Set-DesignStyle 'Future';$ui.OverviewPrograms.SelectedIndex=0;Sync-FutureProgramSelection
+if($ui.Programs.SelectedItem.Key -ne $ui.OverviewPrograms.SelectedItem.Key){throw 'Future-Programmwechsel zeigt falsche App.'}
+$ui.ExpandProgramDetails.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewFrame.Visibility -ne 'Collapsed' -or $ui.LivePanel.Visibility -ne 'Visible'){throw 'Future-Details können nicht vergrößert werden.'}
+$ui.ExpandProgramDetails.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewFrame.Visibility -ne 'Visible'){throw 'Future kehrt nicht zur geteilten Ansicht zurück.'}
+$ui.OverviewSearch.Text='does-not-exist';Refresh-Overview
+if($ui.Programs.SelectedItem -or $ui.ProgramTitle.Text -ne 'Programm auswählen'){throw 'Leere Future-Suche zeigt ein anderes Programm weiter an.'}
+$ui.OverviewSearch.Text='';Refresh-Overview
+Save-UserState;$savedDesign=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if($savedDesign.DesignStyle -ne 'Future' -or $savedDesign.DarkMode){throw 'Design und Helligkeit werden nicht unabhängig gespeichert.'}
+$ui.DesignSelector.SelectedIndex=0
+if($script:designStyle -ne 'Clean'){throw 'Designauswahl wechselt nicht zu Clean.'}
+Write-Output 'PASS: Clean/Future plus Hell/Dunkel, sichere Auswahl, geteilte/vergrößerte Details, Leerzustand und gespeicherte unabhängige Auswahl ohne Regeländerung.'
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -295,6 +331,8 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
+ foreach($designPreview in @('Clean','Future')){
+ Set-DesignStyle $designPreview
  foreach($darkPreview in @($false,$true)){
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
@@ -303,7 +341,7 @@ try{
   $renderPanel=if($panelName -like 'Live*'){'Live'}else{$panelName}
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
-  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $renderPanel){'Visible'}else{'Collapsed'}}
+  Show-RealPanel ($renderPanel+'Panel')
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
    [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')
@@ -318,11 +356,12 @@ try{
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
-   $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
+   $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($designPreview -eq 'Future'){'Future-'}else{''})+$(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
  }
- Set-NetzblickTheme $false
+ }
+ Set-DesignStyle 'Clean';Set-NetzblickTheme $false
  if($LogPreview){
   $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Dark-Overview-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}

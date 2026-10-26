@@ -83,7 +83,7 @@ function Save-UserState {
     param([switch]$ThrowOnError)
     try{
         [void][IO.Directory]::CreateDirectory($userStateDirectory)
-        $state=@{Version=2;NotifyObserved=$script:notifyObserved;DarkMode=[bool]$script:darkMode;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray());Targets=@($script:targetLedger.Values);BlockBaselines=@($script:blockBaselines.Values)}
+        $state=@{Version=2;NotifyObserved=$script:notifyObserved;DarkMode=[bool]$script:darkMode;DesignStyle=$script:designStyle;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray());Targets=@($script:targetLedger.Values);BlockBaselines=@($script:blockBaselines.Values)}
         $temp=$userStateFile+'.tmp'
         [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
         if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,($userStateFile+'.bak'))}else{[IO.File]::Move($temp,$userStateFile)}
@@ -91,7 +91,7 @@ function Save-UserState {
 }
 function Initialize-UserModes {
     $script:allProgramItems=@();$script:policyReady=$true;$script:changes=New-Object 'System.Collections.Generic.List[object]'
-    $script:knownPrograms=@{};$script:newPrograms=@{};$script:notifyObserved=$true;$script:darkMode=$true;$script:traffic=$null;$script:trafficProblem=''
+    $script:knownPrograms=@{};$script:newPrograms=@{};$script:notifyObserved=$true;$script:darkMode=$true;$script:designStyle='Clean';$script:traffic=$null;$script:trafficProblem=''
     $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow
     $script:sessionStartedUtc=[datetime]::UtcNow;$script:userBaseline=$false
     $script:targetLedger=@{};$script:blockBaselines=@{};$script:targetReviewCounts=$null
@@ -106,6 +106,7 @@ function Initialize-UserModes {
             foreach($entry in @($saved.BlockBaselines | Select-Object -First 2000)){
                 if($entry.Key -is [string] -and $entry.Epoch -is [string] -and $entry.Count -ge 0){$blockBaselines[$entry.Key]=$entry}
             }
+            if($saved.DesignStyle -in @('Clean','Future')){$script:designStyle=$saved.DesignStyle}
             if($saved.DarkMode -is [bool]){$script:darkMode=$saved.DarkMode}
             foreach($path in @($saved.Seen)){if($path -is [string] -and $path.Length -lt 32768){$knownPrograms[$path]=$true}}
             foreach($change in @($saved.Changes | Select-Object -First 20)){if($change.Version -eq 2 -and $change.Path -is [string] -and $change.BeforeJson -is [string] -and $change.AfterJson -is [string]){try{[void](Read-ProgramSnapshot $change.BeforeJson);[void](Read-ProgramSnapshot $change.AfterJson);$changes.Add($change)}catch{}}elseif($change.Version -eq 1 -and $change.Path -is [string] -and $change.Before -in @('Default','Private','Blocked') -and $change.After -in @('Default','Private','Blocked') -and $change.Fingerprint -is [string]){$changes.Add($change)}}
@@ -207,7 +208,7 @@ function Refresh-Overview {
         $signal=Get-PermissionStatus $program.Path
         $activity=Get-ProgramActivity $program $sample
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NeedsReview=$needsReview;NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;AppIcon=(Get-ApplicationIcon $program.Path);FutureActivity=$(if($program.BlockCount){$program.BlockCount.ToString()+' Blockversuche'}elseif($sample -and $sample.RateReady){'↓ '+(Format-Rate $sample.ReceivedRate)}else{'Nicht gemessen'});Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NeedsReview=$needsReview;NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $oldKey=if($ui.PendingPrograms.SelectedItem){$ui.PendingPrograms.SelectedItem.Key}else{''}
     $ui.PendingPrograms.ItemsSource=@($newPrograms.Values | Sort-Object FirstUtc -Descending)
@@ -216,13 +217,19 @@ function Refresh-Overview {
     if(Get-Command Refresh-ReviewSelection -ErrorAction SilentlyContinue){Refresh-ReviewSelection}
     $overviewKey=if($ui.OverviewPrograms.SelectedItem){$ui.OverviewPrograms.SelectedItem.Key}else{''}
     $allCount=$items.Count
+    $ui.FutureProgramCount.Text=[string]$allCount;$ui.FutureBlockedCount.Text=[string](@($items | Where-Object Category -eq 'Blocked').Count);$ui.FutureReviewCount.Text=[string](@($items | Where-Object NeedsReview).Count)
     $query=$ui.OverviewSearch.Text.Trim()
     $filter=$ui.OverviewFilter.SelectedIndex
     $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.NeedsReview) -or ($filter -eq 3 -and $_.Active)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
     $ui.ProgramListCounts.Text=$items.Count.ToString()+' von '+$allCount+' Programmen'
     $ui.ProgramListEmpty.Text=if(-not $items.Count){'Keine Programme in dieser Auswahl. Filter oder Suche ändern.'}else{''}
-    $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='NeedsReview';Descending=$true},@{Expression='Volume';Descending=$true})
-    if($overviewKey){$ui.OverviewPrograms.SelectedItem=$ui.OverviewPrograms.Items | Where-Object {$_.Key -eq $overviewKey} | Select-Object -First 1}
+    $script:overviewItemsChanging=$true
+    try{
+        $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='NeedsReview';Descending=$true},@{Expression='Volume';Descending=$true})
+        if($overviewKey){$ui.OverviewPrograms.SelectedItem=$ui.OverviewPrograms.Items | Where-Object {$_.Key -eq $overviewKey} | Select-Object -First 1}
+        if($script:designStyle -eq 'Future' -and -not $ui.OverviewPrograms.SelectedItem -and $ui.OverviewPrograms.Items.Count){$ui.OverviewPrograms.SelectedIndex=0}
+    }finally{$script:overviewItemsChanging=$false}
+    if($script:activePanel -in @('OverviewPanel','LivePanel')){Sync-FutureProgramSelection}
     if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
     Update-QuickActions
     $ui.OverviewNew.Text=[string]$newPrograms.Count

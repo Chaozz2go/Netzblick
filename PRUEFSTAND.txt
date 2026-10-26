@@ -192,3 +192,6 @@ Programm-Aktionen und Prüfmarken (0.13.0)
 
 
 0.14.1: Windows-COM-Prüfung für lesbare Regelnamen, Migration alter eigener Regeln bei identischer Wirkung, Erhalt gültiger Rückgängig-Fingerprints, Namenskollision mit fremder Regel, idempotenten Neustart, Privatmodus und Entfernen. Extern veränderte eigene und fremde Regeln bleiben unberührt. WFP-Blockereignisse enthalten Programmname/Richtung/Prüfgrund.
+
+
+0.15.0: Clean/Future und Hell/Dunkel unabhängig umschalten und speichern. Produktionsnahe WPF-Tests prüfen Kontrast in allen Kombinationen, gemeinsame Auswahl, leere Suche, geteilte und vergrößerte Details sowie unveränderte Firewallkonfiguration. Beide Designs werden mit allen Hauptansichten in 1280x800 und 1480x920 gerendert.

@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.14.1'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.15.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -71,6 +71,7 @@ try {
     $script:group = 'Netzblick.Local.v1'
 
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
+    . (Join-Path $appRoot 'src\DesignMode.ps1')
     . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
     . (Join-Path $appRoot 'src\ActivityReview.ps1')
     . (Join-Path $appRoot 'src\VisualModes.ps1')
@@ -150,6 +151,7 @@ try {
         [void]$ui.Map.Children.Add($label)
     }
     function Draw-Map($program,$sockets) {
+        Draw-FutureProgramMap $program $sockets
         $ui.Map.Children.Clear()
         if ($null -eq $program) { Map-Label 'Keine passenden Programme gefunden.' 20 100 550; return }
         $peers = @($sockets | Where-Object {$_.Address} | Group-Object Remote | Sort-Object Count -Descending)
@@ -172,7 +174,7 @@ try {
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
-        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Update-QuickActions;Draw-Map $null @();return}
+        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Update-FutureProgramPresentation $null $null $null;Update-QuickActions;Draw-Map $null @();return}
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
@@ -244,6 +246,7 @@ try {
     $ui.Search.Add_TextChanged({Refresh-Programs})
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
+        $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
         $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
@@ -253,6 +256,7 @@ try {
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
+        Set-WorkspaceLayout $name
         if($name -eq 'OverviewPanel'){Refresh-Overview}
     }
     $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
@@ -299,6 +303,7 @@ try {
     Initialize-UserModes
     Rename-OwnedNetworkRules
     Initialize-Theme
+    Initialize-DesignMode
     Initialize-WorkspaceMode
     Initialize-EndpointNames
     Initialize-InspectionMode

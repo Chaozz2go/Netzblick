@@ -1,4 +1,4 @@
-﻿# Netzblick 0.14.1 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.15.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
 
@@ -190,3 +190,10 @@ Die Sperre betrifft die gewählte EXE und auch ihr LAN. Bereits bestehende Verbi
 ## Lesbare Regelnamen (0.14.1)
 
 Windows-Regeln zeigen Programmname, Aktion und Richtung. Eigene ältere, unverändert verwaltete Windows-Firewallregeln erhalten beim Start Namen wie **Netzblick · steam.exe · Gesperrt · Ausgehend [NB-…]**. Der kurze Zusatz unterscheidet gleiche Dateinamen aus verschiedenen Ordnern. Fremde oder extern veränderte Regeln werden nicht automatisch umbenannt. Die Gruppierung und die Sperrwirkung bleiben erhalten. Aktuelle WFP-Dienstfilter zeigen zusätzlich IPv4/IPv6 und den eigenen Regelnamen beziehungsweise den Prüfgrund. Diese Dienstfilter sind keine zusätzlichen gespeicherten Regeln in der normalen Windows-Firewall-Regelliste.
+
+
+## Clean oder Future (0.15.0)
+
+Links unten unter **Design** zwischen **Clean** und **Future** wählen. **Hell/Dunkel** bleibt davon unabhängig. Ohne gespeicherte Wahl bleibt Clean aktiv; beide Einstellungen werden gespeichert und bei „Alles neu prüfen“ behalten.
+
+Future zeigt Liste und ausgewähltes Programm nebeneinander, mit App-Symbolen aus den lokalen EXE-Dateien, klaren Statuskarten, einer kompakten Offline-Karte und dem letzten erfassten Blockgrund. Das Vergrößern-Symbol macht bei Bedarf Platz für die Detailtabellen. Alle bisherigen Aktionen bleiben unter „Weitere Aktionen“ erreichbar. Der Designwechsel setzt keine Firewallbefehle ab und verändert keine Regeln. Die Karte markiert grobe Länderzuordnungen und das manuell gewählte Startland; sie belegt keine exakten Serverpositionen oder tatsächlichen Datenwege.

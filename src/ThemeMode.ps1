@@ -3,7 +3,7 @@
     return @{AppBg='#F4F7FA';Surface='#FFFFFF';Sidebar='#EEF2F6';Raised='#EDF2F6';Alternate='#F0F5F8';Input='#F5F8FA';Text='#19283C';Muted='#57677B';Border='#D5E0E8';Accent='#087F8C';AccentSoft='#DDF0F2';OnAccent='#FFFFFF';Blue='#1672B6';Danger='#B32D40';DangerSoft='#F9E5E7';Warning='#996000';WarningSoft='#FFF3D9';Success='#08704E';SuccessSoft='#E0F2EB';MapBg='#0A1B2C';MapBorder='#27405B';ConsoleBg='#08111C';ConsoleText='#69DAC3'}
 }
 function Get-ThemeColor([string]$color){
-    if(-not $script:darkMode){return $color}
+    if(-not $script:darkMode -and $script:designStyle -ne 'Future'){return $color}
     $role=switch($color.ToUpperInvariant()){
         '#19283C'{'Text'} '#57677B'{'Muted'} '#52657A'{'Muted'}
         '#B32D40'{'Danger'} '#AF3B4B'{'Danger'} '#C44152'{'Danger'}
@@ -12,10 +12,10 @@ function Get-ThemeColor([string]$color){
         '#F4F7FA'{'AppBg'} '#EDF2F6'{'Raised'} '#DDF0F2'{'AccentSoft'}
         '#F9E5E7'{'DangerSoft'} '#FFF3D9'{'WarningSoft'} default{''}
     }
-    if($role){return (Get-ThemePalette $true)[$role]};return $color
+    if($role){return (Get-EffectivePalette ([bool]$script:darkMode))[$role]};return $color
 }
 function Set-NetzblickTheme([bool]$dark){
-    $script:darkMode=$dark;$palette=Get-ThemePalette $dark
+    $script:darkMode=$dark;$palette=Get-EffectivePalette $dark
     foreach($key in $palette.Keys){$window.Resources[$key]=[Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString($palette[$key]))}
     $window.Resources[[Windows.SystemColors]::WindowBrushKey]=$window.Resources['Surface']
     $window.Resources[[Windows.SystemColors]::WindowTextBrushKey]=$window.Resources['Text']
@@ -25,6 +25,7 @@ function Set-NetzblickTheme([bool]$dark){
     $window.Resources[[Windows.SystemColors]::HighlightTextBrushKey]=$window.Resources['Text']
     $ui.ThemeToggle.Content=if($dark){'☀ Hell'}else{'☾ Dunkel'}
     $ui.ThemeToggle.ToolTip='Farbschema umschalten · wird für den nächsten Start gespeichert'
+    Set-DesignAppearance
 }
 function Initialize-Theme {
     Set-NetzblickTheme ([bool]$script:darkMode)
