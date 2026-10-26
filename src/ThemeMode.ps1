@@ -36,3 +36,12 @@ function Initialize-Theme {
         if($ui.WorldPanel.Visibility -eq 'Visible'){Refresh-World -Rebuild}
     })
 }
+
+function Set-NavigationTheme([string]$panel){
+    $active=switch($panel){'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} 'AccessPanel'{'AccessTab'} 'RulesPanel'{'OpenSetupRules'} 'HistoryPanel'{'OpenSetupHistory'} default{'OverviewTab'}}
+    foreach($name in @('OverviewTab','LiveTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+        $button=$ui[$name]
+        $button.SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($name -eq $active){'AccentSoft'}else{'Raised'}))
+        $button.SetResourceReference([Windows.Controls.Control]::ForegroundProperty,'Text')
+    }
+}

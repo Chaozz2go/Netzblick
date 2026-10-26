@@ -83,6 +83,15 @@ try{
     if($stale.Ok -or -not (Connect-Fixture)){throw 'Veraltetes Rückgängig überschreibt neuere Entscheidung.'}
     Write-Output 'PASS: echte TCP-Freigabe für 10 Minuten, scoped Rückgängig und Ablehnung veralteter Zustände.'
     Write-Output 'PASS: Programm erlauben entfernt Sperren und Prüfsperre atomar; Standard entfernt eigene Freigaben; erneute echte TCP-Sperre bestätigt.'
+    $beforePause=Send-Control ([Netzblick.SetupCommand]@{Operation='AllowProgram';Path=$fixture})
+    $online=[Netzblick.SetupChanges]::CaptureProgram($beforePause.Config,$fixture)
+    foreach($minutes in @(10,0)){
+     $pause=Send-Control ([Netzblick.SetupCommand]@{Operation='TemporaryBlockProgram';Path=$fixture;DurationMinutes=$minutes})
+     if(Connect-Fixture){throw 'Zeitweise Sperre verhindert echte neue TCP-Verbindung nicht.'}
+     $resumed=Send-Control ([Netzblick.SetupCommand]@{Operation='EndProgramLease';Path=$fixture;ExpectedProgram=[Netzblick.SetupChanges]::CaptureProgram($pause.Config,$fixture)})
+     if(-not (Connect-Fixture) -or -not [Netzblick.SetupChanges]::SameProgram($online,[Netzblick.SetupChanges]::CaptureProgram($resumed.Config,$fixture))){throw 'Beenden der zeitweisen Sperre stellt Verbindung oder Regeln nicht wieder her.'}
+    }
+    Write-Output 'PASS: echte TCP-Sperre für Dauer/manuell und anschließende Wiederherstellung vorheriger Freigaben.'
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'})
     if($fresh.Config.Ask -or $fresh.Config.Rules.Count -or $fresh.Config.WatchedPaths.Count -or $fresh.Attempts.Count){throw 'Reset lässt alte Regeln oder Ereignisse stehen.'}
     if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}

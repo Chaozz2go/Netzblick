@@ -33,3 +33,18 @@ $oldJson='{"Version":1,"Ask":false,"WatchedPaths":[],"Rules":[]}'
 $old=$closed.Invoke([Netzblick.SetupWire]::Json(),@($oldJson));$old.Validate()
 if($null -eq $old.ProgramLeases){throw 'Alte Regeldatei nicht kompatibel.'}
 Write-Output 'PASS: zeitweise Programmfreigabe, JSON-Uhrzeit, Rückweg nach Neustart und alte Regeldateien.'
+
+# Timed denials and manual pauses retain exact restoration plans over a restart.
+foreach($minutes in @(30,0)){
+ $blocked=New-Object Netzblick.SetupConfig;[Netzblick.SetupChanges]::AllowProgram($blocked,$path)
+ $prior=[Netzblick.SetupChanges]::CaptureProgram($blocked,$path)
+ [Netzblick.SetupChanges]::TemporaryBlockProgram($blocked,$path,$minutes,[datetime]::UtcNow)
+ $reloaded=$closed.Invoke([Netzblick.SetupWire]::Json(),@([Netzblick.SetupWire]::Json().Serialize($blocked)));$reloaded.Validate()
+ if($minutes){[void]$reloaded.Expire([datetime]::UtcNow.AddMinutes(31))}else{
+  [void]$reloaded.Expire([datetime]::UtcNow.AddYears(1))
+  if([Netzblick.ProgramPolicy]::Category($reloaded,$path) -ne 'Blocked'){throw 'Manuelle Sperre geht bei Neustart verloren.'}
+  [Netzblick.SetupChanges]::EndProgramLease($reloaded,$path,[Netzblick.SetupChanges]::CaptureProgram($reloaded,$path),[datetime]::UtcNow)
+ }
+ if(-not [Netzblick.SetupChanges]::SameProgram($prior,[Netzblick.SetupChanges]::CaptureProgram($reloaded,$path))){throw 'Zeitweise Sperre verliert vorherige Regeln über JSON.'}
+}
+Write-Output 'PASS: zeitweise und manuelle Sperre über echten JSON-/Neustart-Vertrag mit exakter Wiederherstellung.'

@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param([string]$OutputDirectory=(Join-Path $PSScriptRoot 'ui-preview'),[switch]$LogPreview)
 $ErrorActionPreference='Stop'
+trap {Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 $appRoot=Split-Path $PSScriptRoot -Parent
 $sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','ReleaseUpdates.cs') | ForEach-Object {Join-Path $appRoot ('src\'+$_)}
@@ -35,6 +36,7 @@ Initialize-AccessMode
 $script:SmokeTest=$true;$script:policyReady=$true;$script:notifyObserved=$false
 $script:knownPrograms=@{};$script:newPrograms=@{};$script:trafficSamples=@{};$script:trafficPeers=@([pscustomobject]@{Path=$testExe;Protocol='TCPv4';Address='8.8.8.8';Port=443})
 $script:rows=@();$script:ownRules=@();$script:userBaseline=$true;$script:sessionStartedUtc=[datetime]::UtcNow
+$script:events=New-Object 'System.Collections.Generic.List[object]'
 $script:trafficProblem='';$script:traffic=$null;$script:changes=New-Object 'System.Collections.Generic.List[object]'
 $script:userStateDirectory=Join-Path $env:TEMP ('NetzblickReview-'+[guid]::NewGuid().ToString('N'));$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
 function Add-Event($kind,$program,$detail){}
@@ -151,6 +153,27 @@ if(-not $darkMode -or -not $savedTheme.DarkMode -or $window.Resources['Text'].Co
 Set-NetzblickTheme $false;Save-UserState
 if($window.Resources['Text'].Color.ToString() -ne '#FF19283C'){throw 'Helles Design lässt sich nicht wiederherstellen.'}
 Write-Output 'PASS: zentrale Filter/Suche, gespeicherter Dark Mode, kontrastreiche Ampel und Rückkehr zu Hell.'
+# Exercise production navigation, including changing the theme after navigating.
+$panelFunction=$appAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-Panel'},$true)
+Invoke-Expression ($panelFunction.Extent.Text.Replace('function Show-Panel','function Show-RealPanel'))
+function Get-TestLuminance($c){
+ $channels=@($c.R,$c.G,$c.B) | ForEach-Object {$n=[double]$_/255;if($n -le 0.04045){$n/12.92}else{[math]::Pow(($n+0.055)/1.055,2.4)}}
+ return 0.2126*$channels[0]+0.7152*$channels[1]+0.0722*$channels[2]
+}
+foreach($panel in @('OverviewPanel','AccessPanel','InspectionPanel','UpdatesPanel','LivePanel')){
+ Show-RealPanel $panel
+ foreach($dark in @($true,$false,$true,$false)){
+  Set-NetzblickTheme $dark
+  foreach($name in @('OverviewTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+   $button=$ui[$name];$bg=Get-TestLuminance $button.Background.Color;$fg=Get-TestLuminance $button.Foreground.Color
+   if(([math]::Max($bg,$fg)+0.05)/([math]::Min($bg,$fg)+0.05) -lt 4.5){throw ('Navigation nach Themewechsel nicht lesbar: '+$name)}
+  }
+ }
+}
+$pauseDialog=New-TemporaryBlockDialog $testExe
+if($pauseDialog.FindName('Duration').Items.Count -ne 4 -or $pauseDialog.FindName('Duration').SelectedItem.Tag -ne '10' -or $pauseDialog.FindName('Duration').Items[3].Tag -ne '0' -or $pauseDialog.FindName('PathLabel').Text -ne $testExe){throw 'Auswahl der zeitweisen Sperrdauer fehlt oder falsches Programm.'}
+$pauseDialog.Close()
+Write-Output 'PASS: produktive Navigation und mehrfacher Hell-/Dunkelwechsel behalten lesbaren Kontrast; Sperrdialog hat Dauer und eindeutigen Programmpfad.'
 # Review baseline distinguishes old denials from new attempts without changing policy.
 $script:targetLedger=@{};$script:blockBaselines=@{};$script:trafficPeers=@()
 [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
@@ -183,6 +206,14 @@ $change=$changes[0]
 Set-PermissionProgram $testExe 'BlockProgram'
 try{Undo-ProgramChange $change;throw 'Veraltetes Rückgängig akzeptiert.'}catch{if($_.Exception.GetBaseException().Message -notlike '*inzwischen geändert*'){throw}}
 if((Get-PermissionStatus $testExe).Category -ne 'Blocked'){throw 'Veraltetes Rückgängig verändert Zugriff.'}
+Set-PermissionProgram $testExe 'AllowProgram'
+$online=[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe)
+foreach($minutes in @(30,0)){
+ Set-PermissionProgram $testExe 'TemporaryBlockProgram' $minutes
+ if((Get-PermissionStatus $testExe).Category -ne 'Blocked' -or $ui.ProgramQuickEndTemporary.Visibility -ne 'Visible' -or -not $ui.ProgramQuickEndTemporary.IsEnabled -or $ui.ProgramQuickTempBlock.IsEnabled){throw 'Zeitweise Sperre oder Beenden-Aktion fehlt.'}
+ Set-PermissionProgram $testExe 'EndProgramLease'
+ if(-not [Netzblick.SetupChanges]::SameProgram($online,[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe)) -or $ui.ProgramQuickEndTemporary.Visibility -ne 'Collapsed'){throw 'Zeitweise Sperre beenden stellt frühere Freigabe nicht wieder her.'}
+}
 Write-Output 'PASS: direkte Programm-Aktionen, gespeichertes Rückgängig, neue Ziele und getrennte Wiederholungszähler.'
 [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
 # Retain a fixture entry for the activity rendering.
@@ -270,6 +301,7 @@ try{
  Refresh-ProgramSignals;Refresh-Overview
  foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}else{$panelName}
+  Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
   foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $renderPanel){'Visible'}else{'Collapsed'}}
   if($panelName -eq 'Access'){

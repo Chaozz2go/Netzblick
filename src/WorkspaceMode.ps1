@@ -27,7 +27,7 @@ function Update-ProgramPresentation($program){
     $count=[long]0;foreach($a in $attempts){$count+=$a.Count}
     $last=$attempts | Sort-Object LastUtc -Descending | Select-Object -First 1
     $lease=$setupStatus.Config.ProgramLeases | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key} | Select-Object -First 1
-    if($lease){$sentence+=' Zeitweise bis '+$lease.ExpiresUtc.ToLocalTime().ToString('HH:mm:ss')+'; danach gelten wieder die vorherigen Regeln.'}
+    if($lease){$sentence+=' '+$(if($lease.UntilResumed){'Zeitweise gesperrt, bis du die Sperre beendest.'}else{'Zeitweise bis '+$lease.ExpiresUtc.ToLocalTime().ToString('HH:mm:ss')+'.'})+' Danach gelten wieder die vorherigen Regeln.'}
     $ui.ProgramActivityReview.Text=(Get-ProgramActivityReview $program.Path).Summary
     $ui.ProgramExplanation.Text=$sentence
     $ui.ProgramShortState.Text=$state.Status+' · '+$(if($newPrograms -and $newPrograms.ContainsKey($program.Key)){'noch zu prüfen'}else{'beobachtet'})

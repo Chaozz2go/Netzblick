@@ -1,8 +1,8 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 param([string]$ExpectedCulture)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.13.0-win-x64.exe'
+$setup=Join-Path $root 'dist-install\Netzblick-Setup-0.14.0-win-x64.exe'
 $installed=Join-Path $env:ProgramFiles 'Netzblick'
 function Run-Checked([string]$exe,[string]$arguments){
  $p=Start-Process -FilePath $exe -ArgumentList $arguments -PassThru
