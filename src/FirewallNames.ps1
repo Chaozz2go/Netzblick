@@ -25,24 +25,21 @@ function Assert-ReadableRuleNameAvailable([string]$path,[int]$direction,[string]
     foreach($rule in $policy.Rules){if($rule.Name -eq $name -and (-not (Test-OwnedNetworkRule $rule $path) -or $rule.Direction -ne $direction)){throw 'Der lesbare Regelname ist fremd belegt. Es wird keine fremde Regel verändert.'}}
 }
 function Rename-OwnedNetworkRules {
-    $changed=$false;$historyChanged=$false
+    $changed=$false
     $paths=@($policy.Rules | Where-Object {Test-OwnedNetworkRule $_} | ForEach-Object {$_.ApplicationName} | Select-Object -Unique)
     foreach($path in $paths){
         try{
             $before=@(Read-NetworkRules $path);$mode=Get-NetworkMode $path $before
             if($mode -notin @('Blocked','Private')){continue}
             foreach($direction in @(1,2)){Assert-ReadableRuleNameAvailable $path $direction $mode}
-            $fingerprint=Get-NetworkFingerprint $before
             $rules=@($policy.Rules | Where-Object {Test-OwnedNetworkRule $_ $path})
             foreach($rule in $rules){
                 $name=Get-ReadableRuleName $path $rule.Direction $mode;$marker=Get-OwnedRuleMarker $path $rule.Direction
                 if($rule.Name -eq $name -and ([string]$rule.Description).StartsWith($marker,[StringComparison]::Ordinal)){continue}
                 $rule.Description=$marker+' Programm: '+$path;$rule.Name=$name;$changed=$true
             }
-            $after=Get-NetworkFingerprint @(Read-NetworkRules $path)
-            foreach($change in $script:changes){if($change.Version -eq 1 -and [Netzblick.ProcessLineage]::Normalize($change.Path) -eq [Netzblick.ProcessLineage]::Normalize($path) -and $change.Fingerprint -eq $fingerprint){$change.Fingerprint=$after;$historyChanged=$true}}
+
         }catch{$ui.UserNotice.Text='Regelnamen konnten für '+[IO.Path]::GetFileName($path)+' nicht umgestellt werden: '+$_.Exception.Message}
     }
-    if($historyChanged){Save-UserState}
     if($changed){Refresh-Rules}
 }

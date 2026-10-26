@@ -24,7 +24,7 @@ function Network-ModeLabel([string]$mode) {
 function Get-NetworkFingerprint($rules) {
     $normalized=@($rules | Sort-Object -Property @('Name') | ForEach-Object {
         $scope=try{[Netzblick.NetworkPolicy]::CanonicalScope($_.RemoteAddresses)}catch{$_.Exception.Message}
-        [ordered]@{Name=$_.Name;Path=[Netzblick.ProcessLineage]::Normalize($_.Path);Direction=$_.Direction;Action=$_.Action;Enabled=$_.Enabled;Profiles=$_.Profiles;Protocol=$_.Protocol;Remote=$scope;Local=$_.LocalAddresses;LocalPorts=$_.LocalPorts;RemotePorts=$_.RemotePorts;InterfaceTypes=$_.InterfaceTypes;Service=$_.ServiceName;Edge=$_.EdgeTraversal;Interfaces=$_.Interfaces}
+        [ordered]@{Name=((Rule-Base $_.Path)+$(if($_.Direction -eq 1){'.In'}else{'.Out'}));Path=[Netzblick.ProcessLineage]::Normalize($_.Path);Direction=$_.Direction;Action=$_.Action;Enabled=$_.Enabled;Profiles=$_.Profiles;Protocol=$_.Protocol;Remote=$scope;Local=$_.LocalAddresses;LocalPorts=$_.LocalPorts;RemotePorts=$_.RemotePorts;InterfaceTypes=$_.InterfaceTypes;Service=$_.ServiceName;Edge=$_.EdgeTraversal;Interfaces=$_.Interfaces}
     })
     return ConvertTo-Json -InputObject $normalized -Depth 5 -Compress
 }

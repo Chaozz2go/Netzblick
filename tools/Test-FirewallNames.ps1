@@ -32,7 +32,7 @@ try{
  $policy.Rules.Remove($collisionName);Rename-OwnedNetworkRules
  $current=@(Read-NetworkRules $fixture)
  if($current.Count -ne 2 -or (Get-NetworkMode $fixture) -ne 'Blocked' -or @($current | Where-Object {$_.Name -notlike 'Netzblick · Steam-Fixture.exe · Gesperrt · *'}).Count){throw 'Migration verliert Programmname, Aktion, Richtung oder Sperrwirkung.'}
- if(-not $saved -or $changes[0].Fingerprint -ne (Get-NetworkFingerprint $current)){throw 'Migration erhält gültiges Rückgängig nicht.'}
+ if($changes[0].Fingerprint -ne (Get-NetworkFingerprint $current)){throw 'Migration erhält gültiges Rückgängig nicht.'}
  Rename-OwnedNetworkRules
  if(@(Read-NetworkRules $fixture).Count -ne 2){throw 'Wiederholter Start dupliziert Regeln.'}
  Write-NetworkMode $fixture 'Private'
