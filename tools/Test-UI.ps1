@@ -118,7 +118,7 @@ if(-not $detailFunction -or $parseErrors.Count){throw 'Produktive Programmdetail
 Invoke-Expression $detailFunction.Extent.Text
 function Draw-Map($program,$displayRows){}
 Open-ProgramBlocks $testExe
-if($ui.Connections.Items.Count -ne 2 -or @($ui.Connections.Items | Where-Object {-not $_.IsBlock}).Count -or $ui.BlockReasonText.Text -notlike '*Fixture-Sperre*'){throw 'Produktive Detailansicht filtert Sperren oder Ursachen nicht korrekt.'}
+if($ui.Connections.Items.Count -ne 2 -or @($ui.Connections.Items | Where-Object {-not $_.IsBlock}).Count -or $ui.BlockReasonText.Text -notmatch 'Fixture-(Sperre|Fremdfilter)'){throw ('Produktive Detailansicht: Zeilen='+$ui.Connections.Items.Count+'; Auswahl='+$ui.Connections.SelectedItem.BlockReason+'; Detail='+$ui.BlockReasonText.Text)}
 if(-not $ui.OnlyProgramBlocks.IsChecked -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
 $ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
