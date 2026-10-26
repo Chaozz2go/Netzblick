@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param([string]$OutputDirectory=(Join-Path $PSScriptRoot 'ui-preview'),[switch]$LogPreview)
 $ErrorActionPreference='Stop'
+trap {Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 $appRoot=Split-Path $PSScriptRoot -Parent
 $sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','ReleaseUpdates.cs') | ForEach-Object {Join-Path $appRoot ('src\'+$_)}
@@ -35,6 +36,7 @@ Initialize-AccessMode
 $script:SmokeTest=$true;$script:policyReady=$true;$script:notifyObserved=$false
 $script:knownPrograms=@{};$script:newPrograms=@{};$script:trafficSamples=@{};$script:trafficPeers=@([pscustomobject]@{Path=$testExe;Protocol='TCPv4';Address='8.8.8.8';Port=443})
 $script:rows=@();$script:ownRules=@();$script:userBaseline=$true;$script:sessionStartedUtc=[datetime]::UtcNow
+$script:events=New-Object 'System.Collections.Generic.List[object]'
 $script:trafficProblem='';$script:traffic=$null;$script:changes=New-Object 'System.Collections.Generic.List[object]'
 $script:userStateDirectory=Join-Path $env:TEMP ('NetzblickReview-'+[guid]::NewGuid().ToString('N'));$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
 function Add-Event($kind,$program,$detail){}
