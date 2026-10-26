@@ -14,10 +14,20 @@ $script:group='Netzblick.CI.Names.'+[guid]::NewGuid().ToString('N');$foreignGrou
 $script:changes=New-Object 'System.Collections.Generic.List[object]';$script:ui=@{UserNotice=[pscustomobject]@{Text=''}};$script:saved=$false
 function Refresh-Rules {}
 function Save-UserState {$script:saved=$true}
-$directory=Join-Path $env:TEMP ('NetzblickNames-'+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($directory)
+$directory=Join-Path $env:RUNNER_TEMP ('NetzblickNames-'+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($directory)
 $fixture=Join-Path $directory 'Steam-Fixture.exe';Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') -Destination $fixture
 function New-FixtureRule([string]$name,[string]$groupName,[int]$direction){
- $r=New-Object -ComObject HNetCfg.FWRule;$r.Name=$name;$r.Description='Fixture original';$r.ApplicationName=$fixture;$r.Protocol=256;$r.Direction=$direction;$r.Action=0;$r.Profiles=2147483647;$r.Grouping=$groupName;$r.RemoteAddresses='*';$r.LocalAddresses='*';$r.InterfaceTypes='All';$r.Enabled=$true;Write-Output ('Adding fixture rule: '+$r.Name+'; group='+$r.Grouping+'; direction='+$r.Direction+'; protocol='+$r.Protocol+'; path='+$r.ApplicationName);$policy.Rules.Add($r)
+ $r=New-Object -ComObject HNetCfg.FWRule;$r.Name=$name;$r.Description='Fixture original';$r.ApplicationName=$fixture;$r.Protocol=256;$r.Direction=$direction;$r.Action=0;$r.Profiles=2147483647;$r.Grouping=$groupName;$r.RemoteAddresses='*';$r.LocalAddresses='*';$r.InterfaceTypes='All';$r.Enabled=$true;Write-Output ('Adding fixture rule: '+$r.Name+'; group='+$r.Grouping+'; direction='+$r.Direction+'; protocol='+$r.Protocol+'; path='+$r.ApplicationName);try{$policy.Rules.Add($r)}catch{
+  $original=$_
+  Write-Output ('Firewall services: '+((Get-Service MpsSvc,BFE | Select-Object Name,Status | ConvertTo-Json -Compress)))
+  Write-Output ('Rejected rule properties: '+($r | Select-Object Name,ApplicationName,Protocol,Direction,Action,Profiles,Grouping,LocalAddresses,RemoteAddresses,LocalPorts,RemotePorts,InterfaceTypes,Enabled | ConvertTo-Json -Compress))
+  foreach($variant in @('minimum-all','minimum-seven','group-all','group-seven')){
+   $probe=New-Object -ComObject HNetCfg.FWRule;$probe.Name='Netzblick CI probe '+[guid]::NewGuid().ToString('N');$probe.ApplicationName=$fixture;$probe.Protocol=256;$probe.Direction=1;$probe.Action=0;$probe.Profiles=$(if($variant -like '*seven'){7}else{2147483647});$probe.Enabled=$false
+   if($variant -like 'group-*'){$probe.Grouping=$groupName}
+   try{$policy.Rules.Add($probe);Write-Output ('PROBE PASS '+$variant);$policy.Rules.Remove($probe.Name)}catch{Write-Output ('PROBE FAIL '+$variant+': '+$_.Exception.ToString())}
+  }
+  throw $original
+ }
 }
 try{
  $base=Rule-Base $fixture
