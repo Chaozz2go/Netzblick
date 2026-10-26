@@ -19,6 +19,9 @@ jobs:
         run: |
           git fetch --unshallow --tags
           python tools/check_publication.py
+      - name: Readable Windows Firewall rule names and ownership
+        shell: powershell
+        run: ./tools/Test-FirewallNames.ps1
       - name: Build EXE with embedded libraries
         shell: powershell
         run: ./tools/Build-Desktop.ps1
@@ -35,9 +38,6 @@ jobs:
       - name: WFP coexistence and native blocking
         shell: powershell
         run: ./tools/Test-NativeService.ps1
-      - name: Readable Windows Firewall rule names and ownership
-        shell: powershell
-        run: ./tools/Test-FirewallNames.ps1
       - name: Package portable version
         shell: powershell
         run: |

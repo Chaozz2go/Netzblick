@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-trap {Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
+trap {$failure=$_;Write-Output $failure.ToString();Write-Output $failure.ScriptStackTrace;Write-Output $failure.InvocationInfo.PositionMessage;throw $failure}
 if($env:GITHUB_ACTIONS -ne 'true'){throw 'Nur auf isolierten Windows-Runnern ausführen.'}
 $root=Split-Path $PSScriptRoot -Parent
 Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Numerics.dll') -Path @((Join-Path $root 'src\InspectionCore.cs'),(Join-Path $root 'src\NetworkPolicyCore.cs'))
@@ -17,7 +17,7 @@ function Save-UserState {$script:saved=$true}
 $directory=Join-Path $env:TEMP ('NetzblickNames-'+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($directory)
 $fixture=Join-Path $directory 'Steam-Fixture.exe';Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') -Destination $fixture
 function New-FixtureRule([string]$name,[string]$groupName,[int]$direction){
- $r=New-Object -ComObject HNetCfg.FWRule;$r.Name=$name;$r.Description='Fixture original';$r.ApplicationName=$fixture;$r.Protocol=256;$r.Direction=$direction;$r.Action=0;$r.Profiles=2147483647;$r.Grouping=$groupName;$r.RemoteAddresses='*';$r.LocalAddresses='*';$r.InterfaceTypes='All';$r.Enabled=$true;$policy.Rules.Add($r)
+ $r=New-Object -ComObject HNetCfg.FWRule;$r.Name=$name;$r.Description='Fixture original';$r.ApplicationName=$fixture;$r.Protocol=256;$r.Direction=$direction;$r.Action=0;$r.Profiles=2147483647;$r.Grouping=$groupName;$r.RemoteAddresses='*';$r.LocalAddresses='*';$r.InterfaceTypes='All';$r.Enabled=$true;Write-Output ('Adding fixture rule: '+$r.Name+'; group='+$r.Grouping+'; direction='+$r.Direction+'; protocol='+$r.Protocol+'; path='+$r.ApplicationName);$policy.Rules.Add($r)
 }
 try{
  $base=Rule-Base $fixture
