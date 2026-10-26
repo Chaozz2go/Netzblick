@@ -38,6 +38,8 @@ function Add-Event($kind,$program,$detail){}
 function Show-NetzblickWindow {}
 function Show-Panel($name){$script:lastPanel=$name}
 function Refresh-Detail {}
+. (Join-Path $appRoot 'src\EndpointNames.ps1')
+Initialize-BlockDetails
 $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';Rows=@()})
 $ui.Programs.ItemsSource=$allProgramItems
 Initialize-ReviewMode
@@ -94,16 +96,23 @@ $catalogStatus=[Netzblick.SetupStatus]@{Ok=$true;Verified=$true;Config=(New-Obje
 [Netzblick.SetupChanges]::BlockProgram($catalogStatus.Config,$testExe)
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].Observed -or $catalog[0].Rows.Count -or $catalog[0].BlockCount){throw 'Gespeicherte Sperre verschwindet ohne Socket oder erfindet einen Versuch.'}
-$a=[Netzblick.SetupAttempt]@{Key='blocked-only';Path=$testExe;Program='BlockedOnly.exe';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
+$a=[Netzblick.SetupAttempt]@{FilterId=101;BlockReason='Netzblick-Regel: Fixture-Sperre';Key='blocked-only';Path=$testExe;Program='BlockedOnly.exe';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
 $catalogStatus.Attempts.Add($a)
-$b=[Netzblick.SetupAttempt]@{Key='second-target';Path=$testExe.ToUpperInvariant();Program='BlockedOnly.exe';Direction='Ausgehend';Address='8.8.8.8';Protocol=17;Port=53;Count=2;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
+$b=[Netzblick.SetupAttempt]@{FilterId=102;BlockReason='Windows-Netzwerkfilter: Fixture-Fremdfilter';Key='second-target';Path=$testExe.ToUpperInvariant();Program='BlockedOnly.exe';Direction='Ausgehend';Address='8.8.8.8';Protocol=17;Port=53;Count=2;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
 $catalogStatus.Attempts.Add($b)
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5 -or -not $catalog[0].Observed -or $catalog[0].BlockSummary -notlike '5 blockierte Versuche*'){throw 'Blockversuche ohne Socket fehlen oder doppelte Programmpfade.'}
 $blockRows=@(Get-ProgramBlockRows $testExe $catalogStatus)
 if($blockRows.Count -ne 2 -or $blockRows[0].State -notlike '*3 Versuche*' -or $blockRows[0].Remote -notlike '*1.1.1.1*'){throw 'Blockierte Ziele/Zähler fehlen in den Programmdetails.'}
+$ui.Connections.ItemsSource=$blockRows;$ui.Connections.SelectedIndex=0;Show-ConnectionDetails
+if($ui.BlockReasonText.Text -notlike '*Fixture-Sperre*' -or $ui.BlockReasonText.Text -notlike '*1.1.1.1*'){throw 'Sperrgrund/Ziel nicht direkt sichtbar.'}
+$ui.Connections.SelectedIndex=1;Show-ConnectionDetails
+if($ui.BlockReasonText.Text -notlike '*Fixture-Fremdfilter*'){throw 'Fremder Sperrgrund nicht sichtbar.'}
 # Feed the actual Activity/Programs data bindings with only block evidence.
 $script:setupStatus=$catalogStatus;$script:allProgramItems=$catalog;$ui.Programs.ItemsSource=$catalog;Refresh-Overview;Refresh-ProgramSignals
+Open-ProgramBlocks $testExe
+if(-not $ui.OnlyProgramBlocks.IsChecked -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
+$ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
 $catalogStatus.Config.Rules.Clear()
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())

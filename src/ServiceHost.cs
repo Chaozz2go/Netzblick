@@ -46,7 +46,7 @@ namespace Netzblick {
   bool NeedsWatch(SetupConfig value){return observeWindowsBlocks||value.Ask||value.WatchedPaths.Count>0||value.Rules.Any(r=>r.Action=="Block");}
   void EnsureWatch(){if(watch==null)watch=AccessWatch.Start();if(!watch.Healthy)throw new InvalidOperationException(watch.Warning);}
   void Tick(){
-   if(watch!=null){foreach(var e in watch.Drain())queue.Observe(e,gate!=null&&gate.OwnBlock(e.FilterId));}
+   if(watch!=null){foreach(var e in watch.Drain())queue.Observe(e,gate!=null&&gate.OwnBlock(e.FilterId),gate==null?"Windows meldet eine Sperre; Filtersteuerung nicht verfügbar":gate.DescribeBlock(e.FilterId));}
    try{
     if(gate==null)throw new InvalidOperationException(problem);
     var next=Clone(config);if(next.Expire(DateTime.UtcNow)>0){Apply(next);Log("Zeitlich begrenzte Freigabe abgelaufen");}

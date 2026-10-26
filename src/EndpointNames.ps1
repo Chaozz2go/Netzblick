@@ -10,7 +10,8 @@ function Get-EndpointName([string]$address) {
 }
 function Show-ConnectionDetails {
     $row=$ui.Connections.SelectedItem
-    if($null -eq $row){$ui.SocketDetails.Text='Eine Gegenstelle auswählen: IP, DNS-Name und Diensthinweis erscheinen hier.';return}
+    if($null -eq $row){$ui.BlockReasonText.Text='Eine blockierte Gegenstelle auswählen, um den aufgezeichneten Sperrgrund zu sehen.';$ui.SocketDetails.Text='Eine Gegenstelle auswählen: IP, DNS-Name und Diensthinweis erscheinen hier.';return}
+    if($row.IsBlock){$ui.BlockReasonText.Text="SPERRGRUND (zum Ereigniszeitpunkt)`n$($row.BlockReason)`n`nZiel: $($row.Remote)`nRichtung: $($row.Local)`nVersuche: $($row.Count)`nZuletzt: $($row.LastUtc.ToLocalTime().ToString('dd.MM.yyyy HH:mm:ss'))`nFilter-ID: $($row.FilterId)`n`nDer aktuelle Programmstatus ist getrennt davon. Filter können seit dem Ereignis geändert worden sein."}else{$ui.BlockReasonText.Text='Diese Zeile ist eine Socket-/Datenbeobachtung, kein Blockereignis. „Nur blockierte Versuche“ zeigt aufgezeichnete Sperren.'}
     $scope=[Netzblick.EndpointInfo]::Scope($row.Address)
     $ui.SocketDetails.Text="Gegenstelle: $($row.Remote)`nName: $($row.PeerName)`nBereich: $scope`nHinweis: $($row.ServiceHint)`n`nBeobachtung: $($row.State)`nProtokoll: $($row.Protocol) · PID: $($row.Pid)`nLokal: $($row.Local)`n`nWarum? Port und DNS-Name liefern Anhaltspunkte. Ob es um Updates, Anmeldung, Inhalte oder Telemetrie geht, ist ohne Anwendungsdaten nicht feststellbar. Ein DNS-Name belegt weder Betreiber noch Sicherheit; mehrere Dienste können dieselbe IP nutzen."
 }
@@ -25,3 +26,4 @@ function Update-InspectionNames {
     }
     if($changed){$ui.InspectionEvents.Items.Refresh()}
 }
+

@@ -53,6 +53,11 @@ public static class SetupChecks {
   managed.Ask=false;check(ProgramPolicy.Category(managed,app)=="Default","program reset returns observer default");
   narrow=rule();narrow.Path=app;narrow.ExpiresUtc=now.AddMinutes(-1);managed.Rules.Add(narrow);check(ProgramPolicy.Category(managed,app)=="Default","expired permissions never counted");
   narrow.ExpiresUtc=null;narrow.Action="Block";check(ProgramPolicy.Category(managed,app)=="Limited","single endpoint deny not mistaken for full program block");
+  var causes=new SetupQueue();e.FilterId=101;e.Application=app;e.Protocol="TCP";e.Direction="Ausgehend";e.DestinationPort="443";e.Destination="1.1.1.1";e.TimeUtc=now;
+  causes.Observe(e,true,"Netzblick-Regel: Test-Sperre");e.FilterId=102;causes.Observe(e,false,"Windows-Netzwerkfilter: Fremdfilter");
+  check(causes.Snapshot().Count==2,"different causal filters never overwrite same target history");
+  check(causes.Snapshot().Find(x=>x.FilterId==101).Evidence=="Netzblick-Regel: Test-Sperre","captured rule name survives later policy changes");
+  check(!causes.Snapshot().Find(x=>x.FilterId==102).OwnBlock,"foreign source is separate from own permission");
   return count;
  }
 }

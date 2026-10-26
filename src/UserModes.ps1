@@ -202,7 +202,9 @@ function Refresh-Overview {
     $selected=$ui.PendingPrograms.Items | Where-Object {$_.Key -eq $oldKey} | Select-Object -First 1
     if($selected){$ui.PendingPrograms.SelectedItem=$selected}elseif($ui.PendingPrograms.Items.Count){$ui.PendingPrograms.SelectedIndex=0}
     if(Get-Command Refresh-ReviewSelection -ErrorAction SilentlyContinue){Refresh-ReviewSelection}
+    $overviewKey=if($ui.OverviewPrograms.SelectedItem){$ui.OverviewPrograms.SelectedItem.Key}else{''}
     $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
+    if($overviewKey){$ui.OverviewPrograms.SelectedItem=$ui.OverviewPrograms.Items | Where-Object {$_.Key -eq $overviewKey} | Select-Object -First 1}
     if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
     $ui.OverviewNew.Text=[string]$newPrograms.Count
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}

@@ -33,14 +33,16 @@ public sealed class WfpPeerFixture : IDisposable {
    return peer;
   }catch{peer.Dispose();throw;}
  }
- public ulong AddPermit(string path,bool hard){
+ public ulong AddPermit(string path,bool hard){return AddRule(path,hard,false);}
+ public ulong AddBlock(string path){return AddRule(path,false,true);}
+ ulong AddRule(string path,bool hard,bool block){
   IntPtr app=IntPtr.Zero,condition=IntPtr.Zero,weight=IntPtr.Zero;
   try{
    Check(FwpmGetAppIdFromFileName0(path,out app));
    condition=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(WfpGate.Condition)));
    Marshal.StructureToPtr(new WfpGate.Condition{Field=AppField,Value=new WfpGate.Value{Type=12,Data=new WfpGate.ValueUnion{Pointer=app}}},condition,false);
-   weight=Marshal.AllocHGlobal(8);Marshal.WriteInt64(weight,100);
-   var filter=new WfpGate.Filter{Key=Guid.NewGuid(),Display=new WfpGate.Display{Name=hard?"CI peer hard permit":"CI peer soft permit"},Flags=hard?8u:0u,Layer=Connect4,SubLayer=subLayer,Weight=new WfpGate.Value{Type=4,Data=new WfpGate.ValueUnion{Pointer=weight}},Count=1,Conditions=condition,Action=new WfpGate.Action{Type=0x1002}};
+   weight=Marshal.AllocHGlobal(8);Marshal.WriteInt64(weight,block?150:100);
+   var filter=new WfpGate.Filter{Key=Guid.NewGuid(),Display=new WfpGate.Display{Name=block?"CI peer block":hard?"CI peer hard permit":"CI peer soft permit"},Flags=block||hard?8u:0u,Layer=Connect4,SubLayer=subLayer,Weight=new WfpGate.Value{Type=4,Data=new WfpGate.ValueUnion{Pointer=weight}},Count=1,Conditions=condition,Action=new WfpGate.Action{Type=block?0x1001u:0x1002u}};
    ulong id;Check(FwpmFilterAdd0(engine,ref filter,IntPtr.Zero,out id));filters.Add(id);return id;
   }finally{if(app!=IntPtr.Zero)FwpmFreeMemory0(ref app);if(condition!=IntPtr.Zero)Marshal.FreeHGlobal(condition);if(weight!=IntPtr.Zero)Marshal.FreeHGlobal(weight);}
  }

@@ -20,7 +20,7 @@ namespace Netzblick {
   public string Message {get;set;} public UpdateRelease Release {get;set;} public bool Available {get;set;}
  }
  public static class ReleaseUpdates {
-  public const string CurrentVersion="0.11.2";
+  public const string CurrentVersion="0.12.0";
   public const string RepositoryUrl="https://github.com/Chaozz2go/Netzblick";
   public static int CurrentBuild {get{
    var entry=Assembly.GetEntryAssembly();if(entry==null)return 0;

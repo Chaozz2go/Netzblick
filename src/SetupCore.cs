@@ -101,27 +101,28 @@ namespace Netzblick {
  public sealed class SetupAttempt {
   public string Key {get;set;} public string Path {get;set;} public string Program {get;set;} public string Address {get;set;}
   public string Direction {get;set;} public int Protocol {get;set;} public int Port {get;set;}
-  public long Count {get;set;} public DateTime FirstUtc {get;set;} public DateTime LastUtc {get;set;} public bool OwnBlock {get;set;}
+  public long Count {get;set;} public DateTime FirstUtc {get;set;} public DateTime LastUtc {get;set;} public bool OwnBlock {get;set;} public ulong FilterId {get;set;} public string BlockReason {get;set;}
   public string Target {get{return Address+" · "+SetupRule.ProtocolName(Protocol)+(Port>0?" "+Port:"");}}
-  public string Evidence {get{return OwnBlock?"Netzblick-Filter bestätigt":"Windows-Blockereignis; andere Sperre möglich";}}
+  public string Evidence {get{return !String.IsNullOrEmpty(BlockReason)?BlockReason:OwnBlock?"Netzblick-Filter bestätigt; Regelname nicht aufgezeichnet":"Windows-Blockereignis; Filtername nicht aufgezeichnet";}}
  }
  public sealed class SetupQueue {
   readonly Dictionary<string,SetupAttempt> items=new Dictionary<string,SetupAttempt>(StringComparer.OrdinalIgnoreCase);
   public long Dropped {get;private set;} public long Unknown {get;private set;}
   public void Clear(){items.Clear();Dropped=0;Unknown=0;}
-  public void Observe(BlockEvent e,bool own){
+  public void Observe(BlockEvent e,bool own){Observe(e,own,null);}
+  public void Observe(BlockEvent e,bool own,string reason){
    if(e.Direction!="Ausgehend"&&e.Direction!="Eingehend"){Unknown++;return;}
    IPAddress ip;string raw=e.Target;
    if(!IPAddress.TryParse(raw,out ip)){Unknown++;return;}if(ip.IsIPv4MappedToIPv6)ip=ip.MapToIPv4();
    int protocol=SetupRule.Number(e.Protocol),port=0;
    if(protocol==6||protocol==17){if(!Int32.TryParse(e.DestinationPort,out port)||port<1||port>65535){Unknown++;return;}}
    string path=e.Application??"",address=ip.ToString();
-   string key=ProcessLineage.Normalize(path)+"|"+e.Direction+"|"+address+"|"+protocol+"|"+port;
+   string key=ProcessLineage.Normalize(path)+"|"+e.Direction+"|"+address+"|"+protocol+"|"+port+"|"+e.FilterId+"|"+own;
    SetupAttempt a;if(!items.TryGetValue(key,out a)){
     if(items.Count>=512){Dropped++;return;}
-    a=new SetupAttempt{Key=key,Path=path,Program=e.Program,Address=address,Protocol=protocol,Port=port,Direction=e.Direction,FirstUtc=e.TimeUtc,LastUtc=e.TimeUtc};items.Add(key,a);
+    a=new SetupAttempt{Key=key,Path=path,Program=e.Program,Address=address,Protocol=protocol,Port=port,Direction=e.Direction,FirstUtc=e.TimeUtc,LastUtc=e.TimeUtc,FilterId=e.FilterId,BlockReason=reason};items.Add(key,a);
    }
-   a.Count++;if(e.TimeUtc>=a.LastUtc){a.LastUtc=e.TimeUtc;a.OwnBlock=own;}
+   a.Count++;if(e.TimeUtc>=a.LastUtc){a.LastUtc=e.TimeUtc;a.OwnBlock=own;a.BlockReason=reason;}
   }
   public List<SetupAttempt> Snapshot(){return items.Values.OrderByDescending(a=>a.LastUtc).ToList();}
  }

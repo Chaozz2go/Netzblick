@@ -1,4 +1,14 @@
-﻿Netzblick 0.11.2 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.12.0 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.12.0: Blockzähler öffnet direkt die gefilterten Blockversuche. Gespeicherte
+Filterursache, ID und letzte Zeit erscheinen pro Gegenstelle; aktueller Status
+und historische/fremde Sperren bleiben getrennt. Native Filterabfrage ist nur
+lesend, mit begrenztem Cache und explizitem unbekannten Ergebnis. Eigene
+Filternamen bleiben auch nach einer Regeländerung für verzögert eintreffende
+Ereignisse zuordenbar (begrenzt auf die letzten 4096 Filter). Die Ereignisgruppe
+enthält die Filter-ID, damit verschiedene Sperrursachen nicht vermischt werden.
+Tests prüfen eigene und fremde echte WFP-Blockereignisse mit Name/ID und die
+Anzeige von Sperrgrund, Gegenstelle und direktem Nur-Blockversuche-Weg.
 
 Korrektur 0.11.2: Programmquelle vereinigt sichtbare Sockets, ETW-Messungen,
 Prüfliste, gespeicherte Dienst-/Windows-Regeln und erfasste Blockversuche.

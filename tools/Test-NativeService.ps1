@@ -43,6 +43,7 @@ try{
     $evidence=$null
     for($i=0;$i -lt 20;$i++){$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});$evidence=$status.Attempts | Where-Object {$_.Path -eq $fixture -and $_.OwnBlock -and $_.Address -eq '1.1.1.1'} | Select-Object -First 1;if($evidence){break};Start-Sleep -Milliseconds 500}
     if(-not $evidence){throw 'Keine passende echte WFP-Blockmeldung angekommen.'}
+    if(-not $evidence.FilterId -or $evidence.BlockReason -notlike '*Prüfsperre*'){throw 'Eigener Filtername wurde beim realen Blockereignis nicht aufgezeichnet.'}
     . (Join-Path $root 'src\ProgramCatalog.ps1')
     $blockedCatalog=@(Get-ProgramCatalog @() @() @() $status @())
     $blockedProgram=$blockedCatalog | Where-Object {$_.Path -eq $fixture} | Select-Object -First 1
@@ -80,6 +81,14 @@ try{
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=$true}))
     $observed=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
     if($observed.Config.Ask -or $observed.Config.Rules.Count -or $observed.Config.WatchedPaths.Count -or $observed.Warning -like '*Ereignisanzeige nicht verfügbar*'){throw 'Blockbeobachtung verändert Filter oder startet nicht.'}
+    $foreignId=$peer.AddBlock($fixture)
+    if(Connect-Fixture){throw 'Fremder Fixture-Block hat keine Sperrwirkung.'}
+    $foreign=$null
+    for($i=0;$i -lt 20;$i++){$observed=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});$foreign=$observed.Attempts | Where-Object {$_.FilterId -eq $foreignId} | Select-Object -First 1;if($foreign){break};Start-Sleep -Milliseconds 500}
+    if(-not $foreign -or $foreign.OwnBlock -or $foreign.BlockReason -notlike '*CI peer block*'){throw 'Echter Fremdfilter wird nicht mit Name und eigener Filter-ID erkannt.'}
+    $peer.Remove($foreignId)
+    if(-not (Connect-Fixture)){throw 'Rücknahme der Fremd-Fixturesperre gibt nicht frei.'}
+    Write-Output 'PASS: echte eigene Prüfsperre und fremder WFP-Block mit Filtername/ID getrennt aufgezeichnet.'
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=$false}))
     # An overlapping hard permit must still be rejected, while unrelated
     # app permits and a peer soft permit must not disable Netzblick.

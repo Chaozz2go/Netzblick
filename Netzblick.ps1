@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.11.2'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.12.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -170,19 +170,25 @@ try {
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
-        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill='#57677B';$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();Draw-Map $null @();return}
+        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill='#57677B';$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';Draw-Map $null @();return}
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
         $displayRows=@($program.Rows)
         foreach($peer in @($trafficPeers | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})){$displayRows+=@([pscustomobject]@{Key=('ETW|'+$peer.Protocol+'|'+$peer.Address+'|'+$peer.Port);Pid='aggregiert';Protocol=$peer.Protocol;Local='— (ETW)';Remote=($peer.Address+':'+$peer.Port);Address=$peer.Address;Port=$peer.Port;State='ETW beobachtet'})}
-        $displayRows+=@(Get-ProgramBlockRows $program.Path $script:setupStatus)
+        $blockRows=@(Get-ProgramBlockRows $program.Path $script:setupStatus)
+        $ui.ShowProgramBlocks.Content='Blockversuche anzeigen ('+$blockRows.Count+' Ziele / Filter)';$ui.ShowProgramBlocks.IsEnabled=$blockRows.Count -gt 0
+        $ui.ProgramBlockHint.Text=if($blockRows.Count){'Erfasste Sperren seit Dienststart. Aktuell: '+$signal.Status+'. Ein erlaubtes Programm kann frühere oder fremde Sperren in der Liste haben.'}else{'Keine erfassten Blockversuche für dieses Programm. Das beweist keinen fehlenden Netzwerkzugriff.'}
+        if($ui.OnlyProgramBlocks.IsChecked){$displayRows=$blockRows}else{$displayRows=@($blockRows)+@($displayRows)}
         $endpointIndex=0
         $displayRows=@($displayRows | ForEach-Object {
             $endpointIndex++
-            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
+            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
         })
-        $ui.Connections.ItemsSource=$displayRows;Show-ConnectionDetails
+        $ui.Connections.ItemsSource=$displayRows
+        $restore=$displayRows | Where-Object {$_.Key -eq $socketKey} | Select-Object -First 1
+        if($restore){$ui.Connections.SelectedItem=$restore}elseif($ui.OnlyProgramBlocks.IsChecked -and $displayRows.Count){$ui.Connections.SelectedIndex=0}
+        Show-ConnectionDetails
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
         $ui.ProgramStatus.Text=Network-ModeLabel $mode
         $ui.ProgramStatus.Text='Frühere Windows-Regeln: '+$ui.ProgramStatus.Text
@@ -331,6 +337,7 @@ try {
     $script:programCatalogReady=$true
     Initialize-AccessMode
     Initialize-ReviewMode
+    Initialize-BlockDetails
     Initialize-Updates
     $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})
     Initialize-TrayMode

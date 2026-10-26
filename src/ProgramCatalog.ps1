@@ -40,6 +40,23 @@ function Get-ProgramBlockRows([string]$path,$status){
     if(-not $status){return}
     $key=[Netzblick.ProcessLineage]::Normalize($path)
     foreach($a in @($status.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $key})){
-        [pscustomobject]@{Key=('BLOCK|'+$a.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($a.Protocol);Local=$a.Direction;Remote=$a.Target;Address=$a.Address;Port=$a.Port;State=('Blockiert · '+$a.Count+' Versuche · zuletzt '+$a.LastUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$a.Evidence)}
+        [pscustomobject]@{Key=('BLOCK|'+$a.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($a.Protocol);Local=$a.Direction;Remote=$a.Target;Address=$a.Address;Port=$a.Port;IsBlock=$true;Count=$a.Count;FirstUtc=$a.FirstUtc;LastUtc=$a.LastUtc;FilterId=$a.FilterId;BlockReason=$a.Evidence;State=('Blockiert · '+$a.Count+' Versuche · zuletzt '+$a.LastUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$a.Evidence)}
     }
+}
+
+function Open-ProgramBlocks([string]$path){
+    Show-ReviewProgram $path
+    $ui.OnlyProgramBlocks.IsChecked=$true;Refresh-Detail
+}
+function Initialize-BlockDetails {
+    $ui.OnlyProgramBlocks.Add_Click({Refresh-Detail})
+    $ui.ShowProgramBlocks.Add_Click({if($ui.Programs.SelectedItem){$ui.OnlyProgramBlocks.IsChecked=$true;Refresh-Detail}})
+    $ui.OverviewPrograms.Add_PreviewMouseLeftButtonUp({
+        param($sender,$e)
+        $node=$e.OriginalSource
+        while($node -is [Windows.FrameworkElement]){
+            if($node.Name -eq 'BlockAttemptsLink' -and $node.DataContext -and $node.DataContext.Path){Open-ProgramBlocks $node.DataContext.Path;$e.Handled=$true;break}
+            $node=[Windows.Media.VisualTreeHelper]::GetParent($node)
+        }
+    })
 }
