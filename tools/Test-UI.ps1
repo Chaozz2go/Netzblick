@@ -110,11 +110,22 @@ $ui.Connections.SelectedIndex=1;Show-ConnectionDetails
 if($ui.BlockReasonText.Text -notlike '*Fixture-Fremdfilter*'){throw 'Fremder Sperrgrund nicht sichtbar.'}
 # Feed the actual Activity/Programs data bindings with only block evidence.
 $script:setupStatus=$catalogStatus;$script:allProgramItems=$catalog;$ui.Programs.ItemsSource=$catalog;Refresh-Overview;Refresh-ProgramSignals
+# Execute the production detail renderer, not the fixture's earlier stub.
+$parseTokens=$null;$parseErrors=$null
+$appAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $appRoot 'Netzblick.ps1'),[ref]$parseTokens,[ref]$parseErrors)
+$detailFunction=$appAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Refresh-Detail'},$true)
+if(-not $detailFunction -or $parseErrors.Count){throw 'Produktive Programmdetailfunktion konnte nicht geladen werden.'}
+Invoke-Expression $detailFunction.Extent.Text
+function Draw-Map($program,$displayRows){}
 Open-ProgramBlocks $testExe
+if($ui.Connections.Items.Count -ne 2 -or @($ui.Connections.Items | Where-Object {-not $_.IsBlock}).Count -or $ui.BlockReasonText.Text -notlike '*Fixture-Sperre*'){throw 'Produktive Detailansicht filtert Sperren oder Ursachen nicht korrekt.'}
 if(-not $ui.OnlyProgramBlocks.IsChecked -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
 $ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
 $catalogStatus.Config.Rules.Clear()
+Refresh-Detail
+if($ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or $ui.Connections.Items.Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
+function Refresh-Detail {}
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5){throw 'Freigabe entfernt historische Blockversuche.'}
 $catalogStatus.Attempts.Clear()
