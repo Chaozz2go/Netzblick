@@ -29,7 +29,7 @@ $references=@('/target:winexe',"/out:$exe",('/win32manifest:'+(Join-Path $root '
 foreach($dll in Get-ChildItem -LiteralPath (Join-Path $root 'lib') -Filter '*.dll' -File){$references+=('/resource:'+$dll.FullName+',Netzblick.Library.'+$dll.Name)}
 $stamp=Join-Path $work 'BuildStamp.cs'
 $buildNumber=if($env:GITHUB_RUN_NUMBER -match '^\d+$'){$env:GITHUB_RUN_NUMBER}else{'0'}
-[IO.File]::WriteAllText($stamp,('[assembly: System.Reflection.AssemblyInformationalVersion("0.11.2+build.'+$buildNumber+'") ]'))
+[IO.File]::WriteAllText($stamp,('[assembly: System.Reflection.AssemblyInformationalVersion("0.13.0+build.'+$buildNumber+'") ]'))
 Compile ($references+@(Join-Path $root 'src\ExeHost.cs')+@($stamp))
 # No loadFromRemoteSources switch: libraries come from the EXE's own resources.
 @'

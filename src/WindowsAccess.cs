@@ -89,6 +89,8 @@ namespace Netzblick {
   Engine engine;readonly Guid subLayer=Guid.NewGuid();ushort layerWeight;
   readonly List<Expected> expected=new List<Expected>();
   readonly Dictionary<string,List<Expected>> allowed=new Dictionary<string,List<Expected>>(StringComparer.OrdinalIgnoreCase);
+  readonly Dictionary<ulong,string> blockReasons=new Dictionary<ulong,string>();
+  readonly Dictionary<ulong,string> otherReasons=new Dictionary<ulong,string>();
   bool closed;
   public string CompatibilityWarning {get;private set;}
   static void Check(uint code,string operation){if(code!=0)throw new Win32Exception(unchecked((int)code),operation+" fehlgeschlagen (0x"+code.ToString("X8")+").");}
@@ -196,6 +198,7 @@ namespace Netzblick {
      Marshal.StructureToPtr(new Condition{Field=spec.Field,Match=spec.Field==FlagsField?6u:0u,Value=val},IntPtr.Add(filter.Conditions,i*stride),false);
     }
     ulong id;Check(FwpmFilterAdd0(engine,ref filter,IntPtr.Zero,out id),"WFP-Filter hinzufügen");
+    if(action==Block){if(blockReasons.Count>=4096)blockReasons.Clear();blockReasons[id]=name=="ohne Freigabe blockieren"?"Netzblick-Nachfragemodus: keine passende Freigabe":name=="Programmprüfung"?"Netzblick-Prüfsperre dieses Programms":"Netzblick-Regel: "+CleanName(name);}
     return new Expected{Id=id,Layer=layer,Action=action,Weight=weight,Specs=specs,Name=name};
    }
   }
@@ -276,7 +279,30 @@ namespace Netzblick {
    catch{FwpmTransactionAbort0(engine);throw;}
    foreach(var filter in filters)expected.Remove(filter);allowed.Remove(key);Verify();
   }
-  public bool OwnBlock(ulong id){foreach(var filter in expected)if(filter.Id==id && filter.Action==Block)return true;return false;}
+  public bool OwnBlock(ulong id){return blockReasons.ContainsKey(id)||expected.Any(f=>f.Id==id&&f.Action==Block);}
+  static string CleanName(string name){return new string((name??"").Select(c=>Char.IsControl(c)?' ':c).Take(256).ToArray());}
+  public string DescribeBlock(ulong id){
+   string reason;if(blockReasons.TryGetValue(id,out reason))return reason;
+   var current=expected.FirstOrDefault(f=>f.Id==id&&f.Action==Block);if(current!=null)return "Netzblick-Regel: "+CleanName(current.Name);
+   if(otherReasons.TryGetValue(id,out reason))return reason;
+   reason="Windows meldet eine Sperre; Filtername nicht mehr verfügbar";
+   IntPtr pointer=IntPtr.Zero,layerPointer=IntPtr.Zero;
+   try{
+    if(id!=0&&engine!=null&&!engine.IsClosed&&FwpmFilterGetById0(engine,id,out pointer)==0&&pointer!=IntPtr.Zero){
+     var filter=(Filter)Marshal.PtrToStructure(pointer,typeof(Filter));
+     string name=CleanName(filter.Display.Name);
+     reason="Windows-Netzwerkfilter: "+(String.IsNullOrWhiteSpace(name)?"kein Filtername von Windows geliefert":name);
+     Guid key=filter.SubLayer;
+     if(FwpmSubLayerGetByKey0(engine,ref key,out layerPointer)==0&&layerPointer!=IntPtr.Zero){
+      var layer=(SubLayer)Marshal.PtrToStructure(layerPointer,typeof(SubLayer));string layerName=CleanName(layer.Display.Name);
+      if(!String.IsNullOrWhiteSpace(layerName))reason+=" · Ebene: "+layerName;
+     }
+     reason+=". Kein bestätigter Netzblick-Filter; eine genaue Benutzerregel ist daraus nicht sicher ableitbar.";
+    }
+   }catch{reason="Windows meldet eine Sperre; Filterdetails konnten nicht gelesen werden";}
+   finally{if(layerPointer!=IntPtr.Zero)FwpmFreeMemory0(ref layerPointer);if(pointer!=IntPtr.Zero)FwpmFreeMemory0(ref pointer);}
+   if(otherReasons.Count>=512)otherReasons.Clear();otherReasons[id]=reason;return reason;
+  }
   public int AllowedCount {get{return allowed.Count;}}
   // INDEXED only changes lookup performance. A returned CLEAR_ACTION_RIGHT
   // on a block remains restrictive; it is never accepted on our soft permits.

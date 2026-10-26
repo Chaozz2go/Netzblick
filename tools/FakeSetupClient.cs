@@ -17,6 +17,8 @@ namespace Netzblick {
    if(command.Operation=="Watch"){if(!status.Verified)throw new InvalidOperationException("Test: Filterprüfung fehlgeschlagen");status.Config.WatchedPaths.Add(command.Path);return status;}
    if(command.Operation=="AllowProgram"){SetupChanges.AllowProgram(status.Config,command.Path);return status;}
    if(command.Operation=="BlockProgram"){SetupChanges.BlockProgram(status.Config,command.Path);return status;}
+   if(command.Operation=="TemporaryAllowProgram"){SetupChanges.TemporaryAllowProgram(status.Config,command.Path,DateTime.UtcNow.AddMinutes(10),DateTime.UtcNow);return status;}
+   if(command.Operation=="RestoreProgram"){SetupChanges.RestoreProgram(status.Config,command.BeforeProgram,command.ExpectedProgram,DateTime.UtcNow);return status;}
    if(command.Operation=="ProgramDefault"){SetupChanges.ProgramDefault(status.Config,command.Path);return status;}
    if(command.Operation=="Unwatch"){status.Config.WatchedPaths.Remove(command.Path);return status;}
    if(command.Operation=="Remove"){status.Config.Rules.RemoveAll(r=>r.Id==command.RuleId);return status;}

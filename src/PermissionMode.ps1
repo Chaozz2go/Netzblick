@@ -6,8 +6,8 @@
     if(-not $script:setupStatus -or -not $setupStatus.Verified){$category='Unknown'}
     if(-not [Netzblick.AccessQueue]::CanAllow($path)){$category='Unknown'}
     $label=switch($category){'Blocked'{'Gesperrt'} 'Limited'{'Teilweise eingeschränkt'} 'Allowed'{'Erlaubt (Netzblick)'} 'Default'{'Windows-Standard'} default{'Status unbestätigt'}}
-    $color=switch($category){'Blocked'{'#B32D40'} 'Limited'{'#996000'} 'Allowed'{'#08704E'} default{'#57677B'}}
-    $signal=if($category -eq 'Default'){'#08704E'}else{$color}
+    $color=switch($category){'Blocked'{(Get-ThemeColor '#B32D40')} 'Limited'{(Get-ThemeColor '#996000')} 'Allowed'{(Get-ThemeColor '#08704E')} default{(Get-ThemeColor '#57677B')}}
+    $signal=if($category -eq 'Default'){(Get-ThemeColor '#08704E')}else{$color}
     $hint=$label+' · neue externe Verbindungen. '+$(if($category -eq 'Default'){'Netzblick lässt im Beobachten-Modus durch; Windows kann zusätzlich sperren.'}else{'Windows und andere Sicherheitsprogramme können zusätzlich sperren.'})
     [pscustomobject]@{Category=$category;Status=$label;Color=$color;SignalColor=$signal;SignalHint=$hint;Legacy=($legacy.Count -gt 0)}
 }
@@ -77,24 +77,28 @@ function Show-PermissionSelection {
     $reason=if(-not $ready){'Aktuelle Sperrwirkung nicht bestätigt; Änderungen gesperrt.'}elseif($p.Legacy){'Zusätzliche alte Netzblick-Regeln in der Windows-Firewall. Zum Aufheben „Alte Windows-Regeln ansehen“ öffnen.'}elseif($protected){'Windows-Sammelprozess: Einzelne Verbindungen unten gezielt verwalten.'}elseif(-not $exists){'Datei nicht mehr vorhanden. Gespeicherte Regeln können auf Standard zurückgesetzt werden.'}elseif($p.Category -eq 'Default'){'Keine eigene Dienstregel. Im Beobachten-Modus lässt Netzblick neue Verbindungen durch; Windows entscheidet zusätzlich.'}else{'„Erlauben“ ersetzt alle eigenen Programmregeln durch Freigaben. „Standard“ entfernt sie; bei aktivem Nachfragen ist dann wieder eine Freigabe nötig.'}
     $ui.PermissionDetail.Text=$p.Path+[Environment]::NewLine+$reason
 }
-function Confirm-PermissionChange([string]$operation){
-    $p=$ui.PermissionPrograms.SelectedItem;if(-not $p){return}
+function Confirm-PermissionChange([string]$operation,[string]$path=''){
+    $p=if($path){[pscustomobject]@{Path=$path}}else{$ui.PermissionPrograms.SelectedItem};if(-not $p){return}
     $text=switch($operation){
         'AllowProgram' {'Alle eigenen Sperren, Prüfsperren und Einzelregeln dieses Programms durch dauerhafte Freigaben ersetzen? Gilt für alle Ziele und Protokolle, ein- und ausgehend. Andere Firewall-Sperren bleiben bestehen.'}
         'BlockProgram' {'Neue externe Verbindungen dieses Programms ein- und ausgehend sperren? Bestehende Verbindungen werden nicht sicher beendet. Loopback bleibt ausgenommen.'}
+        'TemporaryAllowProgram' {'Dieses Programm für 10 Minuten für alle Ziele und Protokolle ein- und ausgehend erlauben? Danach werden die vorherigen Netzblick-Regeln automatisch wiederhergestellt, auch nach einem Neustart. Andere Firewall-Sperren bleiben bestehen.'}
         'ProgramDefault' {'Alle eigenen Dienstregeln und die Prüfsperre dieses Programms entfernen? Bei aktivem Nachfragen werden Verbindungen ohne Freigabe wieder gesperrt. Sonst gilt der Windows-Standard.'}
     }
     if([Windows.MessageBox]::Show($window,($p.Path+[Environment]::NewLine+[Environment]::NewLine+$text),'Programmzugriff ändern','YesNo','Question') -ne 'Yes'){return}
     try{Set-PermissionProgram $p.Path $operation}catch{Show-Error $_.Exception.GetBaseException().Message}
 }
 function Set-PermissionProgram([string]$path,[string]$operation){
-    if($operation -notin @('AllowProgram','BlockProgram','ProgramDefault')){throw 'Unbekannte Programmaktion.'}
+    if($operation -notin @('AllowProgram','BlockProgram','ProgramDefault','TemporaryAllowProgram')){throw 'Unbekannte Programmaktion.'}
     if(-not $script:setupStatus -or -not $setupStatus.Verified){throw 'Filterstatus nicht bestätigt.'}
     $s=Get-PermissionStatus $path
     if($s.Legacy -and $operation -ne 'BlockProgram'){throw 'Zuerst die alten Windows-Regeln dieses Programms prüfen.'}
     if($operation -ne 'ProgramDefault' -and (Is-Protected $path)){throw 'System-Sammelprozess über einzelne Verbindungen verwalten.'}
-    [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation=$operation;Path=$path}))
-    Update-AccessMode;Refresh-Overview
+    $before=[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$path)
+    $reply=Send-SetupCommand ([Netzblick.SetupCommand]@{Operation=$operation;Path=$path})
+    $after=[Netzblick.SetupChanges]::CaptureProgram($reply.Config,$path)
+    Save-ProgramChange $path $before $after $(if($operation -eq 'TemporaryAllowProgram'){'10 Minuten erlaubt'}else{(Get-PermissionStatus $path).Status})
+    Update-AccessMode;Refresh-Overview;Refresh-Detail
     $script:permissionNoticeKey=[Netzblick.ProcessLineage]::Normalize($path)
     $ui.PermissionNotice.Text=([IO.Path]::GetFileName($path)+': '+(Get-PermissionStatus $path).Status+' · Änderung bestätigt.')
 }
@@ -123,6 +127,6 @@ function Refresh-ProgramSignals {
     }
     $ui.Programs.Items.Refresh();$ui.OverviewPrograms.Items.Refresh()
     $selected=$ui.Programs.SelectedItem
-    if($selected){$state=Get-PermissionStatus $selected.Path;$ui.ProgramSignal.Fill=$state.SignalColor;$ui.ProgramSignal.ToolTip=$state.SignalHint}else{$ui.ProgramSignal.Fill='#57677B';$ui.ProgramSignal.ToolTip='Kein Programm ausgewählt.'}
+    if($selected){$state=Get-PermissionStatus $selected.Path;$ui.ProgramSignal.Fill=$state.SignalColor;$ui.ProgramSignal.ToolTip=$state.SignalHint}else{$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramSignal.ToolTip='Kein Programm ausgewählt.'}
     $ui.ProgramAccessRules.IsEnabled=[bool]($selected -and [Netzblick.AccessQueue]::CanAllow($selected.Path))
 }

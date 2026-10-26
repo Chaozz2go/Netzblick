@@ -11,6 +11,7 @@ namespace Netzblick {
  public static class SetupChanges {
   public static void BlockProgram(SetupConfig config,string path){
    if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
+   config.ProgramLeases.RemoveAll(l=>ProcessLineage.Normalize(l.Path)==ProcessLineage.Normalize(path));
    string name=System.IO.Path.GetFileName(path);
    foreach(string direction in new[]{"Ausgehend","Eingehend"})Upsert(config,new SetupRule{Id=Guid.NewGuid().ToString(),Name="Gesperrt: "+name.Substring(0,Math.Min(70,name.Length)),Path=path,Direction=direction,Address="*",Protocol=0,Port=0,Action="Block"});
    config.Validate();
@@ -18,6 +19,7 @@ namespace Netzblick {
   public static void ProgramDefault(SetupConfig config,string path){
    if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
    string key=ProcessLineage.Normalize(path);
+   config.ProgramLeases.RemoveAll(l=>ProcessLineage.Normalize(l.Path)==key);
    config.WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==key);
    config.Rules.RemoveAll(r=>ProcessLineage.Normalize(r.Path)==key);
   }
@@ -26,6 +28,37 @@ namespace Netzblick {
    string name=System.IO.Path.GetFileName(path);
    foreach(string direction in new[]{"Ausgehend","Eingehend"})Upsert(config,new SetupRule{Id=Guid.NewGuid().ToString(),Name="Erlaubt: "+name.Substring(0,Math.Min(70,name.Length)),Path=path,Direction=direction,Address="*",Protocol=0,Port=0,Action="Allow"});
    config.Validate();
+  }
+  public static SetupRule CopyRule(SetupRule r){return new SetupRule{Id=r.Id,Name=r.Name,Path=r.Path,Direction=r.Direction,Address=r.Address,Action=r.Action,Protocol=r.Protocol,Port=r.Port,ExpiresUtc=r.ExpiresUtc};}
+  static SetupProgramLease CopyLease(SetupProgramLease l){return l==null?null:new SetupProgramLease{Path=l.Path,WasWatched=l.WasWatched,PreviousRules=l.PreviousRules.Select(CopyRule).ToList(),ExpiresUtc=l.ExpiresUtc};}
+  public static SetupProgramState CaptureProgram(SetupConfig config,string path){
+   if(!AccessQueue.CanAllow(path))throw new ArgumentException("Vollständiger Programmpfad fehlt.");
+   string key=ProcessLineage.Normalize(path);
+   return new SetupProgramState{Path=path,Watched=config.WatchedPaths.Any(p=>ProcessLineage.Normalize(p)==key),Rules=config.Rules.Where(r=>ProcessLineage.Normalize(r.Path)==key).Select(CopyRule).ToList(),Lease=CopyLease(config.ProgramLeases.Find(l=>ProcessLineage.Normalize(l.Path)==key))};
+  }
+  static string RulesKey(IEnumerable<SetupRule> rules){return String.Join("\n",rules.OrderBy(r=>r.Id,StringComparer.Ordinal).Select(r=>String.Join("|",new[]{r.Id,r.Name,ProcessLineage.Normalize(r.Path),r.Direction,r.Address,r.Action,r.Protocol.ToString(),r.Port.ToString(),r.ExpiresUtc.HasValue?(r.ExpiresUtc.Value.Ticks/TimeSpan.TicksPerMillisecond).ToString():""})));}
+  public static bool SameProgram(SetupProgramState a,SetupProgramState b){
+   if(a==null||b==null||ProcessLineage.Normalize(a.Path)!=ProcessLineage.Normalize(b.Path)||a.Watched!=b.Watched||RulesKey(a.Rules)!=RulesKey(b.Rules))return false;
+   if(a.Lease==null||b.Lease==null)return a.Lease==b.Lease;
+   return a.Lease.ExpiresUtc.Ticks/TimeSpan.TicksPerMillisecond==b.Lease.ExpiresUtc.Ticks/TimeSpan.TicksPerMillisecond&&a.Lease.WasWatched==b.Lease.WasWatched&&RulesKey(a.Lease.PreviousRules)==RulesKey(b.Lease.PreviousRules);
+  }
+  public static void RestoreProgram(SetupConfig config,SetupProgramState before,SetupProgramState expected,DateTime now){
+   before.Validate();expected.Validate();
+   if(!SameProgram(CaptureProgram(config,expected.Path),expected)||ProcessLineage.Normalize(before.Path)!=ProcessLineage.Normalize(expected.Path))throw new InvalidOperationException("Programmregeln wurden inzwischen geändert. Rückgängig wurde abgebrochen.");
+   ProgramDefault(config,before.Path);
+   if(before.Watched)config.WatchedPaths.Add(before.Path);
+   config.Rules.AddRange(before.Rules.Select(CopyRule));if(before.Lease!=null)config.ProgramLeases.Add(CopyLease(before.Lease));
+   config.Expire(now);config.Validate();
+  }
+  public static void TemporaryAllowProgram(SetupConfig config,string path,DateTime expires,DateTime now){
+   if(expires.Kind!=DateTimeKind.Utc||expires<=now||expires>now.AddHours(24))throw new ArgumentException("Freigabe muss innerhalb von 24 Stunden ablaufen.");
+   var before=CaptureProgram(config,path);if(before.Lease!=null)throw new InvalidOperationException("Eine zeitweise Freigabe läuft bereits. Erst beenden oder dauerhaft entscheiden.");
+   AllowProgram(config,path);
+   foreach(var r in config.Rules.Where(r=>ProcessLineage.Normalize(r.Path)==ProcessLineage.Normalize(path))){r.ExpiresUtc=expires;r.Name="Zeitweise: "+r.Name;}
+   config.ProgramLeases.Add(new SetupProgramLease{Path=path,WasWatched=before.Watched,PreviousRules=before.Rules,ExpiresUtc=expires});config.Validate();
+  }
+  public static void AssertNoProgramLease(SetupConfig config,string path){
+   if(config.ProgramLeases.Any(l=>ProcessLineage.Normalize(l.Path)==ProcessLineage.Normalize(path)))throw new InvalidOperationException("Zeitweise Freigabe aktiv. Zuerst beenden, dauerhaft erlauben oder sperren.");
   }
   public static void Upsert(SetupConfig config,SetupRule rule){
    rule.Validate();var keep=config.Rules.Where(r=>!(r.Covers(rule)&&rule.Covers(r))).ToList();
@@ -87,41 +120,72 @@ namespace Netzblick {
   public bool Covers(SetupRule other){return (Path=="*"||ProcessLineage.Normalize(Path)==ProcessLineage.Normalize(other.Path))&&Direction==other.Direction&&(Address=="*"||Address==other.Address)&&(Protocol==0||Protocol==other.Protocol)&&(Port==0||Port==other.Port);}
   public bool Matches(SetupAttempt a){return (Path=="*"||ProcessLineage.Normalize(Path)==ProcessLineage.Normalize(a.Path))&&Direction==a.Direction&&(Address=="*"||Address==a.Address)&&(Protocol==0||Protocol==a.Protocol)&&(Port==0||Port==a.Port);}
  }
+ public sealed class SetupProgramLease {
+  public string Path {get;set;} public bool WasWatched {get;set;} public List<SetupRule> PreviousRules {get;set;} public DateTime ExpiresUtc {get;set;}
+  public SetupProgramLease(){PreviousRules=new List<SetupRule>();}
+  public void Validate(){
+   if(!AccessQueue.CanAllow(Path)||ExpiresUtc.Kind!=DateTimeKind.Utc||PreviousRules==null||PreviousRules.Count>1000)throw new ArgumentException("Ungültiger Rückweg der zeitweisen Freigabe.");
+   foreach(var r in PreviousRules){if(r==null||ProcessLineage.Normalize(r.Path)!=ProcessLineage.Normalize(Path))throw new ArgumentException("Rückweg betrifft ein anderes Programm.");r.Validate();}
+  }
+ }
+ public sealed class SetupProgramState {
+  public string Path {get;set;} public bool Watched {get;set;} public List<SetupRule> Rules {get;set;} public SetupProgramLease Lease {get;set;}
+  public SetupProgramState(){Rules=new List<SetupRule>();}
+  public void Validate(){
+   if(!AccessQueue.CanAllow(Path)||Rules==null||Rules.Count>1000)throw new ArgumentException("Ungültiger Programmzustand.");
+   foreach(var r in Rules){if(r==null||ProcessLineage.Normalize(r.Path)!=ProcessLineage.Normalize(Path))throw new ArgumentException("Programmzustand enthält fremde Regeln.");r.Validate();}
+   if(Lease!=null){Lease.Validate();if(ProcessLineage.Normalize(Lease.Path)!=ProcessLineage.Normalize(Path))throw new ArgumentException("Rückweg gehört zu anderem Programm.");}
+  }
+ }
  public sealed class SetupConfig {
   public int Version {get;set;} public bool Ask {get;set;} public List<string> WatchedPaths {get;set;}
-  public List<SetupRule> Rules {get;set;}
-  public SetupConfig(){Version=1;WatchedPaths=new List<string>();Rules=new List<SetupRule>();}
+  public List<SetupRule> Rules {get;set;} public List<SetupProgramLease> ProgramLeases {get;set;}
+  public SetupConfig(){Version=1;WatchedPaths=new List<string>();Rules=new List<SetupRule>();ProgramLeases=new List<SetupProgramLease>();}
   public void Validate(){
-   if(Version!=1||WatchedPaths==null||Rules==null||WatchedPaths.Count>256||Rules.Count>1000)throw new ArgumentException("Regeldatei ungültig oder Kapazität überschritten.");
+   if(Version!=1||WatchedPaths==null||Rules==null||WatchedPaths.Count>256||Rules.Count>1000||ProgramLeases==null||ProgramLeases.Count>256)throw new ArgumentException("Regeldatei ungültig oder Kapazität überschritten.");
    foreach(string p in WatchedPaths)if(!AccessQueue.CanAllow(p))throw new ArgumentException("Ungültiger Prüfpfad.");
+   var leasePaths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+   foreach(var l in ProgramLeases){if(l==null)throw new ArgumentException("Leerer Freigabe-Rückweg.");l.Validate();if(!leasePaths.Add(ProcessLineage.Normalize(l.Path)))throw new ArgumentException("Doppelter Freigabe-Rückweg.");
+    var current=Rules.Where(r=>ProcessLineage.Normalize(r.Path)==ProcessLineage.Normalize(l.Path)).ToList();
+    if(current.Count!=2||!new[]{"Ausgehend","Eingehend"}.All(d=>current.Any(r=>r.Direction==d&&r.Action=="Allow"&&r.Address=="*"&&r.Protocol==0&&r.Port==0&&r.ExpiresUtc==l.ExpiresUtc)))throw new ArgumentException("Zeitweise Freigabe und Rückweg passen nicht zusammen.");
+   }
+   if(Rules.Count+ProgramLeases.Sum(l=>Math.Max(0,l.PreviousRules.Count-2))>1000||WatchedPaths.Count+ProgramLeases.Count(l=>l.WasWatched)>256)throw new ArgumentException("Kapazität für den gespeicherten Freigabe-Rückweg überschritten.");
    var ids=new HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var r in Rules){if(r==null)throw new ArgumentException("Leere Regel.");r.Validate();if(!ids.Add(r.Id))throw new ArgumentException("Doppelte Regel-ID.");}
   }
-  public int Expire(DateTime utc){return Rules.RemoveAll(r=>r.ExpiresUtc.HasValue&&r.ExpiresUtc.Value<=utc);}
+  public int Expire(DateTime utc){
+   int changed=0;
+   foreach(var l in ProgramLeases.Where(l=>l.ExpiresUtc<=utc).ToList()){
+    string key=ProcessLineage.Normalize(l.Path);Rules.RemoveAll(r=>ProcessLineage.Normalize(r.Path)==key);WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==key);
+    if(l.WasWatched)WatchedPaths.Add(l.Path);Rules.AddRange(l.PreviousRules.Select(SetupChanges.CopyRule));ProgramLeases.Remove(l);changed++;
+   }
+   return changed+Rules.RemoveAll(r=>r.ExpiresUtc.HasValue&&r.ExpiresUtc.Value<=utc);
+  }
  }
  public sealed class SetupAttempt {
   public string Key {get;set;} public string Path {get;set;} public string Program {get;set;} public string Address {get;set;}
   public string Direction {get;set;} public int Protocol {get;set;} public int Port {get;set;}
-  public long Count {get;set;} public DateTime FirstUtc {get;set;} public DateTime LastUtc {get;set;} public bool OwnBlock {get;set;}
+  public long Count {get;set;} public DateTime FirstUtc {get;set;} public DateTime LastUtc {get;set;} public bool OwnBlock {get;set;} public ulong FilterId {get;set;} public string BlockReason {get;set;}
   public string Target {get{return Address+" · "+SetupRule.ProtocolName(Protocol)+(Port>0?" "+Port:"");}}
-  public string Evidence {get{return OwnBlock?"Netzblick-Filter bestätigt":"Windows-Blockereignis; andere Sperre möglich";}}
+  public string Evidence {get{return !String.IsNullOrEmpty(BlockReason)?BlockReason:OwnBlock?"Netzblick-Filter bestätigt; Regelname nicht aufgezeichnet":"Windows-Blockereignis; Filtername nicht aufgezeichnet";}}
  }
  public sealed class SetupQueue {
   readonly Dictionary<string,SetupAttempt> items=new Dictionary<string,SetupAttempt>(StringComparer.OrdinalIgnoreCase);
   public long Dropped {get;private set;} public long Unknown {get;private set;}
   public void Clear(){items.Clear();Dropped=0;Unknown=0;}
-  public void Observe(BlockEvent e,bool own){
+  public void Observe(BlockEvent e,bool own){Observe(e,own,null);}
+  public void Observe(BlockEvent e,bool own,string reason){
    if(e.Direction!="Ausgehend"&&e.Direction!="Eingehend"){Unknown++;return;}
    IPAddress ip;string raw=e.Target;
    if(!IPAddress.TryParse(raw,out ip)){Unknown++;return;}if(ip.IsIPv4MappedToIPv6)ip=ip.MapToIPv4();
    int protocol=SetupRule.Number(e.Protocol),port=0;
    if(protocol==6||protocol==17){if(!Int32.TryParse(e.DestinationPort,out port)||port<1||port>65535){Unknown++;return;}}
    string path=e.Application??"",address=ip.ToString();
-   string key=ProcessLineage.Normalize(path)+"|"+e.Direction+"|"+address+"|"+protocol+"|"+port;
+   string key=ProcessLineage.Normalize(path)+"|"+e.Direction+"|"+address+"|"+protocol+"|"+port+"|"+e.FilterId+"|"+own;
    SetupAttempt a;if(!items.TryGetValue(key,out a)){
     if(items.Count>=512){Dropped++;return;}
-    a=new SetupAttempt{Key=key,Path=path,Program=e.Program,Address=address,Protocol=protocol,Port=port,Direction=e.Direction,FirstUtc=e.TimeUtc,LastUtc=e.TimeUtc};items.Add(key,a);
+    a=new SetupAttempt{Key=key,Path=path,Program=e.Program,Address=address,Protocol=protocol,Port=port,Direction=e.Direction,FirstUtc=e.TimeUtc,LastUtc=e.TimeUtc,FilterId=e.FilterId,BlockReason=reason};items.Add(key,a);
    }
-   a.Count++;if(e.TimeUtc>=a.LastUtc){a.LastUtc=e.TimeUtc;a.OwnBlock=own;}
+   a.Count++;if(e.TimeUtc>=a.LastUtc){a.LastUtc=e.TimeUtc;a.OwnBlock=own;a.BlockReason=reason;}
   }
   public List<SetupAttempt> Snapshot(){return items.Values.OrderByDescending(a=>a.LastUtc).ToList();}
  }
@@ -133,6 +197,7 @@ namespace Netzblick {
  public sealed class SetupCommand {
   public string Operation {get;set;} public bool Enabled {get;set;} public string Path {get;set;}
   public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
+  public SetupProgramState BeforeProgram {get;set;} public SetupProgramState ExpectedProgram {get;set;}
  }
 }
 

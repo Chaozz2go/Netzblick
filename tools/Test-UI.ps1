@@ -18,6 +18,9 @@ foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Upd
 }
 function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
+. (Join-Path $appRoot 'src\ThemeMode.ps1')
+. (Join-Path $appRoot 'src\WorkspaceMode.ps1')
+. (Join-Path $appRoot 'src\ActivityReview.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
 . (Join-Path $appRoot 'src\PermissionMode.ps1')
 . (Join-Path $appRoot 'src\ProgramCatalog.ps1')
@@ -38,6 +41,8 @@ function Add-Event($kind,$program,$detail){}
 function Show-NetzblickWindow {}
 function Show-Panel($name){$script:lastPanel=$name}
 function Refresh-Detail {}
+. (Join-Path $appRoot 'src\EndpointNames.ps1')
+Initialize-BlockDetails
 $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';Rows=@()})
 $ui.Programs.ItemsSource=$allProgramItems
 Initialize-ReviewMode
@@ -94,18 +99,36 @@ $catalogStatus=[Netzblick.SetupStatus]@{Ok=$true;Verified=$true;Config=(New-Obje
 [Netzblick.SetupChanges]::BlockProgram($catalogStatus.Config,$testExe)
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].Observed -or $catalog[0].Rows.Count -or $catalog[0].BlockCount){throw 'Gespeicherte Sperre verschwindet ohne Socket oder erfindet einen Versuch.'}
-$a=[Netzblick.SetupAttempt]@{Key='blocked-only';Path=$testExe;Program='BlockedOnly.exe';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
+$a=[Netzblick.SetupAttempt]@{FilterId=101;BlockReason='Netzblick-Regel: Fixture-Sperre';Key='blocked-only';Path=$testExe;Program='BlockedOnly.exe';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
 $catalogStatus.Attempts.Add($a)
-$b=[Netzblick.SetupAttempt]@{Key='second-target';Path=$testExe.ToUpperInvariant();Program='BlockedOnly.exe';Direction='Ausgehend';Address='8.8.8.8';Protocol=17;Port=53;Count=2;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
+$b=[Netzblick.SetupAttempt]@{FilterId=102;BlockReason='Windows-Netzwerkfilter: Fixture-Fremdfilter';Key='second-target';Path=$testExe.ToUpperInvariant();Program='BlockedOnly.exe';Direction='Ausgehend';Address='8.8.8.8';Protocol=17;Port=53;Count=2;OwnBlock=$true;LastUtc=[datetime]::UtcNow;FirstUtc=[datetime]::UtcNow}
 $catalogStatus.Attempts.Add($b)
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5 -or -not $catalog[0].Observed -or $catalog[0].BlockSummary -notlike '5 blockierte Versuche*'){throw 'Blockversuche ohne Socket fehlen oder doppelte Programmpfade.'}
 $blockRows=@(Get-ProgramBlockRows $testExe $catalogStatus)
 if($blockRows.Count -ne 2 -or $blockRows[0].State -notlike '*3 Versuche*' -or $blockRows[0].Remote -notlike '*1.1.1.1*'){throw 'Blockierte Ziele/Zähler fehlen in den Programmdetails.'}
+$ui.Connections.ItemsSource=$blockRows;$ui.Connections.SelectedIndex=0;Show-ConnectionDetails
+if($ui.BlockReasonText.Text -notlike '*Fixture-Sperre*' -or $ui.BlockReasonText.Text -notlike '*1.1.1.1*'){throw 'Sperrgrund/Ziel nicht direkt sichtbar.'}
+$ui.Connections.SelectedIndex=1;Show-ConnectionDetails
+if($ui.BlockReasonText.Text -notlike '*Fixture-Fremdfilter*'){throw 'Fremder Sperrgrund nicht sichtbar.'}
 # Feed the actual Activity/Programs data bindings with only block evidence.
 $script:setupStatus=$catalogStatus;$script:allProgramItems=$catalog;$ui.Programs.ItemsSource=$catalog;Refresh-Overview;Refresh-ProgramSignals
+# Execute the production detail renderer, not the fixture's earlier stub.
+$parseTokens=$null;$parseErrors=$null
+$appAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $appRoot 'Netzblick.ps1'),[ref]$parseTokens,[ref]$parseErrors)
+$detailFunction=$appAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Refresh-Detail'},$true)
+if(-not $detailFunction -or $parseErrors.Count){throw 'Produktive Programmdetailfunktion konnte nicht geladen werden.'}
+Invoke-Expression $detailFunction.Extent.Text
+function Draw-Map($program,$displayRows){}
+Open-ProgramBlocks $testExe
+if($ui.Connections.Items.Count -ne 2 -or @($ui.Connections.Items | Where-Object {-not $_.IsBlock}).Count -or $ui.BlockReasonText.Text -notmatch 'Fixture-(Sperre|Fremdfilter)'){throw ('Produktive Detailansicht: Zeilen='+$ui.Connections.Items.Count+'; Auswahl='+$ui.Connections.SelectedItem.BlockReason+'; Detail='+$ui.BlockReasonText.Text)}
+if(-not $ui.OnlyProgramBlocks.IsChecked -or $ui.ProgramDetailTabs.SelectedIndex -ne 1 -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
+$ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
 $catalogStatus.Config.Rules.Clear()
+Refresh-Detail
+if($ui.ProgramExplanation.Text -notlike '*Standardmodus*' -or $ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or @($ui.Connections.Items | Where-Object IsBlock).Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
+function Refresh-Detail {}
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5){throw 'Freigabe entfernt historische Blockversuche.'}
 $catalogStatus.Attempts.Clear()
@@ -114,6 +137,54 @@ if(@(Get-ProgramCatalog @() @() @() $catalogStatus @()).Count){throw 'Leere Quel
 $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';Rows=@()})
 $ui.Programs.ItemsSource=$allProgramItems
 Write-Output 'PASS: gespeicherte gesperrte App und echte Blockereignis-Fixtures ohne Socket in Aktivität/Programme; Ziel, Anzahl, Zeitpunkt, keine erfundenen Verbindungen.'
+# Central-list filtering and saved theme preference are separate from policy.
+Save-ReviewDecision $testExe
+$ui.OverviewFilter.SelectedIndex=2;Refresh-Overview
+if($ui.OverviewPrograms.Items.Count){throw 'Zu-prüfen-Filter enthält bereits geprüfte App.'}
+$ui.OverviewFilter.SelectedIndex=0;$ui.OverviewSearch.Text='does-not-exist';Refresh-Overview
+if($ui.OverviewPrograms.Items.Count -or $ui.ProgramListEmpty.Text -notlike '*Keine Programme*'){throw 'Zentrale Suche/Leerzustand fehlt.'}
+$ui.OverviewSearch.Text='';Refresh-Overview
+Initialize-Theme
+$ui.ThemeToggle.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+$savedTheme=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if(-not $darkMode -or -not $savedTheme.DarkMode -or $window.Resources['Text'].Color.ToString() -ne '#FFE8EFF8' -or (Get-PermissionStatus $testExe).SignalColor -ne '#70DCB4'){throw 'Dark Mode oder gespeicherte Einstellung fehlerhaft.'}
+Set-NetzblickTheme $false;Save-UserState
+if($window.Resources['Text'].Color.ToString() -ne '#FF19283C'){throw 'Helles Design lässt sich nicht wiederherstellen.'}
+Write-Output 'PASS: zentrale Filter/Suche, gespeicherter Dark Mode, kontrastreiche Ampel und Rückkehr zu Hell.'
+# Review baseline distinguishes old denials from new attempts without changing policy.
+$script:targetLedger=@{};$script:blockBaselines=@{};$script:trafficPeers=@()
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+$attempt=[Netzblick.SetupAttempt]@{Key='review-one';Path=$testExe;Program='Test';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow}
+$setupStatus.Attempts.Add($attempt);Update-ActivityLedger
+if((Get-ProgramActivityReview $testExe).NewTargets -ne 1 -or (Get-ProgramActivityReview $testExe).NewBlocks -ne 3){throw 'Neue Ziele oder ungeprüfte Blockversuche fehlen.'}
+Save-ReviewDecision $testExe
+if((Get-ProgramActivityReview $testExe).NewTargets -or (Get-ProgramActivityReview $testExe).NewBlocks){throw 'Prüfmarke lässt alte Ereignisse neu erscheinen.'}
+$attempt.Count=5
+if((Get-ProgramActivityReview $testExe).NewBlocks -ne 2 -or (Get-TargetReviewLabel $testExe $attempt)){throw 'Wiederholter Versuch wird als neues Ziel statt neuem Versuch angezeigt.'}
+$other=[Netzblick.SetupAttempt]@{Key='review-two';Path=$testExe;Address='8.8.8.8';Protocol=17;Port=53;Count=1;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow}
+$setupStatus.Attempts.Add($other);Update-ActivityLedger
+if((Get-ProgramActivityReview $testExe).NewTargets -ne 1 -or (Get-TargetReviewLabel $testExe $other) -ne 'Neues Ziel'){throw 'Neues Ziel nach Prüfung nicht hervorgehoben.'}
+Refresh-Overview;$ui.OverviewFilter.SelectedIndex=2;Refresh-Overview
+if($ui.OverviewPrograms.Items.Count -ne 1){throw 'Bekanntes Programm mit neuem Ziel fehlt unter Zu prüfen.'}
+$ui.OverviewFilter.SelectedIndex=0;Refresh-Overview
+Save-UserState
+$activityState=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if(@($activityState.Targets).Count -ne 2 -or @($activityState.BlockBaselines).Count -ne 1){throw 'Prüfmarken nicht gespeichert.'}
+$ui.Programs.SelectedIndex=0;$ui.OverviewPrograms.SelectedIndex=0
+Initialize-QuickActions
+Set-PermissionProgram $testExe 'BlockProgram'
+$blockedBefore=[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe)
+Set-PermissionProgram $testExe 'TemporaryAllowProgram'
+if(-not $ui.OverviewQuickBlock.IsEnabled -or $ui.ProgramQuickTemporary.IsEnabled -or -not $ui.ProgramQuickUndo.IsEnabled){throw 'Direkte Aktionen berücksichtigen zeitweise Freigabe nicht.'}
+$ui.ProgramQuickUndo.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if(-not [Netzblick.SetupChanges]::SameProgram($blockedBefore,[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe))){throw 'Direktes Rückgängig stellt Programmsperre nicht wieder her.'}
+$historyCount=$changes.Count;Set-PermissionProgram $testExe 'AllowProgram'
+$change=$changes[0]
+Set-PermissionProgram $testExe 'BlockProgram'
+try{Undo-ProgramChange $change;throw 'Veraltetes Rückgängig akzeptiert.'}catch{if($_.Exception.GetBaseException().Message -notlike '*inzwischen geändert*'){throw}}
+if((Get-PermissionStatus $testExe).Category -ne 'Blocked'){throw 'Veraltetes Rückgängig verändert Zugriff.'}
+Write-Output 'PASS: direkte Programm-Aktionen, gespeichertes Rückgängig, neue Ziele und getrennte Wiederholungszähler.'
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
@@ -177,7 +248,7 @@ Write-Output 'PASS: Einzel-Socket-Kartenwechsel, Zoom/Pan-Grenzen, Prüfsperre b
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
-$renderHost.Background=$window.Background;$renderHost.Resources=$window.Resources;$renderHost.Child=$renderRoot
+$renderHost.Resources=$window.Resources;$renderHost.SetResourceReference([Windows.Controls.Border]::BackgroundProperty,'AppBg');$renderHost.Child=$renderRoot
 try{
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode
@@ -193,8 +264,14 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
- foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live')){
-  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+ foreach($darkPreview in @($false,$true)){
+ Set-NetzblickTheme $darkPreview
+ if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
+ Refresh-ProgramSignals;Refresh-Overview
+ foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+  $renderPanel=if($panelName -like 'Live*'){'Live'}else{$panelName}
+  if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
+  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $renderPanel){'Visible'}else{'Collapsed'}}
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
    [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')
@@ -209,11 +286,13 @@ try{
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
-   $file=[IO.File]::Create((Join-Path $OutputDirectory ($panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
+   $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
+ }
+ Set-NetzblickTheme $false
  if($LogPreview){
-  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Overview-1280.png')))
+  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Dark-Overview-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
  # Hide keeps both tray and process alive; complete quit closes the window.

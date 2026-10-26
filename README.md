@@ -1,6 +1,22 @@
-﻿# Netzblick 0.11.2 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.13.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
+
+## Zentrale Übersicht und Dark Mode (0.13.0)
+
+**Programme** ist die zentrale Liste. Suche über Name/Pfad und Filter **Alle Programme**, **Gesperrt**, **Zu prüfen**, **Gerade aktiv**. Aktiv bedeutet: aktuell verbundener/aufbauender TCP-Socket oder ein erfasstes Daten-/Blockereignis innerhalb der letzten 30 Sekunden; ein gespeicherter Eintrag allein gilt nicht als laufendes Programm. Die letzte Ereigniszeit wird angezeigt, soweit sie erfasst wurde.
+
+Doppelklick bzw. **Details öffnen** zeigt **Übersicht**, **Verbindungen**, **Regeln**. Ein verständlicher Satz beschreibt den aktuellen Zugriff; die aufgezeichnete letzte Sperrursache steht getrennt davon. Die Verbindungskarte ist standardmäßig eingeklappt. Regeln für das ausgewählte Programm lassen sich gezielt ansehen und zurücknehmen; globale Einträge weisen ausdrücklich auf ihre Wirkung für alle Programme hin.
+
+**☀ Hell / ☾ Dunkel** oben schaltet das Farbschema um. Dunkel ist die Vorgabe, solange noch keine eigene Farbauswahl gespeichert wurde. Die Einstellung wird mit dem Benutzerzustand gespeichert (portabel im Datenordner) und bleibt bei einem Prüf-Reset erhalten. Tabellen, Listen, Eingabefelder, Auswahlmenüs und Statusfarben verwenden dieselbe Palette. Weltkarte und Terminal behalten ihre passenden dunklen Zeichenflächen.
+
+## Warum wurde etwas blockiert? (0.12.0)
+
+Den unterstrichenen Blockzähler direkt beim Namen unter **Aktivität** anklicken oder in **Programme → Blockversuche anzeigen** wechseln. **Nur blockierte Versuche** blendet erfolgreiche Sockets und ETW-Ziele aus. Die Sperren stehen auch in der Gesamtansicht zuerst.
+
+Die ausgewählte Zeile zeigt den aufgezeichneten Sperrgrund direkt oben im rechten Bereich: Ziel, Richtung, Protokoll, Anzahl, Zeitpunkt und Windows-Filter-ID. Eigene Filter werden mit dem tatsächlich ausgelösten Netzblick-Regelnamen bzw. Prüfsperre/Nachfragemodus gespeichert. Bei anderen WFP-Filtern werden verfügbare Filter-/Ebenennamen gelesen. Ist der Filter nicht mehr verfügbar oder gibt Windows keinen Namen frei, wird die fehlende Zuordnung ausdrücklich ausgewiesen. Aus einem internen WFP-Namen folgt nicht automatisch der Name einer Windows-Benutzerregel oder eines Sicherheitsprodukts.
+
+Der grüne aktuelle Programmstatus und aufgezeichnete Sperren sind getrennt: Die Sperre kann vor einer Freigabe erfasst worden sein oder von einer anderen Netzwerksoftware stammen. Verschiedene Sperrfilter zum gleichen Ziel werden getrennt gezählt. Ein Sperrgrund ist die technische Filterentscheidung, keine Behauptung über den fachlichen Zweck einer Spotify-/Browserverbindung. Keine TLS-Entschlüsselung.
 
 ## Gesperrte Programme bleiben sichtbar (0.11.2)
 
@@ -67,8 +83,8 @@ Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldun
 
 Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-- **Portabel:** `Netzblick-Portable-0.11.2-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
-- **Installiert:** `Netzblick-Setup-0.11.2-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
+- **Portabel:** `Netzblick-Portable-0.13.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.13.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
 Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
 
@@ -154,3 +170,11 @@ GitHub: https://github.com/Chaozz2go/Netzblick. Frühere Stände und zusätzlich
 
 Genauer aktueller Prüfstand und Gerätetest: PRUEFSTAND.txt. Frühere Versionsdokumente sind historische Beschreibungen.
 
+
+
+Programm-Aktionen und Prüfmarken (0.13.0)
+- In der Liste oder Programmübersicht direkt Sperren, Erlauben, 10 Minuten erlauben oder Als geprüft markieren wählen. Aktionen betreffen neue externe Verbindungen beider Richtungen zu allen Zielen/Protokollen; Loopback bleibt ausgenommen. Vor der Änderung wird der Umfang bestätigt.
+- 10 Minuten erlauben speichert die vorherigen Programmregeln samt Prüfsperre und stellt sie nach Ablauf wieder her. Das gilt auch nach einem Dienst-/PC-Neustart; die Frist wird nicht verlängert. Dauerhaft erlauben, Sperren oder Standard ersetzt die zeitweise Entscheidung ausdrücklich. Einzelregeln währenddessen erst nach Beenden der zeitweisen Freigabe bearbeiten.
+- Rückgängig betrifft ausschließlich das jeweilige Programm. Wenn dessen Regeln inzwischen geändert wurden oder die Frist abgelaufen ist, wird ein veraltetes Rückgängig abgelehnt. Allgemeiner Nachfragemodus und andere Programme bleiben erhalten. Die letzten 20 Änderungen werden gespeichert.
+- Neues Ziel bedeutet neue Kombination aus IP-Adresse, Protokoll und Port für dieses Programm. Als geprüft markierte Ziele bleiben nach Neustart bekannt. Weitere Versuche zum selben Ziel erhöhen nur den ungeprüften Blockzähler. Dieser zählt innerhalb der aktuellen Diensterfassung; er ist kein dauerhaftes Ereignisarchiv. Frühere ungeprüfte Ziele ohne aktuelle Verbindung sind ausdrücklich als früher beobachtet gekennzeichnet.
+- Die Ziel-Prüfliste ist auf 5000 Einträge begrenzt; Block-Prüfmarken auf 2000. Alles neu prüfen leert auch diese Markierungen, behält aber die Farbauswahl.

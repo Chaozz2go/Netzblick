@@ -1,4 +1,24 @@
-﻿Netzblick 0.11.2 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.13.0 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.13.0: Eine zentrale Programmliste mit Suche, Filtern und letzter
+beobachteter Aktivität. Programmdetails in Übersicht/Verbindungen/Regeln;
+Verbindungskarte standardmäßig zugeklappt. Zustandsbeschreibung trennt
+aktuellen Zugriff und historische Blockereignisse. Dark Mode mit gemeinsamer
+Palette für XAML und dynamische Statusfarben, eigener Auswahlmenü-Vorlage und
+persistierter Einstellung. Benutzer-Reset erhält die Farbauswahl.
+WPF-Prüfungen: Such-/Prüffilter, Hell/Dunkel-Wechsel und Speicherung, Ampelkontrast,
+Sperrgrundansicht und direkte Navigation. Ansichten werden in beiden Paletten
+bei 1280x800 und 1480x920 gerendert. Normale Firewallregeln bleiben unverändert.
+
+Neu 0.12.0: Blockzähler öffnet direkt die gefilterten Blockversuche. Gespeicherte
+Filterursache, ID und letzte Zeit erscheinen pro Gegenstelle; aktueller Status
+und historische/fremde Sperren bleiben getrennt. Native Filterabfrage ist nur
+lesend, mit begrenztem Cache und explizitem unbekannten Ergebnis. Eigene
+Filternamen bleiben auch nach einer Regeländerung für verzögert eintreffende
+Ereignisse zuordenbar (begrenzt auf die letzten 4096 Filter). Die Ereignisgruppe
+enthält die Filter-ID, damit verschiedene Sperrursachen nicht vermischt werden.
+Tests prüfen eigene und fremde echte WFP-Blockereignisse mit Name/ID und die
+Anzeige von Sperrgrund, Gegenstelle und direktem Nur-Blockversuche-Weg.
 
 Korrektur 0.11.2: Programmquelle vereinigt sichtbare Sockets, ETW-Messungen,
 Prüfliste, gespeicherte Dienst-/Windows-Regeln und erfasste Blockversuche.
@@ -158,3 +178,11 @@ Gerätetest auf einem lokal bedienten Windows-Testrechner:
 Die neue Version ist erst nach diesen Gerätetests als verlässlicher
 Sicherheitsgewinn zu bewerten. Keine Sandbox, keine TLS-Inhaltsprüfung.
 
+
+
+Programm-Aktionen und Prüfmarken (0.13.0)
+- In der Liste oder Programmübersicht direkt Sperren, Erlauben, 10 Minuten erlauben oder Als geprüft markieren wählen. Aktionen betreffen neue externe Verbindungen beider Richtungen zu allen Zielen/Protokollen; Loopback bleibt ausgenommen. Vor der Änderung wird der Umfang bestätigt.
+- 10 Minuten erlauben speichert die vorherigen Programmregeln samt Prüfsperre und stellt sie nach Ablauf wieder her. Das gilt auch nach einem Dienst-/PC-Neustart; die Frist wird nicht verlängert. Dauerhaft erlauben, Sperren oder Standard ersetzt die zeitweise Entscheidung ausdrücklich. Einzelregeln währenddessen erst nach Beenden der zeitweisen Freigabe bearbeiten.
+- Rückgängig betrifft ausschließlich das jeweilige Programm. Wenn dessen Regeln inzwischen geändert wurden oder die Frist abgelaufen ist, wird ein veraltetes Rückgängig abgelehnt. Allgemeiner Nachfragemodus und andere Programme bleiben erhalten. Die letzten 20 Änderungen werden gespeichert.
+- Neues Ziel bedeutet neue Kombination aus IP-Adresse, Protokoll und Port für dieses Programm. Als geprüft markierte Ziele bleiben nach Neustart bekannt. Weitere Versuche zum selben Ziel erhöhen nur den ungeprüften Blockzähler. Dieser zählt innerhalb der aktuellen Diensterfassung; er ist kein dauerhaftes Ereignisarchiv. Frühere ungeprüfte Ziele ohne aktuelle Verbindung sind ausdrücklich als früher beobachtet gekennzeichnet.
+- Die Ziel-Prüfliste ist auf 5000 Einträge begrenzt; Block-Prüfmarken auf 2000. Alles neu prüfen leert auch diese Markierungen, behält aber die Farbauswahl.
