@@ -1,0 +1,16 @@
+name: Published update check
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/public-release-check]
+permissions:
+  contents: read
+jobs:
+  anonymous-update:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify published release through anonymous API and app updater
+        shell: powershell
+        run: ./tools/Test-PublicUpdate.ps1
