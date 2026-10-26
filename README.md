@@ -1,4 +1,4 @@
-﻿# Netzblick 0.13.0 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.14.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
 
@@ -178,3 +178,10 @@ Programm-Aktionen und Prüfmarken (0.13.0)
 - Rückgängig betrifft ausschließlich das jeweilige Programm. Wenn dessen Regeln inzwischen geändert wurden oder die Frist abgelaufen ist, wird ein veraltetes Rückgängig abgelehnt. Allgemeiner Nachfragemodus und andere Programme bleiben erhalten. Die letzten 20 Änderungen werden gespeichert.
 - Neues Ziel bedeutet neue Kombination aus IP-Adresse, Protokoll und Port für dieses Programm. Als geprüft markierte Ziele bleiben nach Neustart bekannt. Weitere Versuche zum selben Ziel erhöhen nur den ungeprüften Blockzähler. Dieser zählt innerhalb der aktuellen Diensterfassung; er ist kein dauerhaftes Ereignisarchiv. Frühere ungeprüfte Ziele ohne aktuelle Verbindung sind ausdrücklich als früher beobachtet gekennzeichnet.
 - Die Ziel-Prüfliste ist auf 5000 Einträge begrenzt; Block-Prüfmarken auf 2000. Alles neu prüfen leert auch diese Markierungen, behält aber die Farbauswahl.
+
+
+## Zeitweise Netzwerksperre (0.14.0)
+
+Programm auswählen → **Zeitweise sperren …** → 10/30/60 Minuten oder bis zur Aufhebung wählen. **Zeitweise beenden …** stellt vorherige Programmregeln wieder her; das beendet auch eine laufende zeitweise Freigabe. Der Rückweg wird mit der Konfiguration gespeichert und übersteht einen Neustart. Bei einer ausdrücklich dauerhaft gewählten Freigabe/Sperre/Standard entfällt der alte Rückweg.
+
+Die Sperre betrifft die gewählte EXE und auch ihr LAN. Bereits bestehende Verbindungen werden nicht garantiert getrennt. Für einen Offline-Test das Programm nach dem Sperren neu starten. Andere EXEs eines Pakets, etwa Hilfsprogramme, werden getrennt verwaltet.

@@ -49,7 +49,7 @@ namespace Netzblick {
    if(watch!=null){foreach(var e in watch.Drain())queue.Observe(e,gate!=null&&gate.OwnBlock(e.FilterId),gate==null?"Windows meldet eine Sperre; Filtersteuerung nicht verfügbar":gate.DescribeBlock(e.FilterId));}
    try{
     if(gate==null)throw new InvalidOperationException(problem);
-    var next=Clone(config);if(next.Expire(DateTime.UtcNow)>0){Apply(next);Log("Zeitlich begrenzte Freigabe abgelaufen");}
+    var next=Clone(config);if(next.Expire(DateTime.UtcNow)>0){Apply(next);Log("Zeitweise Entscheidung abgelaufen; vorherige Programmregeln wiederhergestellt");}
     if(recovery.HasValue&&DateTime.UtcNow>=recovery.Value){var previous=Clone(rollback);previous.Expire(DateTime.UtcNow);Apply(previous);ClearRecovery();Log("Sicherheitsrückweg: vorherige Regeln wiederhergestellt");}
     if((DateTime.UtcNow-checkedUtc).TotalSeconds>=2){gate.Verify();verified=true;problem="";checkedUtc=DateTime.UtcNow;}
    }catch(Exception e){verified=false;problem=e.Message;}
@@ -119,6 +119,12 @@ namespace Netzblick {
     case "TemporaryAllowProgram":
      if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
      command.Path=WfpGate.CanonicalPath(command.Path);SetupChanges.TemporaryAllowProgram(next,command.Path,DateTime.UtcNow.AddMinutes(10),DateTime.UtcNow);break;
+    case "TemporaryBlockProgram":
+     if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);EnsureWatch();SetupChanges.TemporaryBlockProgram(next,command.Path,command.DurationMinutes,DateTime.UtcNow);break;
+    case "EndProgramLease":
+     if(command.ExpectedProgram==null)throw new ArgumentException("Erwarteter Programmzustand fehlt.");
+     SetupChanges.EndProgramLease(next,command.Path,command.ExpectedProgram,DateTime.UtcNow);if(NeedsWatch(next))EnsureWatch();break;
     case "RestoreProgram":
      if(command.BeforeProgram==null||command.ExpectedProgram==null)throw new ArgumentException("Vorheriger Programmzustand fehlt.");
      SetupChanges.RestoreProgram(next,command.BeforeProgram,command.ExpectedProgram,DateTime.UtcNow);if(NeedsWatch(next))EnsureWatch();break;
@@ -128,7 +134,7 @@ namespace Netzblick {
    }
    try{Apply(next);}catch{if(command.Operation=="Ask"&&verified)ClearRecovery();throw;}
    if(command.Operation=="Ask"&&!command.Enabled)ClearRecovery();
-   Log(command.Operation=="TemporaryAllowProgram"?"Programm für 10 Minuten erlaubt; vorherige Regeln werden wiederhergestellt: "+command.Path:command.Operation=="RestoreProgram"?"Programmänderung rückgängig: "+command.BeforeProgram.Path:command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
+   Log(command.Operation=="TemporaryBlockProgram"?"Programm zeitweise gesperrt ("+(command.DurationMinutes==0?"bis aufgehoben":command.DurationMinutes+" Minuten")+"): "+command.Path:command.Operation=="EndProgramLease"?"Zeitweise Entscheidung beendet; vorherige Regeln wiederhergestellt: "+command.Path:command.Operation=="TemporaryAllowProgram"?"Programm für 10 Minuten erlaubt; vorherige Regeln werden wiederhergestellt: "+command.Path:command.Operation=="RestoreProgram"?"Programmänderung rückgängig: "+command.BeforeProgram.Path:command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
    return Status(true,problem);
   }
   static PipeSecurity Security(){var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid,null),PipeAccessRights.FullControl,AccessControlType.Deny));foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid,null),PipeAccessRights.FullControl,AccessControlType.Allow));return security;}

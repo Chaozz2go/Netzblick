@@ -85,6 +85,9 @@ function Update-QuickActions {
         $ui[$prefix+'QuickBlock'].IsEnabled=[bool]$ready
         $ui[$prefix+'QuickAllow'].IsEnabled=[bool]($ready -and -not $state.Legacy)
         $ui[$prefix+'QuickTemporary'].IsEnabled=[bool]($ready -and -not $state.Legacy -and -not $lease)
+        $ui[$prefix+'QuickTempBlock'].IsEnabled=[bool]($ready -and -not $lease)
+        $ui[$prefix+'QuickEndTemporary'].IsEnabled=[bool]($valid -and $script:setupStatus -and $setupStatus.Verified -and $lease)
+        $ui[$prefix+'QuickEndTemporary'].Visibility=if($lease){'Visible'}else{'Collapsed'}
         $ui[$prefix+'QuickReview'].IsEnabled=[bool]$valid
     }
     $ui.UndoNetwork.IsEnabled=$changes.Count -gt 0
@@ -94,7 +97,7 @@ function Update-QuickActions {
 }
 function Initialize-QuickActions {
     foreach($prefix in @('Overview','Program')){
-        foreach($pair in @(@('QuickBlock','BlockProgram'),@('QuickAllow','AllowProgram'),@('QuickTemporary','TemporaryAllowProgram'))){
+        foreach($pair in @(@('QuickBlock','BlockProgram'),@('QuickAllow','AllowProgram'),@('QuickTemporary','TemporaryAllowProgram'),@('QuickTempBlock','TemporaryBlockProgram'),@('QuickEndTemporary','EndProgramLease'))){
             $button=$ui[$prefix+$pair[0]];$button.Tag=[pscustomobject]@{Prefix=$prefix;Operation=$pair[1]}
             $button.Add_Click({param($sender,$e)
                 $p=if($sender.Tag.Prefix -eq 'Overview'){$ui.OverviewPrograms.SelectedItem}else{$ui.Programs.SelectedItem}
@@ -124,4 +127,21 @@ function Get-UnreviewedTargetRows([string]$path,$currentRows){
         if($entry.PathKey -ne $pathKey -or $entry.Reviewed -or -not $entry.Address -or $present.ContainsKey($entry.Key)){continue}
         [pscustomobject]@{Key=('REVIEW|'+$entry.Key);Pid='—';Protocol=[Netzblick.SetupRule]::ProtocolName([int]$(switch -Regex ([string]$entry.Protocol){'^TCP'{6;break} '^UDP'{17;break} '^ICMPv6'{58;break} '^ICMP'{1;break} default{[int]$entry.Protocol}}));Local='—';Remote=($entry.Address+':'+$entry.Port);Address=$entry.Address;Port=$entry.Port;State=('Früher beobachtet · '+([datetime]$entry.FirstUtc).ToLocalTime().ToString('dd.MM. HH:mm')+' · aktuell nicht bestätigt')}
     }
+}
+
+function New-TemporaryBlockDialog([string]$path){
+    [xml]$markup=@'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Zeitweise Netzwerksperre" Width="580" SizeToContent="Height" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI">
+ <StackPanel Margin="22"><TextBlock Text="Programm zeitweise vom Netz trennen" FontSize="21" FontWeight="SemiBold"/><TextBlock x:Name="PathLabel" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,10,0,16"/><TextBlock Text="Dauer der Sperre"/><ComboBox x:Name="Duration" SelectedIndex="0" Margin="0,7,0,14"><ComboBoxItem Content="10 Minuten" Tag="10"/><ComboBoxItem Content="30 Minuten" Tag="30"/><ComboBoxItem Content="1 Stunde" Tag="60"/><ComboBoxItem Content="Bis ich die Sperre aufhebe" Tag="0"/></ComboBox><TextBlock Text="Blockiert neue externe Verbindungen dieser EXE zu allen Zielen und Protokollen, ein- und ausgehend – auch im LAN. Localhost bleibt ausgenommen. Hilfsprogramme mit eigenem EXE-Pfad werden nicht mitgesperrt." TextWrapping="Wrap"/><TextBlock Text="Bestehende Verbindungen werden nicht garantiert beendet. Für einen sicheren Offline-Test das Programm nach Setzen der Sperre neu starten." TextWrapping="Wrap" Foreground="{DynamicResource Warning}" Margin="0,12"/><TextBlock Text="Danach oder über „Zeitweise beenden“ werden die vorherigen Programmregeln wiederhergestellt. Die Entscheidung bleibt nach einem Neustart erhalten." TextWrapping="Wrap" Foreground="{DynamicResource Muted}"/><WrapPanel HorizontalAlignment="Right" Margin="0,18,0,0"><Button x:Name="Cancel" Content="Abbrechen" IsCancel="True"/><Button x:Name="Apply" Content="Zeitweise sperren" IsDefault="True" Background="{DynamicResource DangerSoft}"/></WrapPanel></StackPanel>
+</Window>
+'@
+    $dialog=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($markup));$dialog.Resources=$window.Resources;$dialog.Owner=$window
+    $dialog.FindName('PathLabel').Text=$path
+    $dialog.FindName('Apply').Add_Click({param($sender,$e) [Windows.Window]::GetWindow($sender).DialogResult=$true})
+    return $dialog
+}
+function Show-TemporaryBlockDialog([string]$path){
+    $dialog=New-TemporaryBlockDialog $path
+    if($dialog.ShowDialog()){return [int]$dialog.FindName('Duration').SelectedItem.Tag}
+    return $null
 }

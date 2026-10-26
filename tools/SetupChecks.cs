@@ -74,6 +74,15 @@ public static class SetupChecks {
   SetupChanges.TemporaryAllowProgram(timed,app,now.AddMinutes(10),now);SetupChanges.BlockProgram(timed,app);timed.Expire(now.AddMinutes(11));
   check(ProgramPolicy.Category(timed,app)=="Blocked"&&timed.ProgramLeases.Count==0,"explicit later decision cancels timed restoration");
   var clean=new SetupConfig();SetupChanges.TemporaryAllowProgram(clean,app,now.AddMinutes(10),now);clean.Expire(now.AddMinutes(11));check(ProgramPolicy.Category(clean,app)=="Default","expiry restores default too");
+  var pause=new SetupConfig();SetupChanges.AllowProgram(pause,app);SetupChanges.BlockProgram(pause,peer);var online=SetupChanges.CaptureProgram(pause,app);
+  SetupChanges.TemporaryBlockProgram(pause,app,10,now);check(ProgramPolicy.Category(pause,app)=="Blocked"&&pause.ProgramLeases[0].EffectiveAction=="Block","temporary block replaces full allowance");
+  check(pause.Expire(now.AddMinutes(9))==0,"temporary block remains before deadline");pause.Expire(now.AddMinutes(11));
+  check(SetupChanges.SameProgram(online,SetupChanges.CaptureProgram(pause,app))&&ProgramPolicy.Category(pause,peer)=="Blocked","timed block restores exact prior allowance without changing peer");
+  SetupChanges.TemporaryBlockProgram(pause,app,0,now);check(pause.ProgramLeases[0].UntilResumed&&pause.Expire(now.AddYears(1))==0&&ProgramPolicy.Category(pause,app)=="Blocked","manual pause never expires on clock advance");
+  var paused=SetupChanges.CaptureProgram(pause,app);SetupChanges.EndProgramLease(pause,app,paused,now);check(SetupChanges.SameProgram(online,SetupChanges.CaptureProgram(pause,app)),"manual resume restores prior configuration");
+  SetupChanges.TemporaryBlockProgram(pause,app,30,now);var stalePause=SetupChanges.CaptureProgram(pause,app);SetupChanges.AllowProgram(pause,app);
+  try{SetupChanges.EndProgramLease(pause,app,stalePause,now);throw new Exception("stale pause ended");}catch(InvalidOperationException){check(ProgramPolicy.Category(pause,app)=="Allowed","stale resume cannot override later decision");}
+  try{SetupChanges.TemporaryBlockProgram(pause,app,7,now);throw new Exception("invalid duration");}catch(ArgumentException){count++;}
   return count;
  }
 }

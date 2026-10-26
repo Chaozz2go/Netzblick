@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.13.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.14.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -286,9 +286,7 @@ try {
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
-        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab','UpdatesTab')){$ui[$tab].Background=(Get-ThemeColor '#EDF2F6')}
-        $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} default{'LiveTab'}}
-        $ui[$activeTab].Background=(Get-ThemeColor '#DDF0F2')
+        Set-NavigationTheme $name
         foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
