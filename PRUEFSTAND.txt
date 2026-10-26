@@ -178,3 +178,11 @@ Gerätetest auf einem lokal bedienten Windows-Testrechner:
 Die neue Version ist erst nach diesen Gerätetests als verlässlicher
 Sicherheitsgewinn zu bewerten. Keine Sandbox, keine TLS-Inhaltsprüfung.
 
+
+
+Programm-Aktionen und Prüfmarken (0.13.0)
+- In der Liste oder Programmübersicht direkt Sperren, Erlauben, 10 Minuten erlauben oder Als geprüft markieren wählen. Aktionen betreffen neue externe Verbindungen beider Richtungen zu allen Zielen/Protokollen; Loopback bleibt ausgenommen. Vor der Änderung wird der Umfang bestätigt.
+- 10 Minuten erlauben speichert die vorherigen Programmregeln samt Prüfsperre und stellt sie nach Ablauf wieder her. Das gilt auch nach einem Dienst-/PC-Neustart; die Frist wird nicht verlängert. Dauerhaft erlauben, Sperren oder Standard ersetzt die zeitweise Entscheidung ausdrücklich. Einzelregeln währenddessen erst nach Beenden der zeitweisen Freigabe bearbeiten.
+- Rückgängig betrifft ausschließlich das jeweilige Programm. Wenn dessen Regeln inzwischen geändert wurden oder die Frist abgelaufen ist, wird ein veraltetes Rückgängig abgelehnt. Allgemeiner Nachfragemodus und andere Programme bleiben erhalten. Die letzten 20 Änderungen werden gespeichert.
+- Neues Ziel bedeutet neue Kombination aus IP-Adresse, Protokoll und Port für dieses Programm. Als geprüft markierte Ziele bleiben nach Neustart bekannt. Weitere Versuche zum selben Ziel erhöhen nur den ungeprüften Blockzähler. Dieser zählt innerhalb der aktuellen Diensterfassung; er ist kein dauerhaftes Ereignisarchiv. Frühere ungeprüfte Ziele ohne aktuelle Verbindung sind ausdrücklich als früher beobachtet gekennzeichnet.
+- Die Ziel-Prüfliste ist auf 5000 Einträge begrenzt; Block-Prüfmarken auf 2000. Alles neu prüfen leert auch diese Markierungen, behält aber die Farbauswahl.

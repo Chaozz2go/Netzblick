@@ -26,6 +26,9 @@ function Update-ProgramPresentation($program){
     $attempts=@(if($script:setupStatus){$setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key}})
     $count=[long]0;foreach($a in $attempts){$count+=$a.Count}
     $last=$attempts | Sort-Object LastUtc -Descending | Select-Object -First 1
+    $lease=$setupStatus.Config.ProgramLeases | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key} | Select-Object -First 1
+    if($lease){$sentence+=' Zeitweise bis '+$lease.ExpiresUtc.ToLocalTime().ToString('HH:mm:ss')+'; danach gelten wieder die vorherigen Regeln.'}
+    $ui.ProgramActivityReview.Text=(Get-ProgramActivityReview $program.Path).Summary
     $ui.ProgramExplanation.Text=$sentence
     $ui.ProgramShortState.Text=$state.Status+' · '+$(if($newPrograms -and $newPrograms.ContainsKey($program.Key)){'noch zu prüfen'}else{'beobachtet'})
     if($last){
@@ -37,7 +40,8 @@ function Update-ProgramPresentation($program){
     $ui.ProgramRules.SelectedItem=$rules | Where-Object {$_.Id -eq $selected} | Select-Object -First 1
     $legacy=@($script:ownRules | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key})
     $ui.ProgramRulesHint.Text=if($legacy.Count){'Zusätzlich '+$legacy.Count+' ältere Netzblick-Windows-Regeln. Unter Übersicht → Ältere Windows-Regeln verwalten ansehen.'}elseif(-not $rules.Count){'Keine eigenen Einzelregeln oder Prüfsperren für dieses Programm. Es gilt der allgemeine Modus.'}else{'Einträge mit „Alle Programme“ wirken über dieses Programm hinaus. Eine Einzel-Freigabe hebt andere Sperren nicht automatisch auf.'}
-    $ui.ProgramRuleRemove.IsEnabled=[bool]($ui.ProgramRules.SelectedItem -and $script:setupStatus -and $setupStatus.Verified)
+    $ui.ProgramRuleRemove.IsEnabled=[bool]($ui.ProgramRules.SelectedItem -and $script:setupStatus -and $setupStatus.Verified -and -not $lease)
+    Update-QuickActions
 }
 function Initialize-WorkspaceMode {
     $ui.BackToPrograms.Add_Click({Show-Panel 'OverviewPanel'})

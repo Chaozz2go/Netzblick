@@ -43,7 +43,7 @@ namespace Netzblick {
    try{SetupChanges.Commit(config,next,gate.Replace,Save);config=next;verified=true;problem="";}
    catch(SetupChangeFailure e){verified=e.Restored;if(!verified)problem=e.Message;throw;}
   }
-  bool NeedsWatch(SetupConfig value){return observeWindowsBlocks||value.Ask||value.WatchedPaths.Count>0||value.Rules.Any(r=>r.Action=="Block");}
+  bool NeedsWatch(SetupConfig value){return observeWindowsBlocks||value.Ask||value.WatchedPaths.Count>0||value.Rules.Any(r=>r.Action=="Block")||value.ProgramLeases.Any(l=>l.WasWatched||l.PreviousRules.Any(r=>r.Action=="Block"));}
   void EnsureWatch(){if(watch==null)watch=AccessWatch.Start();if(!watch.Healthy)throw new InvalidOperationException(watch.Warning);}
   void Tick(){
    if(watch!=null){foreach(var e in watch.Drain())queue.Observe(e,gate!=null&&gate.OwnBlock(e.FilterId),gate==null?"Windows meldet eine Sperre; Filtersteuerung nicht verfügbar":gate.DescribeBlock(e.FilterId));}
@@ -97,14 +97,14 @@ namespace Netzblick {
      }
      next.Ask=command.Enabled;break;
     case "Watch":
-     EnsureWatch();
+     SetupChanges.AssertNoProgramLease(next,command.Path);EnsureWatch();
      if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
      command.Path=WfpGate.CanonicalPath(command.Path);
      if(next.Rules.Any(r=>r.Action=="Allow"&&(r.Path=="*"||ProcessLineage.Normalize(r.Path)==ProcessLineage.Normalize(command.Path))))throw new InvalidOperationException("Zuerst bestehende Freigaben dieses Programms unter Regeln zurücknehmen.");
      if(!next.WatchedPaths.Any(p=>ProcessLineage.Normalize(p)==ProcessLineage.Normalize(command.Path)))next.WatchedPaths.Add(command.Path);break;
-    case "Unwatch":next.WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==ProcessLineage.Normalize(command.Path));break;
+    case "Unwatch":SetupChanges.AssertNoProgramLease(next,command.Path);next.WatchedPaths.RemoveAll(p=>ProcessLineage.Normalize(p)==ProcessLineage.Normalize(command.Path));break;
     case "Rule":
-     if(command.Rule==null)throw new ArgumentException("Regel fehlt.");command.Rule.Validate();
+     if(command.Rule==null)throw new ArgumentException("Regel fehlt.");command.Rule.Validate();SetupChanges.AssertNoProgramLease(next,command.Rule.Path);
      if(command.Rule.Path!="*"&&!File.Exists(command.Rule.Path))throw new ArgumentException("Programm existiert nicht mehr.");
      if(command.Rule.Path!="*")command.Rule.Path=WfpGate.CanonicalPath(command.Rule.Path);
      if(command.Rule.ExpiresUtc.HasValue&&(command.Rule.ExpiresUtc<=DateTime.UtcNow||command.Rule.ExpiresUtc>DateTime.UtcNow.AddHours(24)))throw new ArgumentException("Temporäre Regel muss innerhalb der nächsten 24 Stunden ablaufen.");
@@ -116,13 +116,19 @@ namespace Netzblick {
     case "AllowProgram":
      if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
      command.Path=WfpGate.CanonicalPath(command.Path);SetupChanges.AllowProgram(next,command.Path);break;
+    case "TemporaryAllowProgram":
+     if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
+     command.Path=WfpGate.CanonicalPath(command.Path);SetupChanges.TemporaryAllowProgram(next,command.Path,DateTime.UtcNow.AddMinutes(10),DateTime.UtcNow);break;
+    case "RestoreProgram":
+     if(command.BeforeProgram==null||command.ExpectedProgram==null)throw new ArgumentException("Vorheriger Programmzustand fehlt.");
+     SetupChanges.RestoreProgram(next,command.BeforeProgram,command.ExpectedProgram,DateTime.UtcNow);if(NeedsWatch(next))EnsureWatch();break;
     case "ProgramDefault":SetupChanges.ProgramDefault(next,command.Path);break;
-    case "Remove":if(next.Rules.RemoveAll(r=>r.Id==command.RuleId)==0)throw new ArgumentException("Regel nicht gefunden.");break;
+    case "Remove":var removed=next.Rules.Find(r=>r.Id==command.RuleId);if(removed!=null)SetupChanges.AssertNoProgramLease(next,removed.Path);if(next.Rules.RemoveAll(r=>r.Id==command.RuleId)==0)throw new ArgumentException("Regel nicht gefunden.");break;
     default:throw new ArgumentException("Unbekannter Befehl.");
    }
    try{Apply(next);}catch{if(command.Operation=="Ask"&&verified)ClearRecovery();throw;}
    if(command.Operation=="Ask"&&!command.Enabled)ClearRecovery();
-   Log(command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
+   Log(command.Operation=="TemporaryAllowProgram"?"Programm für 10 Minuten erlaubt; vorherige Regeln werden wiederhergestellt: "+command.Path:command.Operation=="RestoreProgram"?"Programmänderung rückgängig: "+command.BeforeProgram.Path:command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
    return Status(true,problem);
   }
   static PipeSecurity Security(){var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid,null),PipeAccessRights.FullControl,AccessControlType.Deny));foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid,null),PipeAccessRights.FullControl,AccessControlType.Allow));return security;}

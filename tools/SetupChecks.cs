@@ -58,6 +58,22 @@ public static class SetupChecks {
   check(causes.Snapshot().Count==2,"different causal filters never overwrite same target history");
   check(causes.Snapshot().Find(x=>x.FilterId==101).Evidence=="Netzblick-Regel: Test-Sperre","captured rule name survives later policy changes");
   check(!causes.Snapshot().Find(x=>x.FilterId==102).OwnBlock,"foreign source is separate from own permission");
+  var timed=new SetupConfig{Ask=true};SetupChanges.BlockProgram(timed,app);timed.WatchedPaths.Add(app);SetupChanges.BlockProgram(timed,peer);
+  var original=SetupChanges.CaptureProgram(timed,app);var otherState=SetupChanges.CaptureProgram(timed,peer);
+  SetupChanges.TemporaryAllowProgram(timed,app,now.AddMinutes(10),now);
+  check(ProgramPolicy.Category(timed,app)=="Allowed"&&timed.ProgramLeases.Count==1,"temporary allow overrides own block and watch");
+  var temporary=SetupChanges.CaptureProgram(timed,app);
+  try{SetupChanges.AssertNoProgramLease(timed,app);throw new Exception("temporary rules editable");}catch(InvalidOperationException){count++;}
+  check(timed.Expire(now.AddMinutes(9))==0,"temporary grant remains until deadline");
+  timed.Expire(now.AddMinutes(11));check(SetupChanges.SameProgram(original,SetupChanges.CaptureProgram(timed,app)),"expiry restores exact prior denies/watch and IDs");
+  check(SetupChanges.SameProgram(otherState,SetupChanges.CaptureProgram(timed,peer))&&timed.Ask,"expiry preserves other programs and general mode");
+  SetupChanges.AllowProgram(timed,app);var expected=SetupChanges.CaptureProgram(timed,app);
+  SetupChanges.RestoreProgram(timed,original,expected,now);check(SetupChanges.SameProgram(original,SetupChanges.CaptureProgram(timed,app)),"scoped undo restores prior policy");
+  SetupChanges.AllowProgram(timed,app);expected=SetupChanges.CaptureProgram(timed,app);SetupChanges.BlockProgram(timed,app);
+  try{SetupChanges.RestoreProgram(timed,original,expected,now);throw new Exception("stale undo accepted");}catch(InvalidOperationException){check(ProgramPolicy.Category(timed,app)=="Blocked","stale undo never overwrites newer policy");}
+  SetupChanges.TemporaryAllowProgram(timed,app,now.AddMinutes(10),now);SetupChanges.BlockProgram(timed,app);timed.Expire(now.AddMinutes(11));
+  check(ProgramPolicy.Category(timed,app)=="Blocked"&&timed.ProgramLeases.Count==0,"explicit later decision cancels timed restoration");
+  var clean=new SetupConfig();SetupChanges.TemporaryAllowProgram(clean,app,now.AddMinutes(10),now);clean.Expire(now.AddMinutes(11));check(ProgramPolicy.Category(clean,app)=="Default","expiry restores default too");
   return count;
  }
 }

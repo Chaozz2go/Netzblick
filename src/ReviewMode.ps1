@@ -1,6 +1,6 @@
 ﻿function Normalize-ReviewPath([string]$path){return [Netzblick.ProcessLineage]::Normalize($path)}
 function Save-ReviewDecision([string]$path){
-    $key=Normalize-ReviewPath $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
+    $key=Normalize-ReviewPath $path;Mark-ProgramActivityReviewed $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
 }
 function Show-ReviewProgram([string]$path){
     Show-NetzblickWindow;$ui.Search.Text='';$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel'
@@ -12,7 +12,7 @@ function Block-ReviewProgram([string]$path){
     try{
         if(Is-Protected $path){throw 'System-Sammelprozesse bitte über Einrichten & testen gezielt bewerten.'}
         if(-not $script:setupStatus -or -not $setupStatus.Verified){throw 'Filtersteuerung nicht bestätigt. Keine Sperre als erfolgreich gemeldet.'}
-        [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$path}))
+        Set-PermissionProgram $path 'BlockProgram'
         Update-AccessMode;Refresh-Overview
         $ui.UserNotice.Text='Externe neue Verbindungen für '+[IO.Path]::GetFileName($path)+' gesperrt. Bereits übertragene Daten werden nicht zurückgenommen.'
         Add-Event 'Programm gesperrt' ([IO.Path]::GetFileName($path)) 'Ein- und ausgehend; Loopback bleibt ausgenommen. Regeln unter Einrichten & testen.'

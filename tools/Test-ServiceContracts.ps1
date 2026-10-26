@@ -16,3 +16,20 @@ if($roundTrip.Rules[0].Name -ne $rule.Name -or $roundTrip.Rules[0].ExpiresUtc.Ki
 $stream=New-Object IO.MemoryStream
 try{[Netzblick.SetupWire]::Write($stream,$json);$stream.Position=0;if([Netzblick.SetupWire]::Read($stream) -ne $json){throw 'Nachrichtenrahmen verändert.'}}finally{$stream.Dispose()}
 Write-Output 'PASS: realer JSON-/UTC-Vertrag und Nachrichtenrahmen. Keine Dienst-/Firewalländerungen.'
+
+
+# The saved restoration plan must survive real Framework JSON and a restart after expiry.
+$path='C:\Test\timed.exe';$config=New-Object Netzblick.SetupConfig
+[Netzblick.SetupChanges]::BlockProgram($config,$path);$config.WatchedPaths.Add($path)
+$before=[Netzblick.SetupChanges]::CaptureProgram($config,$path)
+[Netzblick.SetupChanges]::TemporaryAllowProgram($config,$path,[datetime]::UtcNow.AddMinutes(10),[datetime]::UtcNow)
+$json=[Netzblick.SetupWire]::Json().Serialize($config)
+$reloaded=$closed.Invoke([Netzblick.SetupWire]::Json(),@($json));$reloaded.Validate()
+$expected=[Netzblick.SetupChanges]::CaptureProgram($reloaded,$path)
+if(-not [Netzblick.SetupChanges]::SameProgram([Netzblick.SetupChanges]::CaptureProgram($config,$path),$expected)){throw 'Zeitweise Freigabe verliert Genauigkeit über JSON.'}
+[void]$reloaded.Expire([datetime]::UtcNow.AddMinutes(11))
+if(-not [Netzblick.SetupChanges]::SameProgram($before,[Netzblick.SetupChanges]::CaptureProgram($reloaded,$path))){throw 'Neustart nach Frist stellt vorherige Regeln nicht wieder her.'}
+$oldJson='{"Version":1,"Ask":false,"WatchedPaths":[],"Rules":[]}'
+$old=$closed.Invoke([Netzblick.SetupWire]::Json(),@($oldJson));$old.Validate()
+if($null -eq $old.ProgramLeases){throw 'Alte Regeldatei nicht kompatibel.'}
+Write-Output 'PASS: zeitweise Programmfreigabe, JSON-Uhrzeit, Rückweg nach Neustart und alte Regeldateien.'

@@ -72,6 +72,7 @@ try {
 
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
     . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
+    . (Join-Path $appRoot 'src\ActivityReview.ps1')
     . (Join-Path $appRoot 'src\VisualModes.ps1')
     . (Join-Path $appRoot 'src\InspectionMode.ps1')
     . (Join-Path $appRoot 'src\UserModes.ps1')
@@ -172,7 +173,7 @@ try {
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
-        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Draw-Map $null @();return}
+        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Update-QuickActions;Draw-Map $null @();return}
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
@@ -182,10 +183,11 @@ try {
         $ui.ShowProgramBlocks.Content='Blockversuche anzeigen ('+$blockRows.Count+' Ziele / Filter)';$ui.ShowProgramBlocks.IsEnabled=$blockRows.Count -gt 0
         $ui.ProgramBlockHint.Text=if($blockRows.Count){'Erfasste Sperren seit Dienststart. Aktuell: '+$signal.Status+'. Ein erlaubtes Programm kann frühere oder fremde Sperren in der Liste haben.'}else{'Keine erfassten Blockversuche für dieses Programm. Das beweist keinen fehlenden Netzwerkzugriff.'}
         if($ui.OnlyProgramBlocks.IsChecked){$displayRows=$blockRows}else{$displayRows=@($blockRows)+@($displayRows)}
+        if(-not $ui.OnlyProgramBlocks.IsChecked){$displayRows+=@(Get-UnreviewedTargetRows $program.Path $displayRows)}
         $endpointIndex=0
         $displayRows=@($displayRows | ForEach-Object {
             $endpointIndex++
-            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
+            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;TargetReview=(Get-TargetReviewLabel $program.Path $_);IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
         })
         $ui.Connections.ItemsSource=$displayRows
         $restore=$displayRows | Where-Object {$_.Key -eq $socketKey} | Select-Object -First 1
@@ -342,6 +344,7 @@ try {
     $script:programCatalogReady=$true
     Initialize-AccessMode
     Initialize-ReviewMode
+    Initialize-QuickActions
     Initialize-BlockDetails
     Initialize-Updates
     $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})

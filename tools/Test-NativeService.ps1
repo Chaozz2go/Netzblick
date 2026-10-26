@@ -72,6 +72,16 @@ try{
     if(@($standard.Config.Rules | Where-Object {$_.Path -eq $fixture}).Count -or -not (Connect-Fixture)){throw 'Programmstandard entfernt eigene Freigaben nicht.'}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
     if(Connect-Fixture){throw 'Erneutes Sperren nach Programmfreigabe wirkungslos.'}
+    $prior=[Netzblick.SetupChanges]::CaptureProgram((Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})).Config,$fixture)
+    $temporary=Send-Control ([Netzblick.SetupCommand]@{Operation='TemporaryAllowProgram';Path=$fixture})
+    if($temporary.Config.ProgramLeases.Count -ne 1 -or -not (Connect-Fixture)){throw 'Zeitweise Programmfreigabe lässt neue TCP-Verbindung nicht zu.'}
+    $expected=[Netzblick.SetupChanges]::CaptureProgram($temporary.Config,$fixture)
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='RestoreProgram';BeforeProgram=$prior;ExpectedProgram=$expected}))
+    if(Connect-Fixture){throw 'Programm-Rückgängig stellt echte TCP-Sperre nicht wieder her.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='AllowProgram';Path=$fixture}))
+    $stale=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='RestoreProgram';BeforeProgram=$prior;ExpectedProgram=$expected})
+    if($stale.Ok -or -not (Connect-Fixture)){throw 'Veraltetes Rückgängig überschreibt neuere Entscheidung.'}
+    Write-Output 'PASS: echte TCP-Freigabe für 10 Minuten, scoped Rückgängig und Ablehnung veralteter Zustände.'
     Write-Output 'PASS: Programm erlauben entfernt Sperren und Prüfsperre atomar; Standard entfernt eigene Freigaben; erneute echte TCP-Sperre bestätigt.'
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'})
     if($fresh.Config.Ask -or $fresh.Config.Rules.Count -or $fresh.Config.WatchedPaths.Count -or $fresh.Attempts.Count){throw 'Reset lässt alte Regeln oder Ereignisse stehen.'}

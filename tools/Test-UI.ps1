@@ -20,6 +20,7 @@ function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
+. (Join-Path $appRoot 'src\ActivityReview.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
 . (Join-Path $appRoot 'src\PermissionMode.ps1')
 . (Join-Path $appRoot 'src\ProgramCatalog.ps1')
@@ -149,6 +150,37 @@ if(-not $darkMode -or -not $savedTheme.DarkMode -or $window.Resources['Text'].Co
 Set-NetzblickTheme $false;Save-UserState
 if($window.Resources['Text'].Color.ToString() -ne '#FF19283C'){throw 'Helles Design lässt sich nicht wiederherstellen.'}
 Write-Output 'PASS: zentrale Filter/Suche, gespeicherter Dark Mode, kontrastreiche Ampel und Rückkehr zu Hell.'
+# Review baseline distinguishes old denials from new attempts without changing policy.
+$script:targetLedger=@{};$script:blockBaselines=@{};$script:trafficPeers=@()
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+$attempt=[Netzblick.SetupAttempt]@{Key='review-one';Path=$testExe;Program='Test';Direction='Ausgehend';Address='1.1.1.1';Protocol=6;Port=443;Count=3;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow}
+$setupStatus.Attempts.Add($attempt);Update-ActivityLedger
+if((Get-ProgramActivityReview $testExe).NewTargets -ne 1 -or (Get-ProgramActivityReview $testExe).NewBlocks -ne 3){throw 'Neue Ziele oder ungeprüfte Blockversuche fehlen.'}
+Save-ReviewDecision $testExe
+if((Get-ProgramActivityReview $testExe).NewTargets -or (Get-ProgramActivityReview $testExe).NewBlocks){throw 'Prüfmarke lässt alte Ereignisse neu erscheinen.'}
+$attempt.Count=5
+if((Get-ProgramActivityReview $testExe).NewBlocks -ne 2 -or (Get-TargetReviewLabel $testExe $attempt)){throw 'Wiederholter Versuch wird als neues Ziel statt neuem Versuch angezeigt.'}
+$other=[Netzblick.SetupAttempt]@{Key='review-two';Path=$testExe;Address='8.8.8.8';Protocol=17;Port=53;Count=1;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow}
+$setupStatus.Attempts.Add($other);Update-ActivityLedger
+if((Get-ProgramActivityReview $testExe).NewTargets -ne 1 -or (Get-TargetReviewLabel $testExe $other) -ne 'Neues Ziel'){throw 'Neues Ziel nach Prüfung nicht hervorgehoben.'}
+Save-UserState
+$activityState=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if(@($activityState.Targets).Count -ne 2 -or @($activityState.BlockBaselines).Count -ne 1){throw 'Prüfmarken nicht gespeichert.'}
+$ui.Programs.SelectedIndex=0;$ui.OverviewPrograms.SelectedIndex=0
+Initialize-QuickActions
+Set-PermissionProgram $testExe 'BlockProgram'
+$blockedBefore=[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe)
+Set-PermissionProgram $testExe 'TemporaryAllowProgram'
+if(-not $ui.OverviewQuickBlock.IsEnabled -or $ui.ProgramQuickTemporary.IsEnabled -or -not $ui.ProgramQuickUndo.IsEnabled){throw 'Direkte Aktionen berücksichtigen zeitweise Freigabe nicht.'}
+$ui.ProgramQuickUndo.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if(-not [Netzblick.SetupChanges]::SameProgram($blockedBefore,[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$testExe))){throw 'Direktes Rückgängig stellt Programmsperre nicht wieder her.'}
+$historyCount=$changes.Count;Set-PermissionProgram $testExe 'AllowProgram'
+$change=$changes[0]
+Set-PermissionProgram $testExe 'BlockProgram'
+try{Undo-ProgramChange $change;throw 'Veraltetes Rückgängig akzeptiert.'}catch{if($_.Exception.GetBaseException().Message -notlike '*inzwischen geändert*'){throw}}
+if((Get-PermissionStatus $testExe).Category -ne 'Blocked'){throw 'Veraltetes Rückgängig verändert Zugriff.'}
+Write-Output 'PASS: direkte Programm-Aktionen, gespeichertes Rückgängig, neue Ziele und getrennte Wiederholungszähler.'
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
@@ -232,8 +264,10 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live')){
-  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
+ foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+  $renderPanel=if($panelName -like 'Live*'){'Live'}else{$panelName}
+  if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
+  foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $renderPanel){'Visible'}else{'Collapsed'}}
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
    [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')

@@ -84,9 +84,9 @@ function Save-UserState {
     param([switch]$ThrowOnError)
     try{
         [void][IO.Directory]::CreateDirectory($userStateDirectory)
-        $state=@{Version=2;NotifyObserved=$script:notifyObserved;DarkMode=[bool]$script:darkMode;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray())}
+        $state=@{Version=2;NotifyObserved=$script:notifyObserved;DarkMode=[bool]$script:darkMode;Pending=@($script:newPrograms.Values);Seen=@($knownPrograms.Keys | Select-Object -First 10000);Changes=@($changes.ToArray());Targets=@($script:targetLedger.Values);BlockBaselines=@($script:blockBaselines.Values)}
         $temp=$userStateFile+'.tmp'
-        [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($temp,($state | ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
         if([IO.File]::Exists($userStateFile)){[IO.File]::Replace($temp,$userStateFile,($userStateFile+'.bak'))}else{[IO.File]::Move($temp,$userStateFile)}
     }catch{if($ThrowOnError){throw};$ui.UserNotice.Text='Einstellungen konnten nicht gespeichert werden: '+$_.Exception.Message}
 }
@@ -95,14 +95,21 @@ function Initialize-UserModes {
     $script:knownPrograms=@{};$script:newPrograms=@{};$script:notifyObserved=$true;$script:darkMode=$true;$script:traffic=$null;$script:trafficProblem=''
     $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow
     $script:sessionStartedUtc=[datetime]::UtcNow;$script:userBaseline=$false
+    $script:targetLedger=@{};$script:blockBaselines=@{};$script:targetReviewCounts=$null
     $script:userStateDirectory=Join-Path $env:LOCALAPPDATA 'Netzblick';$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
     if($StateDirectory){$script:userStateDirectory=$StateDirectory;$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'}
     try{
-        if([IO.File]::Exists($userStateFile) -and (Get-Item -LiteralPath $userStateFile).Length -lt 2000000){
+        if([IO.File]::Exists($userStateFile) -and (Get-Item -LiteralPath $userStateFile).Length -lt 4000000){
             $saved=Get-Content -LiteralPath $userStateFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach($entry in @($saved.Targets | Select-Object -First 5000)){
+                if($entry.Key -is [string] -and $entry.Key.Length -lt 32768 -and $entry.PathKey -is [string] -and [Netzblick.AccessQueue]::CanAllow($entry.PathKey)){$targetLedger[$entry.Key]=[pscustomobject]@{Key=$entry.Key;PathKey=$entry.PathKey;Address=$entry.Address;Protocol=$entry.Protocol;Port=[int]$entry.Port;Reviewed=[bool]$entry.Reviewed;FirstUtc=$entry.FirstUtc}}
+            }
+            foreach($entry in @($saved.BlockBaselines | Select-Object -First 2000)){
+                if($entry.Key -is [string] -and $entry.Epoch -is [string] -and $entry.Count -ge 0){$blockBaselines[$entry.Key]=$entry}
+            }
             if($saved.DarkMode -is [bool]){$script:darkMode=$saved.DarkMode}
             foreach($path in @($saved.Seen)){if($path -is [string] -and $path.Length -lt 32768){$knownPrograms[$path]=$true}}
-            foreach($change in @($saved.Changes | Select-Object -First 20)){if($change.Version -eq 1 -and $change.Path -is [string] -and $change.Before -in @('Default','Private','Blocked') -and $change.After -in @('Default','Private','Blocked') -and $change.Fingerprint -is [string]){$changes.Add($change)}}
+            foreach($change in @($saved.Changes | Select-Object -First 20)){if($change.Version -eq 2 -and $change.Path -is [string] -and $change.BeforeJson -is [string] -and $change.AfterJson -is [string]){try{[void](Read-ProgramSnapshot $change.BeforeJson);[void](Read-ProgramSnapshot $change.AfterJson);$changes.Add($change)}catch{}}elseif($change.Version -eq 1 -and $change.Path -is [string] -and $change.Before -in @('Default','Private','Blocked') -and $change.After -in @('Default','Private','Blocked') -and $change.Fingerprint -is [string]){$changes.Add($change)}}
             if($null -ne $saved.NotifyObserved){$script:notifyObserved=[bool]$saved.NotifyObserved}
             foreach($pending in @($saved.Pending | Select-Object -First 1000)){
                 if($pending.Path -is [string] -and [Netzblick.AccessQueue]::CanAllow($pending.Path)){
@@ -129,6 +136,7 @@ function Initialize-UserModes {
         if($changes.Count -eq 0){return}
         $change=$changes[0]
         try{
+            if($change.Version -eq 2){Undo-ProgramChange $change;return}
             $current=@(Read-NetworkRules $change.Path)
             if((Get-NetworkFingerprint $current) -ne $change.Fingerprint){throw 'Die betroffenen Regeln haben sich seit der Änderung verändert. Rückgängig wurde zum Schutz dieser Änderung abgebrochen.'}
             Set-NetworkMode $change.Path $change.Before -NoHistory
@@ -137,7 +145,7 @@ function Initialize-UserModes {
             Refresh-Overview
         }catch{Show-Error $_.Exception.GetBaseException().Message}
     })
-    $ui.AcknowledgeNew.Add_Click({if([Windows.MessageBox]::Show($window,'Alle Einträge als geprüft markieren? Firewallregeln bleiben unverändert.','Prüfliste','YesNo','Question') -eq 'Yes'){$script:newPrograms.Clear();Save-UserState;Refresh-Overview}})
+    $ui.AcknowledgeNew.Add_Click({if([Windows.MessageBox]::Show($window,'Alle Einträge als geprüft markieren? Firewallregeln bleiben unverändert.','Prüfliste','YesNo','Question') -eq 'Yes'){foreach($p in @($script:allProgramItems)){Mark-ProgramActivityReviewed $p.Path};$script:newPrograms.Clear();Save-UserState;Refresh-Overview}})
     $ui.OverviewPrograms.Add_MouseDoubleClick({
         Open-OverviewSelection
     })
@@ -191,13 +199,15 @@ function Track-ObservedPrograms($items,[switch]$AlwaysReview) {
 }
 function Refresh-Overview {
     if(-not $script:policyReady){return}
+    Update-ActivityLedger
     $items=@()
     foreach($program in @($script:allProgramItems)){
         $sample=$trafficSamples[$program.Key]
+        $reviewActivity=Get-ProgramActivityReview $program.Path
         $signal=Get-PermissionStatus $program.Path
         $activity=Get-ProgramActivity $program $sample
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Noch zu prüfen'}else{'Beobachtet'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $oldKey=if($ui.PendingPrograms.SelectedItem){$ui.PendingPrograms.SelectedItem.Key}else{''}
     $ui.PendingPrograms.ItemsSource=@($newPrograms.Values | Sort-Object FirstUtc -Descending)
@@ -214,12 +224,13 @@ function Refresh-Overview {
     $ui.OverviewPrograms.ItemsSource=@($items | Sort-Object -Property @{Expression='New';Descending=$true},@{Expression='Volume';Descending=$true})
     if($overviewKey){$ui.OverviewPrograms.SelectedItem=$ui.OverviewPrograms.Items | Where-Object {$_.Key -eq $overviewKey} | Select-Object -First 1}
     if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
+    Update-QuickActions
     $ui.OverviewNew.Text=[string]$newPrograms.Count
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
     $ui.OverviewStatus.Foreground=if($trafficProblem){(Get-ThemeColor '#9C650A')}else{(Get-ThemeColor '#57677B')}
     if($newPrograms.Count){$ui.NewProgramsNotice.Text=($newPrograms.Count.ToString()+' Programme warten auf deine Prüfung. '+(($newPrograms.Values | Select-Object -First 5 -ExpandProperty Name)-join ', '))}else{$ui.NewProgramsNotice.Text='Prüfliste leer. Beim ersten Start werden 15 Sekunden als Ausgangsbestand erfasst.'}
     $ui.AcknowledgeNew.IsEnabled=$newPrograms.Count -gt 0
-    $ui.LastNetworkChange.Text=if($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}
+    $ui.LastNetworkChange.Text=if($changes.Count -and $changes[0].Version -eq 2){[IO.Path]::GetFileName($changes[0].Path)+': '+$changes[0].Label}elseif($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}
 }
 
 
