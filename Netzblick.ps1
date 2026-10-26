@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.12.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.13.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -70,6 +70,8 @@ try {
     $script:lastRuleRead = [datetime]::MinValue
     $script:group = 'Netzblick.Local.v1'
 
+    . (Join-Path $appRoot 'src\ThemeMode.ps1')
+    . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
     . (Join-Path $appRoot 'src\VisualModes.ps1')
     . (Join-Path $appRoot 'src\InspectionMode.ps1')
     . (Join-Path $appRoot 'src\UserModes.ps1')
@@ -115,19 +117,19 @@ try {
             $restricted = [int]$policy.LocalPolicyModifyState
             if ($disabled.Count -gt 0) {
                 $ui.FirewallStatus.Text = 'Firewall aus: '+(($disabled | ForEach-Object {$_.Name}) -join ', ')
-                $ui.FirewallStatus.Foreground = '#AF3B4B'
+                $ui.FirewallStatus.Foreground = (Get-ThemeColor '#AF3B4B')
             } elseif ($restricted -ne 0) {
                 $ui.FirewallStatus.Text = 'Firewall aktiv · lokale Regeln eingeschränkt'
-                $ui.FirewallStatus.Foreground = '#9C650A'
+                $ui.FirewallStatus.Foreground = (Get-ThemeColor '#9C650A')
             } else {
                 $ui.FirewallStatus.Text = 'Windows-Firewall aktiv'
-                $ui.FirewallStatus.Foreground = '#087F8C'
+                $ui.FirewallStatus.Foreground = (Get-ThemeColor '#087F8C')
             }
             $script:lastRuleRead = Get-Date
         } catch {
             $script:ruleError = $_.Exception.Message
             $ui.FirewallStatus.Text = 'Firewallstatus nicht verfügbar'
-            $ui.FirewallStatus.Foreground = '#9C650A'
+            $ui.FirewallStatus.Foreground = (Get-ThemeColor '#9C650A')
         }
     }
     function Is-Protected([string]$path) {
@@ -140,7 +142,7 @@ try {
         if ($value -ge 1024) { return ('{0:N1} KB/s' -f ($value/1024)) }
         return ('{0:N0} B/s' -f $value)
     }
-    function Map-Label([string]$text,[double]$x,[double]$y,[double]$width,[string]$color='#19283C',[int]$fontSize=13) {
+    function Map-Label([string]$text,[double]$x,[double]$y,[double]$width,[string]$color=(Get-ThemeColor '#19283C'),[int]$fontSize=13) {
         $label = New-Object Windows.Controls.TextBlock
         $label.Text=$text; $label.Width=$width; $label.FontSize=$fontSize; $label.Foreground=$color
         $label.TextTrimming='CharacterEllipsis'; $label.ToolTip=$text
@@ -151,26 +153,26 @@ try {
         $ui.Map.Children.Clear()
         if ($null -eq $program) { Map-Label 'Keine passenden Programme gefunden.' 20 100 550; return }
         $peers = @($sockets | Where-Object {$_.Address} | Group-Object Remote | Sort-Object Count -Descending)
-        Map-Label $program.Name 6 100 165 '#19283C' 18
-        Map-Label ($sockets.Count.ToString()+' Beobachtungen') 6 128 160 '#57677B'
-        if ($peers.Count -eq 0) { Map-Label 'Keine Gegenstelle erfasst' 230 105 350 '#57677B'; return }
+        Map-Label $program.Name 6 100 165 (Get-ThemeColor '#19283C') 18
+        Map-Label ($sockets.Count.ToString()+' Beobachtungen') 6 128 160 (Get-ThemeColor '#57677B')
+        if ($peers.Count -eq 0) { Map-Label 'Keine Gegenstelle erfasst' 230 105 350 (Get-ThemeColor '#57677B'); return }
         $limit=[Math]::Min(6,$peers.Count)
         for ($i=0;$i -lt $limit;$i++) {
             $y=18+$i*34
             $line=New-Object Windows.Shapes.Path
-            $line.Stroke='#1672B6'; $line.StrokeThickness=2
+            $line.Stroke=(Get-ThemeColor '#1672B6'); $line.StrokeThickness=2
             $line.Data=[Windows.Media.Geometry]::Parse(('M 170,120 C 235,120 250,{0} 330,{0}' -f ($y+8)))
             [void]$ui.Map.Children.Add($line)
             $label=$peers[$i].Group[0].PeerName
             if(-not $label -or $label -notlike '*(Reverse-DNS)'){$label=$peers[$i].Name}
-            Map-Label $label 342 $y 250 '#B8DAFA'
+            Map-Label $label 342 $y 250 (Get-ThemeColor '#57677B')
         }
-        if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 '#57677B' 11 }
+        if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 (Get-ThemeColor '#57677B') 11 }
     }
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
-        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill='#57677B';$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';Draw-Map $null @();return}
+        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Draw-Map $null @();return}
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
@@ -201,6 +203,7 @@ try {
         $sample=$trafficSamples[$program.Key]
         $ui.ProgramTraffic.Text=if($sample){'Seit Netzblick-Start (ETW):'+"`n↑ "+(Format-Bytes $sample.Sent)+' gesendet'+"`n↓ "+(Format-Bytes $sample.Received)+' empfangen'+"`n"+$(if($sample.RateReady){(Format-Rate $sample.SentRate)+' ↑ · '+(Format-Rate $sample.ReceivedRate)+' ↓'}else{'Rate wird ermittelt …'})}else{'Für diesen Programmpfad bisher keine Byte-Messung verfügbar.'}
         if($trafficProblem){$ui.ProgramTraffic.Text+="`nMessung eingeschränkt: "+$trafficProblem}
+        Update-ProgramPresentation $program
         Draw-Map $program $displayRows
         if($socketKey){$match=$displayRows | Where-Object {$_.Key -eq $socketKey} | Select-Object -First 1;if($match){$ui.Connections.SelectedItem=$match}}
     }
@@ -278,14 +281,14 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
-        $ui.MainShell.RowDefinitions[1].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(90)}
-        $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(42)}
-        $ui.SummaryMetrics.Visibility=if($compact){'Collapsed'}else{'Visible'}
-        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab','UpdatesTab')){$ui[$tab].Background='#EDF2F6'}
+        $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
+        $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
+        $ui.SummaryMetrics.Visibility='Collapsed'
+        foreach($tab in @('AccessTab','OverviewTab','LiveTab','InspectionTab','UpdatesTab')){$ui[$tab].Background=(Get-ThemeColor '#EDF2F6')}
         $activeTab=switch($name){'AccessPanel'{'AccessTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} default{'LiveTab'}}
-        $ui[$activeTab].Background='#DDF0F2'
+        $ui[$activeTab].Background=(Get-ThemeColor '#DDF0F2')
         foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
-        $ui.Search.Visibility=if($name -eq 'LivePanel'){'Visible'}else{'Collapsed'}
+        $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
         if($name -eq 'OverviewPanel'){Refresh-Overview}
@@ -332,6 +335,8 @@ try {
     Initialize-VisualModes
     Refresh-Rules
     Initialize-UserModes
+    Initialize-Theme
+    Initialize-WorkspaceMode
     Initialize-EndpointNames
     Initialize-InspectionMode
     $script:programCatalogReady=$true

@@ -3,7 +3,7 @@ function Save-ReviewDecision([string]$path){
     $key=Normalize-ReviewPath $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
 }
 function Show-ReviewProgram([string]$path){
-    Show-NetzblickWindow;$ui.Search.Text='';Show-Panel 'LivePanel'
+    Show-NetzblickWindow;$ui.Search.Text='';$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel'
     $key=Normalize-ReviewPath $path
     $match=$ui.Programs.Items | Where-Object {$_.Key -eq $key} | Select-Object -First 1
     if($match){$ui.Programs.SelectedItem=$match;Refresh-Detail}else{Show-Panel 'OverviewPanel';$ui.UserNotice.Text='Das Programm ist derzeit nicht erfasst. Die Prüfliste bleibt gespeichert.'}
@@ -44,7 +44,7 @@ function Refresh-ReviewPolicy {
 function Show-ObservedNotice($entry){
     if(-not $script:reviewReady -or -not $script:notifyObserved -or $script:reviewToast -or $script:SmokeTest){return}
     $script:reviewToastPath=$entry.Path
-    $toast=New-Object Windows.Window;$toast.Title='Netzblick · neues Programm';$toast.Width=440;$toast.SizeToContent='Height';$toast.ResizeMode='NoResize';$toast.WindowStyle='ToolWindow';$toast.ShowInTaskbar=$false;$toast.ShowActivated=$false;$toast.Topmost=$true;$toast.Background='#F4F7FA'
+    $toast=New-Object Windows.Window;$toast.Title='Netzblick · neues Programm';$toast.Width=440;$toast.SizeToContent='Height';$toast.ResizeMode='NoResize';$toast.WindowStyle='ToolWindow';$toast.ShowInTaskbar=$false;$toast.ShowActivated=$false;$toast.Topmost=$true;$toast.Resources=$window.Resources;$toast.Foreground=(Get-ThemeColor '#19283C');$toast.Background=(Get-ThemeColor '#F4F7FA')
     $stack=New-Object Windows.Controls.StackPanel;$stack.Margin='18'
     $title=New-Object Windows.Controls.TextBlock;$title.Text='Neues Programm: '+$entry.Name;$title.FontSize=18;$title.FontWeight='SemiBold';$title.TextWrapping='Wrap';$stack.Children.Add($title) | Out-Null
     $description=New-Object Windows.Controls.TextBlock;$description.Text=$(if($script:accessActive){'Verbindungsversuche prüfen. Freigabe ist erforderlich.'}else{'Darf zunächst kommunizieren. Jetzt Gegenstellen prüfen oder sperren.'})+[Environment]::NewLine+(Get-ReviewTargets $entry.Path);$description.Margin='0,10,0,12';$description.TextWrapping='Wrap';$stack.Children.Add($description) | Out-Null

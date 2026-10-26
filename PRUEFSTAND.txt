@@ -1,4 +1,14 @@
-﻿Netzblick 0.12.0 – EXE-Pakete (Entwicklungsversion)
+﻿Netzblick 0.13.0 – EXE-Pakete (Entwicklungsversion)
+
+Neu 0.13.0: Eine zentrale Programmliste mit Suche, Filtern und letzter
+beobachteter Aktivität. Programmdetails in Übersicht/Verbindungen/Regeln;
+Verbindungskarte standardmäßig zugeklappt. Zustandsbeschreibung trennt
+aktuellen Zugriff und historische Blockereignisse. Dark Mode mit gemeinsamer
+Palette für XAML und dynamische Statusfarben, eigener Auswahlmenü-Vorlage und
+persistierter Einstellung. Benutzer-Reset erhält die Farbauswahl.
+WPF-Prüfungen: Such-/Prüffilter, Hell/Dunkel-Wechsel und Speicherung, Ampelkontrast,
+Sperrgrundansicht und direkte Navigation. Ansichten werden in beiden Paletten
+bei 1280x800 und 1480x920 gerendert. Normale Firewallregeln bleiben unverändert.
 
 Neu 0.12.0: Blockzähler öffnet direkt die gefilterten Blockversuche. Gespeicherte
 Filterursache, ID und letzte Zeit erscheinen pro Gegenstelle; aktueller Status

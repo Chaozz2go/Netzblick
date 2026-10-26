@@ -18,6 +18,8 @@ foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Upd
 }
 function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
+. (Join-Path $appRoot 'src\ThemeMode.ps1')
+. (Join-Path $appRoot 'src\WorkspaceMode.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
 . (Join-Path $appRoot 'src\PermissionMode.ps1')
 . (Join-Path $appRoot 'src\ProgramCatalog.ps1')
@@ -119,12 +121,12 @@ Invoke-Expression $detailFunction.Extent.Text
 function Draw-Map($program,$displayRows){}
 Open-ProgramBlocks $testExe
 if($ui.Connections.Items.Count -ne 2 -or @($ui.Connections.Items | Where-Object {-not $_.IsBlock}).Count -or $ui.BlockReasonText.Text -notmatch 'Fixture-(Sperre|Fremdfilter)'){throw ('Produktive Detailansicht: Zeilen='+$ui.Connections.Items.Count+'; Auswahl='+$ui.Connections.SelectedItem.BlockReason+'; Detail='+$ui.BlockReasonText.Text)}
-if(-not $ui.OnlyProgramBlocks.IsChecked -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
+if(-not $ui.OnlyProgramBlocks.IsChecked -or $ui.ProgramDetailTabs.SelectedIndex -ne 1 -or $lastPanel -ne 'LivePanel'){throw 'Direkter Blockversuch-Weg öffnet nicht den Programmfilter.'}
 $ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
 $catalogStatus.Config.Rules.Clear()
 Refresh-Detail
-if($ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or @($ui.Connections.Items | Where-Object IsBlock).Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
+if($ui.ProgramExplanation.Text -notlike '*Standardmodus*' -or $ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or @($ui.Connections.Items | Where-Object IsBlock).Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
 function Refresh-Detail {}
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5){throw 'Freigabe entfernt historische Blockversuche.'}
@@ -134,6 +136,19 @@ if(@(Get-ProgramCatalog @() @() @() $catalogStatus @()).Count){throw 'Leere Quel
 $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';Rows=@()})
 $ui.Programs.ItemsSource=$allProgramItems
 Write-Output 'PASS: gespeicherte gesperrte App und echte Blockereignis-Fixtures ohne Socket in Aktivität/Programme; Ziel, Anzahl, Zeitpunkt, keine erfundenen Verbindungen.'
+# Central-list filtering and saved theme preference are separate from policy.
+$ui.OverviewFilter.SelectedIndex=2;Refresh-Overview
+if($ui.OverviewPrograms.Items.Count){throw 'Zu-prüfen-Filter enthält bereits geprüfte App.'}
+$ui.OverviewFilter.SelectedIndex=0;$ui.OverviewSearch.Text='does-not-exist';Refresh-Overview
+if($ui.OverviewPrograms.Items.Count -or $ui.ProgramListEmpty.Text -notlike '*Keine Programme*'){throw 'Zentrale Suche/Leerzustand fehlt.'}
+$ui.OverviewSearch.Text='';Refresh-Overview
+Initialize-Theme
+$ui.ThemeToggle.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+$savedTheme=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
+if(-not $darkMode -or -not $savedTheme.DarkMode -or $window.Resources['Text'].Color.ToString() -ne '#FFE8EFF8' -or (Get-PermissionStatus $testExe).SignalColor -ne '#70DCB4'){throw 'Dark Mode oder gespeicherte Einstellung fehlerhaft.'}
+Set-NetzblickTheme $false;Save-UserState
+if($window.Resources['Text'].Color.ToString() -ne '#FF19283C'){throw 'Helles Design lässt sich nicht wiederherstellen.'}
+Write-Output 'PASS: zentrale Filter/Suche, gespeicherter Dark Mode, kontrastreiche Ampel und Rückkehr zu Hell.'
 # Retain a fixture entry for the activity rendering.
 $entry=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';FirstUtc=[datetime]::UtcNow}
 $newPrograms[$entry.Key]=$entry;Refresh-Overview
@@ -213,6 +228,9 @@ try{
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
+ foreach($darkPreview in @($false,$true)){
+ Set-NetzblickTheme $darkPreview
+ Refresh-ProgramSignals;Refresh-Overview
  foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live')){
   foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
   if($panelName -eq 'Access'){
@@ -229,11 +247,13 @@ try{
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
-   $file=[IO.File]::Create((Join-Path $OutputDirectory ($panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
+   $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
   }
  }
+ }
+ Set-NetzblickTheme $false
  if($LogPreview){
-  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Overview-1280.png')))
+  $encoded=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $OutputDirectory 'Dark-Overview-1280.png')))
   for($i=0;$i -lt $encoded.Length;$i+=2048){Write-Output ('NETZBLICK_UI_'+$i.ToString('D7')+'='+$encoded.Substring($i,[Math]::Min(2048,$encoded.Length-$i)))}
  }
  # Hide keeps both tray and process alive; complete quit closes the window.

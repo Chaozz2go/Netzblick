@@ -76,7 +76,7 @@ function Update-AccessMode {
         $ui.AccessHeadline.Text=if(-not $accessVerified){'Filterstatus nicht bestätigt'}elseif($accessActive){'Nachfragen aktiv · unbekannte Zugriffe zunächst gesperrt'}else{'Beobachten · gezielte Einzelregeln bleiben aktiv'}
         $ui.AccessExplanation.Text=if(-not $accessVerified){$setupStatus.Error}elseif($Portable){'Portable Filtersteuerung läuft bis zum vollständigen Beenden von Netzblick. Loopback bleibt ausgenommen.'}else{'Der Hintergrunddienst arbeitet auch bei geschlossenem Fenster. Kommunikation auf diesem PC bleibt ausgenommen.'}
         $ui.AccessProof.Text='Filterprüfung: '+$setupStatus.CheckedUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$setupStatus.Warning;$ui.AccessGlobalStatus.Text=$ui.AccessHeadline.Text
-        $ui.AccessGlobalStatus.Foreground=if(-not $accessVerified -or $setupStatus.Warning){'#A4680B'}else{'#087F8C'};$script:trayStatusText=$ui.AccessHeadline.Text
+        $ui.AccessGlobalStatus.Foreground=if(-not $accessVerified -or $setupStatus.Warning){(Get-ThemeColor '#A4680B')}else{(Get-ThemeColor '#087F8C')};$script:trayStatusText=$ui.AccessHeadline.Text
         $ui.RecoveryBanner.Visibility=if($setupStatus.RecoveryUtc){'Visible'}else{'Collapsed'}
         if($setupStatus.RecoveryUtc){$seconds=[Math]::Max(0,[int]($setupStatus.RecoveryUtc-[datetime]::UtcNow).TotalSeconds);$ui.RecoveryText.Text='Sicherheitsrückweg in '+$seconds+' Sekunden. Benötigte Zugriffe testen und die Einrichtung bestätigen.'}
         $selected=$ui.AccessRequests.SelectedItem;$key=if($selected){$selected.Key}else{''};$ui.AccessRequests.ItemsSource=@($setupStatus.Attempts)

@@ -72,11 +72,11 @@ function Initialize-WorldCanvas($canvas,$overlay) {
     $canvas.Children.Clear()
     if($null -ne $worldGeometry){
         $land=New-Object Windows.Shapes.Path
-        $land.Data=$worldGeometry;$land.Fill='#213C50';$land.Stroke='#3D5C70';$land.StrokeThickness=0.65
+        $land.Data=$worldGeometry;$land.Fill=(Get-ThemeColor '#213C50');$land.Stroke=(Get-ThemeColor '#3D5C70');$land.StrokeThickness=0.65
         [void]$canvas.Children.Add($land)
     }
-    for($x=0;$x -le 1000;$x+=100){Add-VisualLine $canvas $x 0 $x 500 '#193146' 0.5}
-    for($y=0;$y -le 500;$y+=83.3333){Add-VisualLine $canvas 0 $y 1000 $y '#193146' 0.5}
+    for($x=0;$x -le 1000;$x+=100){Add-VisualLine $canvas $x 0 $x 500 (Get-ThemeColor '#193146') 0.5}
+    for($y=0;$y -le 500;$y+=83.3333){Add-VisualLine $canvas 0 $y 1000 $y (Get-ThemeColor '#193146') 0.5}
     [void]$canvas.Children.Add($overlay)
 }
 function Add-VisualLine($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$y2,[string]$color,[double]$thickness=1) {
@@ -84,7 +84,7 @@ function Add-VisualLine($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$y2,
     $line.X1=$x1;$line.Y1=$y1;$line.X2=$x2;$line.Y2=$y2;$line.Stroke=$color;$line.StrokeThickness=$thickness
     [void]$canvas.Children.Add($line)
 }
-function Add-VisualText($canvas,[string]$text,[double]$x,[double]$y,[string]$color='#B8DAFA',[double]$size=13) {
+function Add-VisualText($canvas,[string]$text,[double]$x,[double]$y,[string]$color=(Get-ThemeColor '#B8DAFA'),[double]$size=13) {
     $label=New-Object Windows.Controls.TextBlock
     $label.Text=$text;$label.Foreground=$color;$label.FontSize=$size
     [Windows.Controls.Canvas]::SetLeft($label,$x);[Windows.Controls.Canvas]::SetTop($label,$y)
@@ -121,10 +121,10 @@ function Add-CountryLine($overlay,$from,$to,[string]$color,[bool]$dashed=$false)
         [void]$overlay.Children.Add($line)
     }
 }
-function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[string]$color='#1672B6',[bool]$selectable=$false) {
+function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[string]$color=(Get-ThemeColor '#1672B6'),[bool]$selectable=$false) {
     $point=Map-Point $location
     $dot=New-Object Windows.Shapes.Ellipse
-    $dot.Width=12;$dot.Height=12;$dot.Fill=$color;$dot.Stroke='#D0EDFF';$dot.StrokeThickness=1
+    $dot.Width=12;$dot.Height=12;$dot.Fill=$color;$dot.Stroke=(Get-ThemeColor '#D0EDFF');$dot.StrokeThickness=1
     $dot.ToolTip=$tooltip;$dot.Tag=$location.Code
     [Windows.Controls.Canvas]::SetLeft($dot,$point.X-6);[Windows.Controls.Canvas]::SetTop($dot,$point.Y-6)
     if($selectable){
@@ -140,7 +140,7 @@ function Add-CountryMarker($overlay,$location,[string]$label,[string]$tooltip,[s
 }
 function Draw-Origin($overlay) {
     $origin=$ui.OriginCountry.SelectedItem
-    if($origin){Add-CountryMarker $overlay $origin ('Start: '+$origin.Code) ('Manuell gewähltes Ausgangsland: '+$origin.Name+' · keine automatische Standortmessung') '#087F8C'}
+    if($origin){Add-CountryMarker $overlay $origin ('Start: '+$origin.Code) ('Manuell gewähltes Ausgangsland: '+$origin.Name+' · keine automatische Standortmessung') (Get-ThemeColor '#087F8C')}
 }
 function Refresh-World([switch]$Rebuild) {
     try{Update-WorldCore -Rebuild:$Rebuild}catch{$ui.WorldSummary.Text='Kartenansicht konnte nicht aktualisiert werden: '+$_.Exception.GetBaseException().Message}finally{$script:worldRefreshing=$false}
@@ -175,9 +175,9 @@ function Update-WorldCore([switch]$Rebuild) {
     $origin=$ui.OriginCountry.SelectedItem
     foreach($countryGroup in $groups){
         $location=$countryGroup.Group[0].Location
-        if($origin){Add-CountryLine $ui.WorldOverlay $origin $location '#1672B6'}
+        if($origin){Add-CountryLine $ui.WorldOverlay $origin $location (Get-ThemeColor '#1672B6')}
         $tooltip=$location.Country+' · '+$countryGroup.Count+' Programm-/IP-Zuordnungen · Länderpunkt, kein Serverstandort'
-        Add-CountryMarker $ui.WorldOverlay $location ($location.Code+' · '+$countryGroup.Count) $tooltip '#1672B6' $true
+        Add-CountryMarker $ui.WorldOverlay $location ($location.Code+' · '+$countryGroup.Count) $tooltip (Get-ThemeColor '#1672B6') $true
     }
     Draw-Origin $ui.WorldOverlay
     $unplotted=@($peers | Where-Object {-not $_.Location.CanPlot}).Count
@@ -228,19 +228,19 @@ function Draw-ProbeMap {
             $responders=@($hopGroup.Group | Where-Object {$null -ne $_.Location -and $_.Location.CanPlot})
             if($responders.Count -eq 0){$previous=$null;continue}
             $point=$responders[0]
-            if($previous -and ($previousHop+1) -eq $point.Number){Add-CountryLine $ui.RouteOverlay $previous $point.Location '#9C650A' $true}
+            if($previous -and ($previousHop+1) -eq $point.Number){Add-CountryLine $ui.RouteOverlay $previous $point.Location (Get-ThemeColor '#9C650A') $true}
             $previous=$point.Location;$previousHop=$point.Number
         }
     }elseif($origin){
-        foreach($item in @($points | Group-Object Code)){Add-CountryLine $ui.RouteOverlay $origin $item.Group[0].Location '#087F8C'}
+        foreach($item in @($points | Group-Object Code)){Add-CountryLine $ui.RouteOverlay $origin $item.Group[0].Location (Get-ThemeColor '#087F8C')}
     }
     foreach($countryGroup in @($points | Group-Object Code)){
         $location=$countryGroup.Group[0].Location
         $numbers=($countryGroup.Group.Number | Select-Object -Unique)-join ','
-        Add-CountryMarker $ui.RouteOverlay $location ($location.Code+' · '+$numbers) ($location.Country+' · Probe/Hop '+$numbers+' · nur Länderzuordnung') '#9C650A'
+        Add-CountryMarker $ui.RouteOverlay $location ($location.Code+' · '+$numbers) ($location.Country+' · Probe/Hop '+$numbers+' · nur Länderzuordnung') (Get-ThemeColor '#9C650A')
     }
     if($null -ne $probeTarget -and $probeTarget.CanPlot -and @($points | Where-Object {$_.Code -eq $probeTarget.Code}).Count -eq 0){
-        Add-CountryMarker $ui.RouteOverlay $probeTarget ('Ziel: '+$probeTarget.Code) ('Aufgelöstes Ziel: '+$probeTarget.Address+' · noch keine ICMP-Antwort an diesem Länderpunkt bestätigt') '#57677B'
+        Add-CountryMarker $ui.RouteOverlay $probeTarget ('Ziel: '+$probeTarget.Code) ('Aufgelöstes Ziel: '+$probeTarget.Address+' · noch keine ICMP-Antwort an diesem Länderpunkt bestätigt') (Get-ThemeColor '#57677B')
     }
     Draw-Origin $ui.RouteOverlay
 }
@@ -252,15 +252,15 @@ function Draw-Latency {
     $max=[Math]::Max(1,[Math]::Ceiling($max*1.15))
     for($i=0;$i -le 2;$i++){
         $y=12+$i*44
-        Add-VisualLine $canvas 55 $y 980 $y '#28425A'
-        Add-VisualText $canvas (($max*(2-$i)/2).ToString('0.#')+' ms') 0 ($y-8) '#57677B' 11
+        Add-VisualLine $canvas 55 $y 980 $y (Get-ThemeColor '#28425A')
+        Add-VisualText $canvas (($max*(2-$i)/2).ToString('0.#')+' ms') 0 ($y-8) (Get-ThemeColor '#57677B') 11
     }
     $trace=$null -ne $script:probe -and $script:probe.Command.Mode -eq 'tracert'
     $slots=if($trace){30}else{10}
     $ui.LatencyTitle.Text=if($trace){'ICMP-RÜCKLAUFZEIT PRO HOP · keine Laufzeit einzelner Leitungsabschnitte'}else{'PING-ANTWORTZEITEN · Rot am unteren Rand = keine erfolgreiche Zeitmessung'}
     for($i=1;$i -le $slots;$i++){
         $x=55+($i-1)*925/($slots-1)
-        if(-not $trace -or $i -eq 1 -or $i%5 -eq 0){Add-VisualText $canvas ([string]$i) ($x-3) 111 '#57677B' 11}
+        if(-not $trace -or $i -eq 1 -or $i%5 -eq 0){Add-VisualText $canvas ([string]$i) ($x-3) 111 (Get-ThemeColor '#57677B') 11}
     }
     $last=$null
     foreach($item in $probeRows.ToArray()){
@@ -268,12 +268,12 @@ function Draw-Latency {
         if($trace){$x+=($item.Attempt-2)*3}
         if($item.HasLatency){
             $y=100-$item.Milliseconds/$max*88
-            if(-not $trace -and $last -and $last.Number -eq ($item.Number-1)){Add-VisualLine $canvas $last.X $last.Y $x $y '#087F8C' 2}
+            if(-not $trace -and $last -and $last.Number -eq ($item.Number-1)){Add-VisualLine $canvas $last.X $last.Y $x $y (Get-ThemeColor '#087F8C') 2}
             $dot=New-Object Windows.Shapes.Ellipse
-            $dot.Width=6;$dot.Height=6;$dot.Fill='#087F8C';$dot.ToolTip='Nr. '+$item.Number+' · '+$item.Address+' · '+$item.Latency+' · '+$item.Status
+            $dot.Width=6;$dot.Height=6;$dot.Fill=(Get-ThemeColor '#087F8C');$dot.ToolTip='Nr. '+$item.Number+' · '+$item.Address+' · '+$item.Latency+' · '+$item.Status
             [Windows.Controls.Canvas]::SetLeft($dot,$x-3);[Windows.Controls.Canvas]::SetTop($dot,$y-3);[void]$canvas.Children.Add($dot)
             $last=@{Number=$item.Number;X=$x;Y=$y}
-        }else{Add-VisualLine $canvas ($x-3) 97 ($x+3) 103 '#AF3B4B' 2;Add-VisualLine $canvas ($x-3) 103 ($x+3) 97 '#AF3B4B' 2;$last=$null}
+        }else{Add-VisualLine $canvas ($x-3) 97 ($x+3) 103 (Get-ThemeColor '#AF3B4B') 2;Add-VisualLine $canvas ($x-3) 103 ($x+3) 97 (Get-ThemeColor '#AF3B4B') 2;$last=$null}
     }
 }
 
