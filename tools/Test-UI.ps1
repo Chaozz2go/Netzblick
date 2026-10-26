@@ -124,7 +124,7 @@ $ui.OnlyProgramBlocks.IsChecked=$false
 if($ui.Programs.Items.Count -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].BlockSummary -notlike '5 blockierte Versuche*' -or $ui.OverviewPrograms.Items[0].SignalColor -ne '#B32D40'){throw 'Gesperrte App mit Versuchen fehlt in Aktivität/Programme.'}
 $catalogStatus.Config.Rules.Clear()
 Refresh-Detail
-if($ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or $ui.Connections.Items.Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
+if($ui.ProgramBlockHint.Text -notlike '*Windows-Standard*' -or @($ui.Connections.Items | Where-Object IsBlock).Count -ne 2){throw 'Freigabe und historische Sperrgründe werden nicht getrennt angezeigt.'}
 function Refresh-Detail {}
 $catalog=@(Get-ProgramCatalog @() @() @() $catalogStatus @())
 if($catalog.Count -ne 1 -or $catalog[0].BlockCount -ne 5){throw 'Freigabe entfernt historische Blockversuche.'}
