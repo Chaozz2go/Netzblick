@@ -212,7 +212,7 @@ Write-Output 'PASS: Einzel-Socket-Kartenwechsel, Zoom/Pan-Grenzen, Prüfsperre b
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
-$renderHost.Background=$window.Background;$renderHost.Resources=$window.Resources;$renderHost.Child=$renderRoot
+$renderHost.Resources=$window.Resources;$renderHost.SetResourceReference([Windows.Controls.Border]::BackgroundProperty,'AppBg');$renderHost.Child=$renderRoot
 try{
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode
@@ -230,6 +230,7 @@ try{
  }
  foreach($darkPreview in @($false,$true)){
  Set-NetzblickTheme $darkPreview
+ if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
  foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live')){
   foreach($n in @('Access','Overview','Updates','World','Inspection','Live')){$ui[$n+'Panel'].Visibility=if($n -eq $panelName){'Visible'}else{'Collapsed'}}
