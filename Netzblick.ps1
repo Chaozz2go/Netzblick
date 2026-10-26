@@ -29,7 +29,7 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.14.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.14.1'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
@@ -75,6 +75,7 @@ try {
     . (Join-Path $appRoot 'src\ActivityReview.ps1')
     . (Join-Path $appRoot 'src\VisualModes.ps1')
     . (Join-Path $appRoot 'src\InspectionMode.ps1')
+    . (Join-Path $appRoot 'src\FirewallNames.ps1')
     . (Join-Path $appRoot 'src\UserModes.ps1')
     . (Join-Path $appRoot 'src\EndpointNames.ps1')
     . (Join-Path $appRoot 'src\AccessMode.ps1')
@@ -103,9 +104,7 @@ try {
         $list = New-Object 'System.Collections.Generic.List[object]'
         try {
             foreach ($rule in $policy.Rules) {
-                if ($rule.Grouping -ne $group -or [string]::IsNullOrWhiteSpace($rule.ApplicationName)) { continue }
-                $base = Rule-Base $rule.ApplicationName
-                if ($rule.Name -ne ($base+'.In') -and $rule.Name -ne ($base+'.Out')) { continue }
+                if (-not (Test-OwnedNetworkRule $rule)) { continue }
                 $list.Add([pscustomobject]@{ Name=$rule.Name; Path=$rule.ApplicationName; Program=[IO.Path]::GetFileName($rule.ApplicationName); Direction=$(if($rule.Direction -eq 1){'Eingehend'}else{'Ausgehend'}); Enabled=[bool]$rule.Enabled; Action=[int]$rule.Action; Protocol=[int]$rule.Protocol; Profiles=[int]$rule.Profiles; DirectionId=[int]$rule.Direction; RemoteAddresses=[string]$rule.RemoteAddresses; LocalAddresses=[string]$rule.LocalAddresses; LocalPorts=[string]$rule.LocalPorts; RemotePorts=[string]$rule.RemotePorts; InterfaceTypes=[string]$rule.InterfaceTypes; ServiceName=[string]$rule.ServiceName; EdgeTraversal=[bool]$rule.EdgeTraversal; Interfaces=$rule.Interfaces })
             }
             $script:ownRules = @($list.ToArray())
@@ -225,11 +224,7 @@ try {
     function Remove-ProgramRules([string]$path) {
         if($script:policyReady){Set-NetworkMode $path 'Default';return}
         if($script:inspectionActive -and ($inspection.Path -eq $path -or @($inspectionNodes | Where-Object {$_.Path -eq $path}).Count -gt 0)){throw 'Diese Datei gehört zur laufenden Prüfung. Bitte zuerst die Prüfung beenden.'}
-        $base=Rule-Base $path
-        foreach($name in @(($base+'.In'),($base+'.Out'))) {
-            $owned=@($ownRules | Where-Object {$_.Name -eq $name -and $_.Path -eq $path})
-            if($owned.Count -gt 0) { $policy.Rules.Remove($name) }
-        }
+        foreach($rule in @(Read-NetworkRules $path)){$policy.Rules.Remove($rule.Name)}
         Refresh-Rules
         if ($ruleError -or @($ownRules | Where-Object {$_.Path -eq $path}).Count -gt 0) { throw 'Sperre konnte nicht vollständig entfernt werden.' }
         Add-Event 'Eigene Sperre entfernt' ([IO.Path]::GetFileName($path)) $path
@@ -238,40 +233,7 @@ try {
     function Set-ProgramBlock([string]$path) {
         if($script:policyReady){Set-NetworkMode $path 'Blocked';return}
         if(Is-Protected $path){throw 'Dieser Prozess kann nicht pauschal gesperrt werden.'}
-        $created=New-Object 'System.Collections.Generic.List[string]'
-        try {
-            Refresh-Rules
-            if($ruleError){throw $ruleError}
-            $base=Rule-Base $path
-            foreach($direction in @(1,2)) {
-                $name=$base+$(if($direction -eq 1){'.In'}else{'.Out'})
-                $existing=@($ownRules | Where-Object {$_.Name -eq $name})
-                if($existing.Count -gt 0) {
-                    if(-not $existing[0].Enabled -or $existing[0].Action -ne 0 -or $existing[0].Protocol -ne 256 -or $existing[0].Profiles -ne 2147483647 -or $existing[0].DirectionId -ne $direction){throw 'Eine eigene Regel wurde außerhalb der App verändert. Bitte zuerst in der Sperrenübersicht entfernen.'}
-                    continue
-                }
-                # Do not overwrite a rule with the same name but different ownership.
-                $collision=$null
-                try{$collision=$policy.Rules.Item($name)}catch{}
-                if($null -ne $collision){throw 'Regelname bereits belegt. Es wurden keine fremden Regeln ersetzt.'}
-                $rule=New-Object -ComObject HNetCfg.FWRule
-                $rule.Name=$name; $rule.Description='Manuell mit Netzblick gesetzte Programmsperre'
-                $rule.ApplicationName=$path; $rule.Protocol=256; $rule.Direction=$direction
-                $rule.Action=0; $rule.Profiles=2147483647; $rule.Grouping=$group; $rule.Enabled=$true
-                $policy.Rules.Add($rule); $created.Add($name)
-            }
-            Refresh-Rules
-            if($ruleError -or @($ownRules | Where-Object {$_.Path -eq $path -and $_.Enabled -and $_.Action -eq 0}).Count -ne 2){throw 'Regelüberprüfung fehlgeschlagen.'}
-            Add-Event 'Eigene Sperre gesetzt' ([IO.Path]::GetFileName($path)) $path
-            Refresh-Detail
-        } catch {
-            $reason=$_.Exception.Message
-            $rollbackErrors=@()
-            foreach($name in $created){try{$policy.Rules.Remove($name)}catch{$rollbackErrors += $_.Exception.Message}}
-            Refresh-Rules; Refresh-Detail
-            if($rollbackErrors.Count){$reason+="`nRücknahme unvollständig: "+($rollbackErrors -join '; ')}
-            throw $reason
-        }
+        Set-NetworkMode $path 'Blocked' -NoHistory
     }
     $ui.RemoveRule.Add_Click({
         $rule=$ui.Rules.SelectedItem
@@ -335,6 +297,7 @@ try {
     Initialize-VisualModes
     Refresh-Rules
     Initialize-UserModes
+    Rename-OwnedNetworkRules
     Initialize-Theme
     Initialize-WorkspaceMode
     Initialize-EndpointNames

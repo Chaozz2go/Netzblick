@@ -43,7 +43,7 @@ try{
     $evidence=$null
     for($i=0;$i -lt 20;$i++){$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});$evidence=$status.Attempts | Where-Object {$_.Path -eq $fixture -and $_.OwnBlock -and $_.Address -eq '1.1.1.1'} | Select-Object -First 1;if($evidence){break};Start-Sleep -Milliseconds 500}
     if(-not $evidence){throw 'Keine passende echte WFP-Blockmeldung angekommen.'}
-    if(-not $evidence.FilterId -or $evidence.BlockReason -notlike '*Prüfsperre*'){throw 'Eigener Filtername wurde beim realen Blockereignis nicht aufgezeichnet.'}
+    if(-not $evidence.FilterId -or $evidence.BlockReason -notlike '*Prüfsperre*' -or $evidence.BlockReason -notlike '*ConnectFixture.exe*' -or $evidence.BlockReason -notlike '*Ausgehend*'){throw 'Eigener Filtername wurde beim realen Blockereignis nicht aufgezeichnet.'}
     . (Join-Path $root 'src\ProgramCatalog.ps1')
     $blockedCatalog=@(Get-ProgramCatalog @() @() @() $status @())
     $blockedProgram=$blockedCatalog | Where-Object {$_.Path -eq $fixture} | Select-Object -First 1

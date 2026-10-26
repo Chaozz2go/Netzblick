@@ -40,6 +40,9 @@ jobs:
         if: ${{ !cancelled() && steps.service_build.outcome == 'success' }}
         shell: powershell
         run: ./tools/Test-NativeService.ps1
+      - name: Readable Windows Firewall rule names and ownership
+        shell: powershell
+        run: ./tools/Test-FirewallNames.ps1
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         if: always()
@@ -47,3 +50,4 @@ jobs:
           name: wpf-previews
           retention-days: 1
           path: tools/ui-preview/*.png
+

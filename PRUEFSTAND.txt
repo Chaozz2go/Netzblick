@@ -189,3 +189,6 @@ Programm-Aktionen und Prüfmarken (0.13.0)
 
 
 0.14.0: Regressionsprüfung der echten Show-Panel-Navigation mit mehrfachem Dunkel/Hell-Wechsel und Kontrastprüfung aller sichtbaren Menüpunkte. Zeitweise Netzwerksperren 10/30/60 Minuten und bis Aufhebung: Kernlogik, echte Framework-JSON-/Neustart-Wiederherstellung, manuelles Beenden, alte Freigaben und fremde Programmregeln. Native TCP-Fixture prüft Sperre und Freigabe nach Beenden. Bestehende Verbindungen werden weiterhin nicht garantiert getrennt; andere EXE-Pfade eines Pakets separat berücksichtigen.
+
+
+0.14.1: Windows-COM-Prüfung für lesbare Regelnamen, Migration alter eigener Regeln bei identischer Wirkung, Erhalt gültiger Rückgängig-Fingerprints, Namenskollision mit fremder Regel, idempotenten Neustart, Privatmodus und Entfernen. Extern veränderte eigene und fremde Regeln bleiben unberührt. WFP-Blockereignisse enthalten Programmname/Richtung/Prüfgrund.

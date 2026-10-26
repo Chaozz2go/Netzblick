@@ -1,8 +1,6 @@
 ﻿function Read-NetworkRules([string]$path) {
-    $base=Rule-Base $path
     foreach($rule in $policy.Rules){
-        if($rule.Name -ne ($base+'.In') -and $rule.Name -ne ($base+'.Out')){continue}
-        if($rule.Grouping -ne $group -or [Netzblick.ProcessLineage]::Normalize($rule.ApplicationName) -ne [Netzblick.ProcessLineage]::Normalize($path)){throw 'Der Regelname ist fremd belegt. Die Regel wird nicht verändert.'}
+        if(-not (Test-OwnedNetworkRule $rule $path)){continue}
         [pscustomobject]@{Name=[string]$rule.Name;Path=[string]$rule.ApplicationName;Direction=[int]$rule.Direction;DirectionId=[int]$rule.Direction;Action=[int]$rule.Action;Enabled=[bool]$rule.Enabled;Profiles=[int]$rule.Profiles;Protocol=[int]$rule.Protocol;RemoteAddresses=[string]$rule.RemoteAddresses;LocalAddresses=[string]$rule.LocalAddresses;LocalPorts=[string]$rule.LocalPorts;RemotePorts=[string]$rule.RemotePorts;InterfaceTypes=[string]$rule.InterfaceTypes;ServiceName=[string]$rule.ServiceName;EdgeTraversal=[bool]$rule.EdgeTraversal;Interfaces=$rule.Interfaces}
     }
 }
@@ -31,17 +29,18 @@ function Get-NetworkFingerprint($rules) {
     return ConvertTo-Json -InputObject $normalized -Depth 5 -Compress
 }
 function Write-NetworkMode([string]$path,[string]$mode) {
-    $base=Rule-Base $path
-    # Restrictive changes go outbound first; own rules are updated in place.
+    if($mode -ne 'Default'){foreach($direction in @(2,1)){Assert-ReadableRuleNameAvailable $path $direction $mode}}
+    # Restrictive changes go outbound first; update existing objects in place.
     foreach($direction in @(2,1)){
-        $name=$base+$(if($direction -eq 1){'.In'}else{'.Out'})
-        $existing=$null
-        foreach($candidate in $policy.Rules){if($candidate.Name -eq $name){$existing=$candidate;break}}
-        if($mode -eq 'Default'){if($existing){$policy.Rules.Remove($name)};continue}
+        $matches=@($policy.Rules | Where-Object {(Test-OwnedNetworkRule $_ $path) -and $_.Direction -eq $direction})
+        if($matches.Count -gt 1){throw 'Mehrere eigene Regeln für dieselbe Richtung. Zuerst unter Regeln prüfen.'}
+        $existing=if($matches.Count){$matches[0]}else{$null}
+        if($mode -eq 'Default'){if($existing){$policy.Rules.Remove($existing.Name)};continue}
         $scope=if($mode -eq 'Blocked'){'*'}else{[Netzblick.NetworkPolicy]::PrivateOnlyBlockScope()}
-        if($existing){$existing.RemoteAddresses=$scope;continue}
+        $name=Get-ReadableRuleName $path $direction $mode;$description=(Get-OwnedRuleMarker $path $direction)+' Programm: '+$path
+        if($existing){$existing.RemoteAddresses=$scope;$existing.Description=$description;$existing.Name=$name;continue}
         $rule=New-Object -ComObject HNetCfg.FWRule
-        $rule.Name=$name;$rule.Description='Manuell über Netzblick gesetzte Einschränkung';$rule.ApplicationName=$path
+        $rule.Name=$name;$rule.Description=$description;$rule.ApplicationName=$path
         $rule.Protocol=256;$rule.Direction=$direction;$rule.Action=0;$rule.Profiles=2147483647;$rule.Grouping=$group
         $rule.LocalAddresses='*';$rule.InterfaceTypes='All';$rule.RemoteAddresses=$scope;$rule.Enabled=$true;$policy.Rules.Add($rule)
     }
