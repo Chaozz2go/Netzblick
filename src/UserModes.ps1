@@ -32,9 +32,9 @@ function Write-NetworkMode([string]$path,[string]$mode) {
     if($mode -ne 'Default'){foreach($direction in @(2,1)){Assert-ReadableRuleNameAvailable $path $direction $mode}}
     # Restrictive changes go outbound first; update existing objects in place.
     foreach($direction in @(2,1)){
-        $matches=@($policy.Rules | Where-Object {(Test-OwnedNetworkRule $_ $path) -and $_.Direction -eq $direction})
-        if($matches.Count -gt 1){throw 'Mehrere eigene Regeln für dieselbe Richtung. Zuerst unter Regeln prüfen.'}
-        $existing=if($matches.Count){$matches[0]}else{$null}
+        $ownedMatches=@($policy.Rules | Where-Object {(Test-OwnedNetworkRule $_ $path) -and $_.Direction -eq $direction})
+        if($ownedMatches.Count -gt 1){throw 'Mehrere eigene Regeln für dieselbe Richtung. Zuerst unter Regeln prüfen.'}
+        $existing=if($ownedMatches.Count){$ownedMatches[0]}else{$null}
         if($mode -eq 'Default'){if($existing){$policy.Rules.Remove($existing.Name)};continue}
         $scope=if($mode -eq 'Blocked'){'*'}else{[Netzblick.NetworkPolicy]::PrivateOnlyBlockScope()}
         $name=Get-ReadableRuleName $path $direction $mode;$description=(Get-OwnedRuleMarker $path $direction)+' Programm: '+$path
