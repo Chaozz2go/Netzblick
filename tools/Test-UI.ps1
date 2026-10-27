@@ -332,7 +332,7 @@ Set-DesignStyle 'Future';Set-NetzblickTheme $false;Refresh-Overview
 $beforeReviewConfig=$serializer.Serialize($setupStatus.Config)
 $ui.OverviewSearch.Text='does-not-exist';$ui.ReviewOptions.IsExpanded=$true
 $ui.FutureReviewFilter.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
-if($ui.OverviewFilter.SelectedIndex -ne 2 -or $ui.OverviewSearch.Text -or $ui.ReviewOptions.IsExpanded -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewNew.Text -notlike '1 Programme*' -or $ui.NewProgramsNotice.Text -like '*leer*'){throw 'Kartenfilter/Prüfzähler widersprüchlich bei neuer Gegenstelle einer bekannten App.'}
+if($ui.OverviewFilter.SelectedIndex -ne 2 -or $ui.OverviewSearch.Text -or $ui.ReviewOptions.IsExpanded -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewNew.Text -ne '1 Programm zu prüfen' -or $ui.NewProgramsNotice.Text -like '*leer*'){throw 'Kartenfilter/Prüfzähler widersprüchlich bei neuer Gegenstelle einer bekannten App.'}
 if($ui.OverviewPrograms.SelectedItem.ReviewReason -ne '1 neues Ziel' -or $ui.ReviewListActions.Visibility -ne 'Visible'){throw 'Prüfgrund oder direkte Prüfaktionen fehlen.'}
 $ui.OverviewReviewDetails.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
 if($ui.ProgramDetailTabs.SelectedIndex -ne 1 -or -not $ui.OnlyProgramUnreviewed.IsChecked -or $ui.OnlyProgramBlocks.IsChecked -or $ui.Connections.Items.Count -ne 1 -or $ui.Connections.Items[0].TargetReview -ne 'Neues Ziel'){throw 'Prüfdetails führen nicht zur neuen Gegenstelle.'}
@@ -375,6 +375,7 @@ try{
   if($scenario -eq 3 -and $ui.SaveSetupRule.IsEnabled){throw 'Unbestätigter Zustand erlaubt Änderungen.'}
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
+   if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
@@ -404,6 +405,7 @@ try{
   $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0);$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
+   if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))

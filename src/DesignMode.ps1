@@ -61,6 +61,7 @@ function Set-DesignAppearance {
     $script:designChanging=$true
     try{$ui.DesignSelector.SelectedIndex=if($future){1}else{0}}finally{$script:designChanging=$false}
     $ui.FutureLogo.Visibility=$visible;$ui.FutureStats.Visibility=$visible;$ui.FuturePrimaryActions.Visibility=$visible;$ui.FutureConnectionCard.Visibility=$visible;$ui.ProgramInfoToggle.Visibility=$visible;$ui.ExpandProgramDetails.Visibility=$visible
+    $ui.ReviewSummaryCard.Visibility=$cleanVisible;
     $ui.BackToPrograms.Visibility=$cleanVisible;$ui.ProgramMapExpander.Visibility=$cleanVisible;$ui.OverviewQuickActions.Visibility=$cleanVisible
     if($future){$glow=[Windows.Media.Effects.DropShadowEffect]::new();$glow.Color=[Windows.Media.ColorConverter]::ConvertFromString($palette.Accent);$glow.BlurRadius=14;$glow.ShadowDepth=0;$glow.Opacity=0.35;$ui.FutureLogo.Effect=$glow}else{$ui.FutureLogo.Effect=$null}
     $ui.BrandTitle.Text=if($future){'NETZBLICK'}else{'◈ Netzblick'};$ui.BrandTitle.FontSize=if($future){19}else{24}
@@ -75,6 +76,7 @@ function Set-DesignAppearance {
     $ui.ProgramIcon.Source=Get-ApplicationIcon $(if($ui.Programs.SelectedItem){$ui.Programs.SelectedItem.Path}else{''})
     $ui.ProgramInfoGrid.Visibility=if(-not $future -or $ui.ProgramInfoToggle.IsExpanded){'Visible'}else{'Collapsed'}
     [Windows.Controls.DockPanel]::SetDock($ui.OverviewFooterButtons,$(if($future){'Top'}else{'Right'}))
+    $ui.OverviewPrograms.RowHeight=if($future){64}else{82}
     $ui.OverviewPrograms.Columns[0].MinWidth=if($future){170}else{260}
     $ui.OverviewPrograms.Columns[1].Width=[Windows.Controls.DataGridLength]::new($(if($future){135}else{155}))
     for($i=2;$i -le 5;$i++){$ui.OverviewPrograms.Columns[$i].Visibility=$cleanVisible}

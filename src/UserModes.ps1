@@ -223,6 +223,7 @@ function Refresh-Overview {
     $filter=$ui.OverviewFilter.SelectedIndex
     $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.NeedsReview) -or ($filter -eq 3 -and $_.Active)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
     $ui.ProgramListCounts.Text=$items.Count.ToString()+' von '+$allCount+' Programmen'
+    $ui.ProgramListEmpty.Visibility=if($items.Count){'Collapsed'}else{'Visible'}
     $ui.ProgramListEmpty.Text=if(-not $items.Count){'Keine Programme in dieser Auswahl. Filter oder Suche ändern.'}else{''}
     $script:overviewItemsChanging=$true
     try{
@@ -233,12 +234,15 @@ function Refresh-Overview {
     if($script:activePanel -in @('OverviewPanel','LivePanel')){Sync-FutureProgramSelection}
     if(Get-Command Refresh-Permissions -ErrorAction SilentlyContinue){Refresh-Permissions}
     Update-QuickActions
-    $ui.OverviewNew.Text=if($reviewCount){$reviewCount.ToString()+' Programme zu prüfen'}else{'Alles geprüft'}
+    $ui.OverviewNew.Text=if($reviewCount){$reviewCount.ToString()+$(if($reviewCount -eq 1){' Programm zu prüfen'}else{' Programme zu prüfen'})}else{'Alles geprüft'}
     $ui.NewProgramsNotice.Text=if($reviewCount){'Prüfgrund steht direkt beim Namen. Programm auswählen und Prüfdetails ansehen.'}else{'Keine offenen Programme, Ziele oder Blockversuche.'}
     $ui.ReviewShow.IsEnabled=$reviewCount -gt 0
     $ui.AcknowledgeNew.IsEnabled=@($items | Where-Object NeedsReview).Count -gt 0
     $ui.ReviewListActions.Visibility=if($filter -eq 2){'Visible'}else{'Collapsed'}
     $ui.ProgramListTitle.Text=switch($filter){1{'Gesperrte Programme'} 2{'Programme zu prüfen'} 3{'Gerade aktive Programme'} default{'Programme'}}
+    $ui.ProgramListHint.Text=if($filter -eq 2){'Prüfgrund direkt beim Namen · Auswahl → Prüfdetails ansehen'}else{'Ampel = aktueller Zugriff · App auswählen für Details'}
+    $ui.LastNetworkChange.Visibility=if($changes.Count){'Visible'}else{'Collapsed'}
+    $ui.UndoNetwork.Visibility=$ui.LastNetworkChange.Visibility
     Update-OverviewFilterChrome
     Update-OverviewReviewActions
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
