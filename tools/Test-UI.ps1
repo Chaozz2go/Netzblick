@@ -400,6 +400,8 @@ Reset-DashboardHistory
 for($i=0;$i -lt 61;$i++){Add-DashboardSample $now.AddSeconds(($i-61)*2) (2000000+[Math]::Abs([Math]::Sin($i/5))*6000000) (120000+[Math]::Abs([Math]::Sin($i/7))*300000) $true}
 Set-DesignStyle 'Future';Show-RealPanel 'DashboardPanel';Update-Dashboard
 if($dashboardFrame.ActiveCount -ne 5 -or $dashboardFrame.Programs.Count -ne 5 -or $ui.DashboardActiveCount.Text -ne '5' -or $ui.DashboardBlockedCount.Text -ne '2' -or @($ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]}).Count -ne 5){throw 'Dashboard zählt nicht die aktive Erfassung oder zeichnet keine anklickbaren App-Knoten.'}
+$internetNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Border] -and $_.Child -is [Windows.Controls.TextBlock] -and $_.Child.Text -eq "Internet`n2 Gegenstellen"}
+if(-not $internetNode){throw 'Internet-Ziele werden im Dashboard falsch als LAN oder nur einzeln zusammengefasst.'}
 $flowModel=$dashboardFrame.Programs | Where-Object Path -eq $testExe | Select-Object -First 1
 if($flowModel.Outgoing -ne 1 -or $flowModel.Incoming -ne 0 -or $flowModel.Rx -le $flowModel.Tx -or -not @($flowModel.Edges | Where-Object Blocked).Count){throw 'Download wird als eingehender Aufbau dargestellt oder Blockkante fehlt.'}
 $node=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -Last 1;$nodeKey=$node.Tag;$node.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))

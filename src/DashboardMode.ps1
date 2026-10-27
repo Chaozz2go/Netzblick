@@ -47,7 +47,7 @@ function Add-DashboardLabel($canvas,[string]$text,[double]$x,[double]$y,[double]
 function Add-DashboardEdge($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$y2,[string]$direction,[bool]$blocked,[double]$offset,[double]$thickness=2.2){
     $dx=$x2-$x1;$dy=$y2-$y1;$length=[Math]::Sqrt($dx*$dx+$dy*$dy);if($length -lt 1){return}
     $ux=$dx/$length;$uy=$dy/$length
-    $trimX=if([Math]::Abs($ux) -gt 0.001){68/[Math]::Abs($ux)}else{100000};$trimY=if([Math]::Abs($uy) -gt 0.001){24/[Math]::Abs($uy)}else{100000};$targetTrim=[Math]::Min($trimX,$trimY)+8
+    $trimX=if([Math]::Abs($ux) -gt 0.001){68/[Math]::Abs($ux)}else{100000};$trimY=if([Math]::Abs($uy) -gt 0.001){29/[Math]::Abs($uy)}else{100000};$targetTrim=[Math]::Min($trimX,$trimY)+8
     $a=[Windows.Point]::new(($x1+$ux*38-$uy*$offset),($y1+$uy*38+$ux*$offset));$b=[Windows.Point]::new(($x2-$ux*$targetTrim-$uy*$offset),($y2-$uy*$targetTrim+$ux*$offset))
     $role=if($blocked){'Danger'}elseif($direction -eq 'Ausgehend'){'Accent'}elseif($direction -eq 'Eingehend'){'Inbound'}else{'Muted'}
     $line=[Windows.Shapes.Line]::new();$line.X1=$a.X;$line.Y1=$a.Y;$line.X2=$b.X;$line.Y2=$b.Y;$line.Stroke=$window.Resources[$role];$line.StrokeThickness=$thickness
@@ -62,23 +62,23 @@ function Draw-DashboardNetwork {
     $canvas=$ui.DashboardNetwork;$canvas.Children.Clear();$frame=$script:dashboardFrame
     for($x=0;$x -le 960;$x+=80){$l=[Windows.Shapes.Line]::new();$l.X1=$x;$l.X2=$x;$l.Y2=520;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
     for($y=0;$y -le 520;$y+=65){$l=[Windows.Shapes.Line]::new();$l.Y1=$y;$l.Y2=$y;$l.X2=960;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
-    $pc=[Windows.Controls.Border]::new();$pc.Width=98;$pc.Height=98;$pc.CornerRadius=[Windows.CornerRadius]::new(49);$pc.Background=$window.Resources['Raised'];$pc.BorderBrush=$window.Resources['Accent'];$pc.BorderThickness='2';$label=[Windows.Controls.TextBlock]::new();$label.Text="▣`nDein PC";$label.TextAlignment='Center';$label.FontSize=20;$label.VerticalAlignment='Center';$label.Foreground=$window.Resources['Text'];$pc.Child=$label
-    [Windows.Controls.Canvas]::SetLeft($pc,431);[Windows.Controls.Canvas]::SetTop($pc,211);[void]$canvas.Children.Add($pc)
+    $pc=[Windows.Controls.Border]::new();$pc.Width=78;$pc.Height=78;$pc.CornerRadius=[Windows.CornerRadius]::new(39);$pc.Background=$window.Resources['Raised'];$pc.BorderBrush=$window.Resources['Accent'];$pc.BorderThickness='2';$label=[Windows.Controls.TextBlock]::new();$label.Text="▣`nDein PC";$label.TextAlignment='Center';$label.FontSize=20;$label.VerticalAlignment='Center';$label.Foreground=$window.Resources['Text'];$pc.Child=$label
+    [Windows.Controls.Canvas]::SetLeft($pc,441);[Windows.Controls.Canvas]::SetTop($pc,221);[void]$canvas.Children.Add($pc)
     if(-not $frame -or -not $frame.Programs.Count){Add-DashboardLabel $canvas 'Noch keine aktive Netzwerkkommunikation erfasst' 200 390 560 'Muted' 18;return}
     $index=0;$count=$frame.Programs.Count
     foreach($p in $frame.Programs){
         $angle=-[Math]::PI/2+$index*2*[Math]::PI/[Math]::Max(3,$count);$index++
-        $x=480+190*[Math]::Cos($angle);$y=260+140*[Math]::Sin($angle);$tx=480+365*[Math]::Cos($angle);$ty=260+210*[Math]::Sin($angle)
+        $x=480+145*[Math]::Cos($angle);$y=260+95*[Math]::Sin($angle);$tx=480+375*[Math]::Cos($angle);$ty=260+220*[Math]::Sin($angle)
         $spoke=[Windows.Shapes.Line]::new();$spoke.X1=480;$spoke.Y1=260;$spoke.X2=$x;$spoke.Y2=$y;$spoke.Stroke=$window.Resources['Border'];[void]$canvas.Children.Insert(0,$spoke)
-        $groups=@($p.Edges | Group-Object Direction,Blocked | Select-Object -First 4);$offset=-($groups.Count-1)*4
+        $groups=@($p.Edges | Group-Object Direction,Blocked);$offset=-($groups.Count-1)*4
         $edgeWidth=if($p.RateReady){[Math]::Min(4.5,1.5+[Math]::Log10(1+($p.Rx+$p.Tx)/1024))}else{1.5}
         foreach($g in $groups){Add-DashboardEdge $canvas $x $y $tx $ty $g.Group[0].Direction $g.Group[0].Blocked $offset $edgeWidth;$offset+=8}
         if($p.Edges.Count){
-            $targets=@($p.Edges.Address | Select-Object -Unique);$scopes=@($targets | ForEach-Object {[Netzblick.EndpointInfo]::Scope($_)})
+            $targets=@($p.Edges | ForEach-Object {$_.Address} | Select-Object -Unique);$scopes=@($targets | ForEach-Object {[Netzblick.EndpointInfo]::Scope($_)})
             $kind=if(@($scopes | Where-Object {$_ -eq 'Öffentliche / sonstige Adresse'}).Count -eq $scopes.Count){'Internet'}elseif(@($scopes | Where-Object {$_ -eq 'Öffentliche / sonstige Adresse'}).Count){'LAN / Internet'}else{'Lokal / LAN'}
-            $endpoint=[Windows.Controls.Border]::new();$endpoint.Width=136;$endpoint.Height=48;$endpoint.Background=$window.Resources['Raised'];$endpoint.BorderBrush=$window.Resources['Border'];$endpoint.BorderThickness='1';$endpoint.CornerRadius=[Windows.CornerRadius]::new(5);$endpoint.ToolTip=($p.Edges | ForEach-Object {$_.Direction+' · '+$_.Address+':'+$_.Port+$(if($_.Blocked){' · blockiert'})} | Select-Object -First 12)-join "`n"
-            $t=[Windows.Controls.TextBlock]::new();$t.Text=$kind+"`n"+$targets.Count+' Gegenstellen';$t.FontSize=13;$t.TextAlignment='Center';$t.VerticalAlignment='Center';$t.Foreground=$window.Resources['Text'];$endpoint.Child=$t
-            [Windows.Controls.Canvas]::SetLeft($endpoint,($tx-68));[Windows.Controls.Canvas]::SetTop($endpoint,($ty-24));[void]$canvas.Children.Add($endpoint)
+            $endpoint=[Windows.Controls.Border]::new();$endpoint.Width=136;$endpoint.Height=58;$endpoint.Background=$window.Resources['Raised'];$endpoint.BorderBrush=$window.Resources['Border'];$endpoint.BorderThickness='1';$endpoint.CornerRadius=[Windows.CornerRadius]::new(5);$endpoint.ToolTip=($p.Edges | ForEach-Object {$_.Direction+' · '+$_.Address+':'+$_.Port+$(if($_.Blocked){' · blockiert'})} | Select-Object -First 12)-join "`n"
+            $t=[Windows.Controls.TextBlock]::new();$t.Text=$kind+"`n"+$targets.Count+$(if($targets.Count -eq 1){' Gegenstelle'}else{' Gegenstellen'});$t.FontSize=15;$t.TextAlignment='Center';$t.VerticalAlignment='Center';$t.Foreground=$window.Resources['Text'];$endpoint.Child=$t
+            [Windows.Controls.Canvas]::SetLeft($endpoint,($tx-68));[Windows.Controls.Canvas]::SetTop($endpoint,($ty-29));[void]$canvas.Children.Add($endpoint)
         }
         $button=[Windows.Controls.Button]::new();$button.Width=66;$button.Height=66;$button.Padding='6';$button.Margin='0';$button.Background=$window.Resources['Raised'];$button.BorderBrush=$window.Resources[$(if($p.Key -eq $script:dashboardSelectedKey){'Accent'}else{'Border'})];$button.Tag=$p.Key;$button.ToolTip=$p.Name+' · '+$p.State
         $button.Template=[Windows.Markup.XamlReader]::Parse('<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="2" CornerRadius="33"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate>')
@@ -87,7 +87,7 @@ function Draw-DashboardNetwork {
         [Windows.Automation.AutomationProperties]::SetName($button,$p.Name+' auswählen')
         $button.Add_Click({param($sender,$e) $script:dashboardSelectedKey=[string]$sender.Tag;Draw-Dashboard})
         [Windows.Controls.Canvas]::SetLeft($button,($x-33));[Windows.Controls.Canvas]::SetTop($button,($y-33));[void]$canvas.Children.Add($button)
-        Add-DashboardLabel $canvas $p.Name ($x-90) ($y+36) 180 'Text' 15
+        Add-DashboardLabel $canvas $p.Name ($x-90) ($y+36) 180 'Text' 18
     }
 }
 function Draw-DashboardChart($canvas,[string]$property,[string]$role){
