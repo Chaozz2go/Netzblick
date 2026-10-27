@@ -49,6 +49,7 @@ function Update-ProgramPresentation($program){
 function Set-OverviewFilter([int]$index){
     $script:overviewFilterChanging=$true
     try{$ui.OverviewSearch.Text='';$ui.OverviewFilter.SelectedIndex=$index;$ui.ReviewOptions.IsExpanded=$false}finally{$script:overviewFilterChanging=$false}
+    if($index -eq 2){$ui.ProgramDetailTabs.SelectedIndex=0}
     $script:futureDetailFocused=$false;Show-Panel 'OverviewPanel';Refresh-Overview
     $ui.OverviewPrograms.Focus() | Out-Null
 }

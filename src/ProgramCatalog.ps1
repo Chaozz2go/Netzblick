@@ -46,11 +46,12 @@ function Get-ProgramBlockRows([string]$path,$status){
 
 function Open-ProgramBlocks([string]$path){
     Show-ReviewProgram $path
+    $ui.OnlyProgramUnreviewed.IsChecked=$false
     $ui.ProgramDetailTabs.SelectedIndex=1;$ui.OnlyProgramBlocks.IsChecked=$true;Refresh-Detail
 }
 function Initialize-BlockDetails {
     $ui.OnlyProgramBlocks.Add_Click({Refresh-Detail})
-    $ui.ShowProgramBlocks.Add_Click({if($ui.Programs.SelectedItem){$ui.ProgramDetailTabs.SelectedIndex=1;$ui.OnlyProgramBlocks.IsChecked=$true;Refresh-Detail}})
+    $ui.ShowProgramBlocks.Add_Click({if($ui.Programs.SelectedItem){$ui.OnlyProgramUnreviewed.IsChecked=$false;$ui.ProgramDetailTabs.SelectedIndex=1;$ui.OnlyProgramBlocks.IsChecked=$true;Refresh-Detail}})
     $ui.OverviewPrograms.Add_PreviewMouseLeftButtonUp({
         param($sender,$e)
         $node=$e.OriginalSource

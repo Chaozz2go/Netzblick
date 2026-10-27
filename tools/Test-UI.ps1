@@ -391,6 +391,7 @@ try{
  foreach($panelName in @('Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
+  if($panelName -eq 'Review'){Set-OverviewFilter 2}
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
   Show-RealPanel ($renderPanel+'Panel')

@@ -4,6 +4,12 @@
 
 Dieses Handbuch beschreibt die Bedienung, die Wirkung der Regeln und technische Grenzen von Netzblick 0.15.1. Die Überschriften mit Versionsnummern nennen die Einführung einer Funktion. Den aktuellen Umfang der automatisierten Windows-Prüfungen und der noch nötigen Gerätetests beschreibt [PRUEFSTAND.txt](../PRUEFSTAND.txt).
 
+## Gemeinsame Prüfliste (0.15.1)
+
+Die Zähler **Programme**, **gesperrt** und **zu prüfen** sind anklickbare Filter. Der Kartenklick entfernt eine vorherige Suche. Ein gemeinsamer Prüfstatus umfasst neue Programme, neue Ziele und neue Blockversuche. Der Grund steht direkt beim Namen in der Programmliste. **Prüfdetails ansehen** öffnet die Verbindungen mit dem Filter **Nur ungeprüfte Ziele / Versuche**. Der Filter berücksichtigt auch zusätzliche Blockversuche zu einem bereits geprüften Ziel. **Auswahl geprüft** markiert nur das gewählte Programm; **Liste geprüft …** betrifft nach Bestätigung nur die derzeit angezeigten offenen Programme. Diese Prüfmarken ändern keine Firewallregeln.
+
+Die frühere separate Auswahl für neue Programme entfällt. Erkennungseinstellungen stehen unter **Erkennung & Hinweise**. Offene historische Ziele halten beendete Apps sichtbar, ohne einen aktuell laufenden Prozess oder Socket zu behaupten.
+
 ## Zentrale Übersicht und Dark Mode (0.13.0)
 
 **Programme** ist die zentrale Liste. Suche über Name/Pfad und Filter **Alle Programme**, **Gesperrt**, **Zu prüfen**, **Gerade aktiv**. Aktiv bedeutet: aktuell verbundener/aufbauender TCP-Socket oder ein erfasstes Daten-/Blockereignis innerhalb der letzten 30 Sekunden; ein gespeicherter Eintrag allein gilt nicht als laufendes Programm. Die letzte Ereigniszeit wird angezeigt, soweit sie erfasst wurde.
