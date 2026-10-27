@@ -174,7 +174,7 @@ try {
     function Refresh-Detail {
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
-        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramRules.ItemsSource=@();Update-FutureProgramPresentation $null $null $null;Update-QuickActions;Draw-Map $null @();return}
+        if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramActivityReview.Text='';$ui.ProgramReviewDetails.Visibility='Collapsed';$ui.ProgramRules.ItemsSource=@();Update-FutureProgramPresentation $null $null $null;Update-QuickActions;Draw-Map $null @();return}
         $selected=$ui.Connections.SelectedItem;$socketKey=if($selected){$selected.Key}else{''}
         $ui.ProgramTitle.Text=$program.Name;$ui.ProgramPath.Text=$program.Path
         $signal=Get-PermissionStatus $program.Path;$ui.ProgramSignal.Fill=$signal.SignalColor;$ui.ProgramSignal.ToolTip=$signal.SignalHint;$ui.ProgramAccessRules.IsEnabled=[Netzblick.AccessQueue]::CanAllow($program.Path)
@@ -190,6 +190,7 @@ try {
             $endpointIndex++
             [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;TargetReview=(Get-TargetReviewLabel $program.Path $_);IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
         })
+        if($ui.OnlyProgramUnreviewed.IsChecked){$displayRows=@($displayRows | Where-Object TargetReview);$ui.ProgramBlockHint.Text='Ungeprüfte Ziele und neue Blockversuche: '+$displayRows.Count+'. Frühere Ziele sind ausdrücklich gekennzeichnet. Nach der Prüfung kannst du das Programm als geprüft markieren.'}
         $ui.Connections.ItemsSource=$displayRows
         $restore=$displayRows | Where-Object {$_.Key -eq $socketKey} | Select-Object -First 1
         if($restore){$ui.Connections.SelectedItem=$restore}elseif($ui.OnlyProgramBlocks.IsChecked -and $displayRows.Count){$ui.Connections.SelectedIndex=0}
@@ -212,7 +213,7 @@ try {
     }
     function Refresh-Programs {
         $selected=$ui.Programs.SelectedItem;$selectedKey=if($selected){$selected.Key}else{''}
-        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) @($script:newPrograms.Values) $script:setupStatus $script:ownRules | Sort-Object Name)
+        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) (@($script:newPrograms.Values)+@(Get-ReviewCatalogEntries)) $script:setupStatus $script:ownRules | Sort-Object Name)
         foreach($p in $allProgramItems){Set-ProgramSignal $p}
         Track-ObservedPrograms @($allProgramItems | Where-Object Observed)
         $term=$ui.Search.Text.Trim()

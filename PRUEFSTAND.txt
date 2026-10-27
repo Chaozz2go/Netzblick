@@ -1,4 +1,4 @@
-﻿Netzblick 0.13.0 – EXE-Pakete (Entwicklungsversion)
+Netzblick 0.13.0 – EXE-Pakete (Entwicklungsversion)
 
 Neu 0.13.0: Eine zentrale Programmliste mit Suche, Filtern und letzter
 beobachteter Aktivität. Programmdetails in Übersicht/Verbindungen/Regeln;
@@ -195,3 +195,5 @@ Programm-Aktionen und Prüfmarken (0.13.0)
 
 
 0.15.0: Clean/Future und Hell/Dunkel unabhängig umschalten und speichern. Produktionsnahe WPF-Tests prüfen Kontrast in allen Kombinationen, gemeinsame Auswahl, leere Suche, geteilte und vergrößerte Details sowie unveränderte Firewallkonfiguration. Beide Designs werden mit allen Hauptansichten in 1280x800 und 1480x920 gerendert.
+
+0.15.1: Einheitliche Prüfgründe für neue Programme, Ziele und Blockversuche; Kartenklicks als Filter, Detailfilter für ungeprüfte Ziele/Versuche und historische offene Prüfungen. WPF-Fixtures prüfen den konkreten Fall „keine neue EXE, aber neues Ziel“, Filterwechsel ohne Firewalländerung, Markieren/Leeren der Liste und wiederholte Blockversuche eines geprüften Ziels. Renderings enthalten die eigene Prüfansicht in beiden Designs und Farbschemata. Future ist die Vorgabe ohne gespeicherte Designwahl.

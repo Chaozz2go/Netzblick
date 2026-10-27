@@ -28,10 +28,12 @@ function Update-ProgramPresentation($program){
     $last=$attempts | Sort-Object LastUtc -Descending | Select-Object -First 1
     $lease=$setupStatus.Config.ProgramLeases | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $program.Key} | Select-Object -First 1
     if($lease){$sentence+=' '+$(if($lease.UntilResumed){'Zeitweise gesperrt, bis du die Sperre beendest.'}else{'Zeitweise bis '+$lease.ExpiresUtc.ToLocalTime().ToString('HH:mm:ss')+'.'})+' Danach gelten wieder die vorherigen Regeln.'}
-    $ui.ProgramActivityReview.Text=(Get-ProgramActivityReview $program.Path).Summary
+    $review=Get-ProgramReviewState $program.Path
+    $ui.ProgramActivityReview.Text=$review.Reason
+    $ui.ProgramReviewDetails.Visibility=if($review.NeedsReview){'Visible'}else{'Collapsed'}
     Update-FutureProgramPresentation $program $last $lease
     $ui.ProgramExplanation.Text=$sentence
-    $ui.ProgramShortState.Text=$state.Status+' · '+$(if($newPrograms -and $newPrograms.ContainsKey($program.Key)){'noch zu prüfen'}else{'beobachtet'})
+    $ui.ProgramShortState.Text=$state.Status+' · '+$(if($review.NeedsReview){'zu prüfen'}else{'geprüft'})
     if($last){
         $ui.ProgramEvidenceSummary.Text=$count.ToString()+' erfasste Blockversuche seit Dienststart, zuletzt '+$last.LastUtc.ToLocalTime().ToString('dd.MM. HH:mm:ss')+'.'+[Environment]::NewLine+'Letzter aufgezeichneter Grund: '+$last.Evidence+[Environment]::NewLine+'Der aktuelle Zugriff und vergangene Sperrereignisse sind getrennt. Windows und andere Sicherheitsprogramme können zusätzlich sperren.'
     }else{$ui.ProgramEvidenceSummary.Text='Keine Blockversuche in der laufenden Erfassung aufgezeichnet. Das beweist keinen fehlenden Netzwerkzugriff. Windows und andere Sicherheitsprogramme können zusätzlich sperren.'}
@@ -44,10 +46,26 @@ function Update-ProgramPresentation($program){
     $ui.ProgramRuleRemove.IsEnabled=[bool]($ui.ProgramRules.SelectedItem -and $script:setupStatus -and $setupStatus.Verified -and -not $lease)
     Update-QuickActions
 }
+function Set-OverviewFilter([int]$index){
+    $script:overviewFilterChanging=$true
+    try{$ui.OverviewSearch.Text='';$ui.OverviewFilter.SelectedIndex=$index;$ui.ReviewOptions.IsExpanded=$false}finally{$script:overviewFilterChanging=$false}
+    if($index -eq 2){$ui.ProgramDetailTabs.SelectedIndex=0}
+    $script:futureDetailFocused=$false;Show-Panel 'OverviewPanel';Refresh-Overview
+    $ui.OverviewPrograms.Focus() | Out-Null
+}
+function Update-OverviewFilterChrome {
+    foreach($name in @('FutureAllFilter','FutureBlockedFilter','FutureReviewFilter')){
+        $selected=[int]$ui[$name].Tag -eq $ui.OverviewFilter.SelectedIndex
+        $ui[$name].SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($selected){'AccentSoft'}else{'Raised'}))
+        $ui[$name].SetResourceReference([Windows.Controls.Control]::BorderBrushProperty,$(if($selected){'Accent'}else{'Border'}))
+        [Windows.Automation.AutomationProperties]::SetItemStatus($ui[$name],$(if($selected){'Ausgewählter Filter'}else{'Filter anzeigen'}))
+    }
+}
 function Initialize-WorkspaceMode {
     $ui.BackToPrograms.Add_Click({Show-Panel 'OverviewPanel'})
-    $ui.OverviewFilter.Add_SelectionChanged({Refresh-Overview})
-    $ui.OverviewSearch.Add_TextChanged({Refresh-Overview})
+    $ui.OverviewFilter.Add_SelectionChanged({if(-not $script:overviewFilterChanging){Refresh-Overview}})
+    foreach($name in @('FutureAllFilter','FutureBlockedFilter','FutureReviewFilter')){$ui[$name].Add_Click({param($sender,$e) Set-OverviewFilter ([int]$sender.Tag)})}
+    $ui.OverviewSearch.Add_TextChanged({if(-not $script:overviewFilterChanging){Refresh-Overview}})
     $ui.ProgramRulesManage.Add_Click({if($ui.Programs.SelectedItem){Open-Permissions $ui.Programs.SelectedItem.Path}})
     $ui.ProgramRules.Add_SelectionChanged({$ui.ProgramRuleRemove.IsEnabled=[bool]($ui.ProgramRules.SelectedItem -and $script:setupStatus -and $setupStatus.Verified)})
     $ui.ProgramRuleRemove.Add_Click({

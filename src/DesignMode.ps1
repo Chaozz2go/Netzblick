@@ -1,4 +1,5 @@
-﻿function Get-EffectivePalette([bool]$dark){
+﻿function Get-StartupDesignStyle($savedStyle){if($savedStyle -in @('Clean','Future')){return $savedStyle};return 'Future'}
+function Get-EffectivePalette([bool]$dark){
     $palette=Get-ThemePalette $dark
     if($script:designStyle -eq 'Future'){
         $overrides=if($dark){@{AppBg='#07121C';Surface='#0C1B28';Sidebar='#08151F';Raised='#112A3B';Alternate='#0D202E';Input='#081824';Text='#EDF8FF';Muted='#ADC5D7';Border='#2B4F65';Accent='#10D9EC';AccentSoft='#103D49';OnAccent='#032029';Blue='#75CFFF';Danger='#FF7B87';DangerSoft='#3B222E';Warning='#FFC16B';WarningSoft='#372D20';Success='#63E5B0';SuccessSoft='#143C33'}}else{@{AppBg='#EAF2F8';Surface='#F9FDFF';Sidebar='#DFEDF4';Raised='#E0EEF6';Alternate='#EDF6FA';Input='#F5FBFF';Text='#102C40';Muted='#426276';Border='#9FBECD';Accent='#006A84';AccentSoft='#CAEAF1';OnAccent='#FFFFFF';Blue='#006D9B';Danger='#AD243B';DangerSoft='#F9DFE6';Warning='#835100';WarningSoft='#FFF0CE';Success='#006747';SuccessSoft='#D4EFE3'}}
@@ -60,6 +61,7 @@ function Set-DesignAppearance {
     $script:designChanging=$true
     try{$ui.DesignSelector.SelectedIndex=if($future){1}else{0}}finally{$script:designChanging=$false}
     $ui.FutureLogo.Visibility=$visible;$ui.FutureStats.Visibility=$visible;$ui.FuturePrimaryActions.Visibility=$visible;$ui.FutureConnectionCard.Visibility=$visible;$ui.ProgramInfoToggle.Visibility=$visible;$ui.ExpandProgramDetails.Visibility=$visible
+    $ui.ReviewSummaryCard.Visibility=$cleanVisible;
     $ui.BackToPrograms.Visibility=$cleanVisible;$ui.ProgramMapExpander.Visibility=$cleanVisible;$ui.OverviewQuickActions.Visibility=$cleanVisible
     if($future){$glow=[Windows.Media.Effects.DropShadowEffect]::new();$glow.Color=[Windows.Media.ColorConverter]::ConvertFromString($palette.Accent);$glow.BlurRadius=14;$glow.ShadowDepth=0;$glow.Opacity=0.35;$ui.FutureLogo.Effect=$glow}else{$ui.FutureLogo.Effect=$null}
     $ui.BrandTitle.Text=if($future){'NETZBLICK'}else{'◈ Netzblick'};$ui.BrandTitle.FontSize=if($future){19}else{24}
@@ -74,6 +76,7 @@ function Set-DesignAppearance {
     $ui.ProgramIcon.Source=Get-ApplicationIcon $(if($ui.Programs.SelectedItem){$ui.Programs.SelectedItem.Path}else{''})
     $ui.ProgramInfoGrid.Visibility=if(-not $future -or $ui.ProgramInfoToggle.IsExpanded){'Visible'}else{'Collapsed'}
     [Windows.Controls.DockPanel]::SetDock($ui.OverviewFooterButtons,$(if($future){'Top'}else{'Right'}))
+    $ui.OverviewPrograms.RowHeight=if($future){64}else{82}
     $ui.OverviewPrograms.Columns[0].MinWidth=if($future){170}else{260}
     $ui.OverviewPrograms.Columns[1].Width=[Windows.Controls.DataGridLength]::new($(if($future){135}else{155}))
     for($i=2;$i -le 5;$i++){$ui.OverviewPrograms.Columns[$i].Visibility=$cleanVisible}
@@ -82,6 +85,7 @@ function Set-DesignAppearance {
         $ui[$name].HorizontalContentAlignment=if($future){'Left'}else{'Center'}
         $ui[$name].FontSize=if($future){13}else{12};$ui[$name].Height=if($future){40}else{[double]::NaN}
     }
+    Update-OverviewFilterChrome
     Set-WorkspaceLayout $script:activePanel
 }
 function Set-DesignStyle([string]$style){

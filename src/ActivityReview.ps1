@@ -40,8 +40,33 @@ function Get-ProgramActivityReview([string]$path){
     }
     [pscustomobject]@{NewTargets=$fresh;NewBlocks=$blocks;Summary=($fresh.ToString()+' neue Ziele · '+$blocks+' ungeprüfte Blockversuche in aktueller Erfassung')}
 }
+function Get-ProgramReviewState([string]$path){
+    $activity=Get-ProgramActivityReview $path
+    $key=[Netzblick.ProcessLineage]::Normalize($path)
+    $isNew=$script:newPrograms -and $script:newPrograms.ContainsKey($key)
+    $reasons=@()
+    if($isNew){$reasons+='Neues Programm'}
+    if($activity.NewTargets){$reasons+=$activity.NewTargets.ToString()+$(if($activity.NewTargets -eq 1){' neues Ziel'}else{' neue Ziele'})}
+    if($activity.NewBlocks){$reasons+=$activity.NewBlocks.ToString()+$(if($activity.NewBlocks -eq 1){' neuer Blockversuch'}else{' neue Blockversuche'})}
+    [pscustomobject]@{NeedsReview=[bool]($reasons.Count);NewTargets=$activity.NewTargets;NewBlocks=$activity.NewBlocks;NewProgram=[bool]$isNew;Reason=$(if($reasons.Count){$reasons -join ' · '}else{'Geprüft · keine Neuigkeiten'})}
+}
+function Get-ReviewCatalogEntries {
+    Initialize-ActivityLedger
+    $seen=@{}
+    foreach($entry in $targetLedger.Values){
+        if($entry.Reviewed -or $seen.ContainsKey($entry.PathKey)){continue}
+        $seen[$entry.PathKey]=$true
+        [pscustomobject]@{Path=$entry.PathKey;Name=[IO.Path]::GetFileName($entry.PathKey);Historical=$true}
+    }
+}
 function Get-TargetReviewLabel([string]$path,$row){
     Initialize-ActivityLedger
+    if($row.IsBlock -and $script:setupStatus){
+        $attemptKey=([string]$row.Key) -replace '^BLOCK\|',''
+        $baseline=$blockBaselines[$attemptKey];$epoch=$setupStatus.StartedUtc.ToUniversalTime().ToString('o')
+        $seen=if($baseline -and $baseline.Epoch -eq $epoch){[long]$baseline.Count}else{0}
+        if([long]$row.Count -gt $seen){return 'Neue Blockversuche'}
+    }
     $key=Get-TargetKey $path $row.Address $row.Protocol $row.Port
     if($key -and $targetLedger.ContainsKey($key) -and -not $targetLedger[$key].Reviewed){return 'Neues Ziel'}
     return ''
