@@ -5,14 +5,14 @@ $ErrorActionPreference='Stop'
 trap {Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 $appRoot=Split-Path $PSScriptRoot -Parent
-$sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','ReleaseUpdates.cs') | ForEach-Object {Join-Path $appRoot ('src\'+$_)}
+$sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','ReleaseUpdates.cs','TrafficCore.cs') | ForEach-Object {Join-Path $appRoot ('src\'+$_)}
 $sources+=Join-Path $PSScriptRoot 'FakeSetupClient.cs'
 Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Web.Extensions.dll','System.Security.dll') -Path $sources
 [xml]$xaml=Get-Content -LiteralPath (Join-Path $appRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
 $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($xaml)))
 $ui=@{}
 $xaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$control=$window.FindName($name);if($control){$ui[$name]=$control}}}
-foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates')){
+foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard')){
  [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
  $panel=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($panelXaml)));$ui[$panelName+'Panel'].Content=$panel
  $panelXaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$ui[$name]=$panel.FindName($name)}}
@@ -21,6 +21,8 @@ function Show-Error([string]$message){throw $message}
 function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
 . (Join-Path $appRoot 'src\DesignMode.ps1')
+. (Join-Path $appRoot 'src\DirectionMode.ps1')
+. (Join-Path $appRoot 'src\DashboardMode.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
 . (Join-Path $appRoot 'src\ActivityReview.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
@@ -50,6 +52,7 @@ $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Norm
 $ui.Programs.ItemsSource=$allProgramItems
 Initialize-ReviewMode
 Initialize-WorkspaceMode
+Initialize-DirectionMode
 Track-ObservedPrograms $allProgramItems
 Refresh-Overview
 if($newPrograms.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewPrograms.Items[0].ReviewReason -notmatch 'Neues Programm' -or (Get-ReviewTargets $testExe) -notmatch '8.8.8.8'){throw 'Einheitliche Prüfliste oder Gegenstellen fehlen.'}
@@ -162,7 +165,7 @@ function Get-TestLuminance($c){
  $channels=@($c.R,$c.G,$c.B) | ForEach-Object {$n=[double]$_/255;if($n -le 0.04045){$n/12.92}else{[math]::Pow(($n+0.055)/1.055,2.4)}}
  return 0.2126*$channels[0]+0.7152*$channels[1]+0.0722*$channels[2]
 }
-foreach($panel in @('OverviewPanel','AccessPanel','InspectionPanel','UpdatesPanel','LivePanel')){
+foreach($panel in @('DashboardPanel','OverviewPanel','AccessPanel','InspectionPanel','UpdatesPanel','LivePanel')){
  Show-RealPanel $panel
  foreach($dark in @($true,$false,$true,$false)){
   Set-NetzblickTheme $dark
@@ -362,6 +365,68 @@ $ui.ReviewShow.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Butto
 if($ui.OverviewPrograms.Items.Count -ne 2 -or $ui.OverviewFilter.SelectedIndex -ne 2){throw 'Prüfliste-Knopf zeigt nicht alle offenen Prüfgründe.'}
 Write-Output 'PASS: Future-Standard, anklickbare Zähler, gemeinsame Prüfliste für Programme/Ziele/Blockversuche, historische Prüfungen und Detailfilter ohne Regeländerung.'
 
+
+$rateFunction=$appAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Format-Rate'},$true)
+Invoke-Expression $rateFunction.Extent.Text
+# Real dashboard widgets, measured-rate history and truthful initiation directions.
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+$script:newPrograms=@{};$script:targetLedger=@{};$script:targetReviewCounts=$null;$script:blockBaselines=@{};$script:trafficPeers=@();$script:trafficProblem=''
+$start=[datetime]::UtcNow.AddMinutes(-2);$script:connectionDirectionIndex=@{}
+$flowStore=New-Object Netzblick.Capture.FlowStore
+$fixtureRows=@();$script:trafficSamples=@{}
+$fixturePaths=@($testExe,(Join-Path $env:SystemRoot 'System32\cmd.exe'),(Join-Path $env:SystemRoot 'System32\notepad.exe'),'C:\Beispiel\Musik.exe','C:\Beispiel\Chat.exe')
+$fixtureNames=@('Browser','Lokaler Server','Unbekannter Aufbau','Musik','Chat')
+for($i=0;$i -lt 5;$i++){
+ $path=$fixturePaths[$i];$pidValue=7100+$i;$localPort=50000+$i;$remote='203.0.113.'+(10+$i);$remotePort=443
+ if($i -eq 1){$localPort=8443;$remote='10.0.0.15';$remotePort=53000}
+ $row=[Netzblick.SocketRow]@{Pid=$pidValue;ProcessStartUtc=$start;Path=$path;Program=$fixtureNames[$i];Protocol='TCPv4';Local=('192.0.2.5:'+$localPort);Remote=($remote+':'+$remotePort);Address=$remote;Port=$remotePort;State='Verbunden'}
+ $fixtureRows+=@($row)
+ if($i -ne 2){$identity=[Netzblick.Capture.ProcessIdentity]@{Pid=$pidValue;Path=$path;Name=$fixtureNames[$i];StartUtc=$start};$flowStore.Observe($identity,[datetime]::UtcNow,'TCPv4','192.0.2.5',$localPort,$remote,$remotePort,($i -eq 1),$false)}
+ $key=[Netzblick.ProcessLineage]::Normalize($path);$script:trafficSamples[$key]=[pscustomobject]@{Key=$key;Path=$path;Name=$fixtureNames[$i];ReceivedRate=(8200000/($i+1));SentRate=(240000/($i+1));Received=82000000;Sent=2400000;RateReady=$true;LastUtc=[datetime]::UtcNow}
+}
+foreach($flow in $flowStore.Snapshot()){$script:connectionDirectionIndex[$flow.Key]=$flow.Direction}
+if((Get-ConnectionDirection $fixtureRows[0] $fixturePaths[0]).Label -ne 'Ausgehend' -or (Get-ConnectionDirection $fixtureRows[1] $fixturePaths[1]).Label -ne 'Eingehend' -or (Get-ConnectionDirection $fixtureRows[2] $fixturePaths[2]).Label -ne 'Unbekannt'){throw 'TCP-Rollen verwechselt oder Port-Heuristik für unbekannten Aufbau.'}
+$udp=[Netzblick.SocketRow]@{Path=$testExe;Pid=7100;Protocol='UDPv4';Local='0.0.0.0:12345';State='UDP-Endpunkt'}
+$listen=[Netzblick.SocketRow]@{Path=$testExe;Pid=7100;Protocol='TCPv4';Local='0.0.0.0:443';State='Lauscht'}
+if((Get-ConnectionDirection $udp $testExe).Label -ne 'Unbekannt' -or (Get-ConnectionDirection $listen $testExe).Label -ne 'Lauschend'){throw 'UDP oder lauschender Socket wird als eingehende Verbindung erfunden.'}
+$script:rows=$fixtureRows
+$attempt=[Netzblick.SetupAttempt]@{Key='dashboard-block';Path=$testExe;Program='Browser';Direction='Ausgehend';Address='198.51.100.50';Protocol=6;Port=443;Count=2;FirstUtc=[datetime]::UtcNow;LastUtc=[datetime]::UtcNow;BlockReason='Fixture: gezielte Sperre'};$setupStatus.Attempts.Add($attempt)
+$script:allProgramItems=@(Get-ProgramCatalog $fixtureRows @($trafficSamples.Values) @() $setupStatus @() | Sort-Object Name);$ui.Programs.ItemsSource=$allProgramItems
+$script:activePanel='DashboardPanel';Initialize-DashboardMode
+$now=[datetime]::UtcNow
+for($i=0;$i -lt 400;$i++){Add-DashboardSample $now.AddSeconds(($i-400)*2) 1000 200 $true}
+if($dashboardHistory.Count -gt 154){throw 'Dashboard-Historie ist nicht zeitlich begrenzt.'}
+Reset-DashboardHistory
+for($i=0;$i -lt 61;$i++){Add-DashboardSample $now.AddSeconds(($i-61)*2) (2000000+[Math]::Abs([Math]::Sin($i/5))*6000000) (120000+[Math]::Abs([Math]::Sin($i/7))*300000) $true}
+Set-DesignStyle 'Future';Show-RealPanel 'DashboardPanel';Update-Dashboard
+if($dashboardFrame.ActiveCount -ne 5 -or $dashboardFrame.Programs.Count -ne 5 -or $ui.DashboardActiveCount.Text -ne '5' -or $ui.DashboardBlockedCount.Text -ne '2' -or @($ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]}).Count -ne 5){throw 'Dashboard zählt nicht die aktive Erfassung oder zeichnet keine anklickbaren App-Knoten.'}
+$flowModel=$dashboardFrame.Programs | Where-Object Path -eq $testExe | Select-Object -First 1
+if($flowModel.Outgoing -ne 1 -or $flowModel.Incoming -ne 0 -or $flowModel.Rx -le $flowModel.Tx -or -not @($flowModel.Edges | Where-Object Blocked).Count){throw 'Download wird als eingehender Aufbau dargestellt oder Blockkante fehlt.'}
+$node=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -Last 1;$nodeKey=$node.Tag;$node.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($dashboardSelectedKey -ne $nodeKey -or $ui.DashboardProgramName.Text -eq 'Programm auswählen'){throw 'App-Knoten öffnet keine Dashboard-Details.'}
+$policyBeforeDashboard=$serializer.Serialize($setupStatus.Config)
+$ui.DashboardFreeze.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent));$frozenFrame=$dashboardFrame
+Add-DashboardSample ([datetime]::UtcNow) 99999999 99999999 $true;Update-Dashboard
+if(-not $dashboardFrozen -or -not [object]::ReferenceEquals($frozenFrame,$dashboardFrame) -or $ui.DashboardTemporaryBlock.IsEnabled){throw 'Eingefrorenes Dashboard verändert seine Daten oder bietet eine veraltete Sperraktion.'}
+$ui.DashboardPeriod.SelectedIndex=2
+if(-not [object]::ReferenceEquals($frozenFrame,$dashboardFrame)){throw 'Zeitraumwahl hebt Dashboard-Freeze auf.'}
+$ui.DashboardFreeze.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent));$ui.DashboardPeriod.SelectedIndex=0
+if($dashboardFrozen -or [object]::ReferenceEquals($frozenFrame,$dashboardFrame) -or $serializer.Serialize($setupStatus.Config) -ne $policyBeforeDashboard){throw 'Dashboard setzt nicht fort oder verändert Firewallregeln.'}
+$ui.OnlyProgramUnreviewed.IsChecked=$false;$ui.OnlyProgramBlocks.IsChecked=$false;$ui.Programs.SelectedItem=$allProgramItems | Where-Object Path -eq $testExe | Select-Object -First 1
+$ui.ConnectionDirectionFilter.SelectedIndex=1;Refresh-Detail
+if(-not $ui.Connections.Items.Count -or @($ui.Connections.Items | Where-Object ConnectionDirection -ne 'Ausgehend').Count){throw 'Ausgehend-Filter zeigt andere Richtungen.'}
+$ui.ConnectionDirectionFilter.SelectedIndex=2;Refresh-Detail
+if($ui.Connections.Items.Count){throw 'Download-App erhält erfundene eingehende Verbindungen.'}
+$ui.Programs.SelectedItem=$allProgramItems | Where-Object Path -eq $fixturePaths[1] | Select-Object -First 1;Refresh-Detail
+if($ui.Connections.Items.Count -ne 1 -or $ui.Connections.Items[0].ConnectionDirection -ne 'Eingehend'){throw 'Eingehende Serververbindung fehlt im Richtungsfilter.'}
+$ui.ConnectionDirectionFilter.SelectedIndex=0
+# Restore representative graph samples after freeze tests; no fixture values enter production.
+Reset-DashboardHistory
+for($i=0;$i -lt 61;$i++){Add-DashboardSample $now.AddSeconds(($i-61)*2) (2000000+[Math]::Abs([Math]::Sin($i/5))*6000000) (120000+[Math]::Abs([Math]::Sin($i/7))*300000) $true}
+$ui.UserNotice.Text='UI-Testdaten · keine realen Netzwerkverbindungen dargestellt.'
+Show-RealPanel 'DashboardPanel';Update-Dashboard
+Write-Output 'PASS: echtes Dashboard-XAML mit App-Auswahl, getrennten Daten-/Aufbaurichtungen, bounded Historie, Freeze/Fortsetzen und Richtungsfiltern ohne Firewalländerung.'
+
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -377,6 +442,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
+   if($panelName -eq 'Dashboard'){Draw-Dashboard}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
@@ -388,7 +454,7 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+ foreach($panelName in @('Dashboard','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
@@ -408,6 +474,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
+   if($panelName -eq 'Dashboard'){Draw-Dashboard}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($designPreview -eq 'Future'){'Future-'}else{''})+$(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}

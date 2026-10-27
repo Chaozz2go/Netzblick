@@ -39,8 +39,8 @@ function Initialize-Theme {
 }
 
 function Set-NavigationTheme([string]$panel){
-    $active=switch($panel){'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} 'AccessPanel'{'AccessTab'} 'RulesPanel'{'OpenSetupRules'} 'HistoryPanel'{'OpenSetupHistory'} default{'OverviewTab'}}
-    foreach($name in @('OverviewTab','LiveTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+    $active=switch($panel){'DashboardPanel'{'DashboardTab'} 'OverviewPanel'{'OverviewTab'} 'InspectionPanel'{'InspectionTab'} 'UpdatesPanel'{'UpdatesTab'} 'AccessPanel'{'AccessTab'} 'RulesPanel'{'OpenSetupRules'} 'HistoryPanel'{'OpenSetupHistory'} default{'OverviewTab'}}
+    foreach($name in @('DashboardTab','OverviewTab','LiveTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
         $button=$ui[$name]
         $button.SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($name -eq $active){'AccentSoft'}else{'Raised'}))
         $button.SetResourceReference([Windows.Controls.Control]::ForegroundProperty,'Text')

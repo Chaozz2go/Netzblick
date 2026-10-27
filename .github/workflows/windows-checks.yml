@@ -31,6 +31,11 @@ jobs:
         id: service_build
         shell: powershell
         run: ./tools/Build-Service.ps1 -LogBinary
+      - name: Compile ETW capture and test TCP connection directions
+        shell: powershell
+        run: |
+          ./tools/Build-Capture.ps1
+          ./tools/Test-DirectionCapture.ps1
       - name: WPF fixtures without network changes
         timeout-minutes: 2
         shell: powershell

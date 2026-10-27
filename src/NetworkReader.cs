@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace Netzblick {
  public sealed class SocketRow {
+  public DateTime ProcessStartUtc {get;set;}
   public int Pid {get;set;} public string Program {get;set;} public string Path {get;set;}
   public string Protocol {get;set;} public string Local {get;set;} public string Remote {get;set;}
   public string State {get;set;} public string Address {get;set;} public int Port {get;set;}
@@ -55,15 +56,15 @@ namespace Netzblick {
      int pid=U32(p,tcp?(v6?52:20):(v6?24:8));
      string[] proc;
      if(!processes.TryGetValue(pid,out proc)) {
-      proc=new string[]{pid==0?"System / beendet":"PID "+pid,""};
-      try { using(var pr=Process.GetProcessById(pid)) { proc[0]=pr.ProcessName; try{proc[1]=pr.MainModule.FileName;}catch{} } } catch{}
+      proc=new string[]{pid==0?"System / beendet":"PID "+pid,"","0"};
+      try { using(var pr=Process.GetProcessById(pid)) { proc[0]=pr.ProcessName; try{proc[2]=pr.StartTime.ToUniversalTime().Ticks.ToString();}catch{} try{proc[1]=pr.MainModule.FileName;}catch{} } } catch{}
       processes[pid]=proc;
      }
      int lo=tcp && !v6?4:0, lp=v6?20:(tcp?8:4);
      string local=Address(p,lo,v6,v6?U32(p,16):0), remote="";
      int port=0, state=tcp?U32(p,v6?48:0):0;
      if(tcp && state!=2) { remote=Address(p,v6?24:12,v6,v6?U32(p,40):0); port=Port(p,v6?44:16); }
-     s.Rows.Add(new SocketRow{Pid=pid,Program=proc[0],Path=proc[1],Protocol=(tcp?"TCP":"UDP")+(v6?"v6":"v4"),Local=Endpoint(local,Port(p,lp)),Address=remote,Port=port,Remote=remote.Length>0?Endpoint(remote,port):(tcp?"—":"Gegenstelle nicht erfasst"),State=tcp?State(state):"UDP-Endpunkt"});
+     s.Rows.Add(new SocketRow{ProcessStartUtc=new DateTime(Int64.Parse(proc[2]),DateTimeKind.Utc),Pid=pid,Program=proc[0],Path=proc[1],Protocol=(tcp?"TCP":"UDP")+(v6?"v6":"v4"),Local=Endpoint(local,Port(p,lp)),Address=remote,Port=port,Remote=remote.Length>0?Endpoint(remote,port):(tcp?"—":"Gegenstelle nicht erfasst"),State=tcp?State(state):"UDP-Endpunkt"});
     }
    } finally { if(data!=IntPtr.Zero) Marshal.FreeHGlobal(data); }
   }
@@ -82,3 +83,4 @@ namespace Netzblick {
   public static Task<Snapshot> Start() { return Task.Run<Snapshot>(()=>Collect()); }
  }
 }
+

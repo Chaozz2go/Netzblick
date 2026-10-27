@@ -10,7 +10,7 @@
 function Open-OverviewSelection {
     $item=$ui.OverviewPrograms.SelectedItem
     if(-not $item -and $ui.OverviewPrograms.Items.Count){$item=$ui.OverviewPrograms.Items[0]}
-    if($item){$ui.Search.Text='';$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel';$match=$ui.Programs.Items | Where-Object {$_.Key -eq $item.Key} | Select-Object -First 1;if($match){$ui.Programs.SelectedItem=$match;Refresh-Detail}}else{$ui.UserNotice.Text='Keine Programme in dieser Auswahl.'}
+    if($item){$ui.Search.Text='';$ui.ConnectionDirectionFilter.SelectedIndex=0;$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel';$match=$ui.Programs.Items | Where-Object {$_.Key -eq $item.Key} | Select-Object -First 1;if($match){$ui.Programs.SelectedItem=$match;Refresh-Detail}}else{$ui.UserNotice.Text='Keine Programme in dieser Auswahl.'}
 }
 function Update-ProgramPresentation($program){
     if(-not $program){return}
