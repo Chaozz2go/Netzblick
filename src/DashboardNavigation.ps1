@@ -21,10 +21,15 @@ function Get-DashboardBounds {
     }}
     [pscustomobject]@{Left=$left;Top=$top;Right=$right;Bottom=$bottom}
 }
+function Get-DashboardNodeGain {
+    return [Math]::Max(1.0,[Math]::Min(3.0,0.5/[Math]::Max(0.002,$script:dashboardScale)))
+}
 function Set-DashboardTransform([double]$scale,[double]$x,[double]$y){
+    $oldGain=Get-DashboardNodeGain
     $script:dashboardScale=[Math]::Max(0.002,[Math]::Min(8.0,$scale));$script:dashboardOffsetX=$x;$script:dashboardOffsetY=$y
     $ui.DashboardNetwork.RenderTransform=[Windows.Media.MatrixTransform]::new([Windows.Media.Matrix]::new($dashboardScale,0,0,$dashboardScale,$x,$y))
     $ui.DashboardZoomText.Text=('{0:0.#} %' -f ($dashboardScale*100))
+    if($script:dashboardReady -and [Math]::Abs((Get-DashboardNodeGain)-$oldGain) -gt 0.001){Draw-DashboardNetwork}
 }
 function Fit-Dashboard {
     $w=$ui.DashboardViewport.ActualWidth;$h=$ui.DashboardViewport.ActualHeight;if($w -le 1 -or $h -le 1){return}
