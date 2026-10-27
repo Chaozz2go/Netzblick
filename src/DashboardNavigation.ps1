@@ -46,9 +46,12 @@ function Zoom-Dashboard([double]$delta,[double]$x,[double]$y){
 function Center-DashboardSelection {
     $p=if($script:dashboardFrame){$dashboardFrame.Programs | Where-Object Key -eq $script:dashboardSelectedKey | Select-Object -First 1}else{$null}
     if(-not $p){return};$pos=Get-DashboardPosition $p.Key
-    $x=$pos.X;$y=$pos.Y;if($p.Edges.Count){$x=($x+$pos.TargetX)/2;$y=($y+$pos.TargetY)/2}
-    $scale=[Math]::Max(1.0,$dashboardScale)
-    Set-DashboardTransform $scale ($ui.DashboardViewport.ActualWidth/2-$x*$scale) ($ui.DashboardViewport.ActualHeight/2-$y*$scale)
+    $left=$pos.X-100;$right=$pos.X+100;$top=$pos.Y-40;$bottom=$pos.Y+70
+    if($p.Edges.Count){$left=[Math]::Min($left,$pos.TargetX-80);$right=[Math]::Max($right,$pos.TargetX+80);$top=[Math]::Min($top,$pos.TargetY-40);$bottom=[Math]::Max($bottom,$pos.TargetY+40)}
+    $w=$ui.DashboardViewport.ActualWidth;$h=$ui.DashboardViewport.ActualHeight
+    $fit=[Math]::Min([Math]::Max(1,$w-24)/($right-$left),[Math]::Max(1,$h-24)/($bottom-$top))
+    $scale=[Math]::Min([Math]::Max(1.0,$dashboardScale),$fit)
+    Set-DashboardTransform $scale ($w/2-($left+$right)/2*$scale) ($h/2-($top+$bottom)/2*$scale)
     $script:dashboardCameraReady=$true;$script:dashboardFittedPrograms=$true
 }
 function Stop-DashboardDrag {
