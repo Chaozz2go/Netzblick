@@ -1,5 +1,5 @@
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
- <Grid.RowDefinitions><RowDefinition Height="68"/><RowDefinition Height="*"/><RowDefinition Height="172"/></Grid.RowDefinitions>
+ <Grid.RowDefinitions><RowDefinition Height="78"/><RowDefinition Height="*"/><RowDefinition Height="172"/></Grid.RowDefinitions>
  <UniformGrid Columns="3" Margin="0,0,0,10">
   <Button x:Name="DashboardActive" HorizontalContentAlignment="Left" ToolTip="Gerade aktive Programme öffnen"><StackPanel><TextBlock x:Name="DashboardActiveCount" Text="0" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="aktiv · Socket oder Aktivität ≤ 30 s" FontSize="11" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
   <Button x:Name="DashboardBlocked" ToolTip="Programm mit zuletzt erfasstem Blockversuch ansehen"><StackPanel><TextBlock x:Name="DashboardBlockedCount" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource Danger}"/><TextBlock Text="Blockversuche · seit Dienststart" FontSize="11" Foreground="{DynamicResource Muted}"/></StackPanel></Button>

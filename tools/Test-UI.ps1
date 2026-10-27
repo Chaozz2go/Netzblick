@@ -442,7 +442,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
-   if($panelName -eq 'Dashboard'){Draw-Dashboard}
+   if($panelName -eq 'Dashboard'){Draw-Dashboard;$renderHost.UpdateLayout();$renderedNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
@@ -458,6 +458,7 @@ try{
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
+  if($panelName -eq 'Dashboard'){[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode;$setupStatus.Attempts.Add($attempt)}
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
   Show-RealPanel ($renderPanel+'Panel')
@@ -474,7 +475,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
-   if($panelName -eq 'Dashboard'){Draw-Dashboard}
+   if($panelName -eq 'Dashboard'){Draw-Dashboard;$renderHost.UpdateLayout();$renderedNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($designPreview -eq 'Future'){'Future-'}else{''})+$(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
