@@ -40,6 +40,7 @@ function Reset-NetzblickState {
     Refresh-Rules
     if($script:ruleError -or $script:ownRules.Count){throw 'Nicht alle eigenen Windows-Regeln konnten zurückgenommen werden.'}
     if($script:reviewToast){$reviewToast.Close()}
+    if($script:dashboardReady){Reset-DashboardHistory};$script:connectionDirectionIndex=@{}
     $script:targetLedger=@{};$script:targetReviewCounts=$null;$script:blockBaselines=@{};$script:knownPrograms.Clear();$script:newPrograms.Clear();$script:changes.Clear();$script:events.Clear();$script:seen.Clear();$script:previous=$null
     $script:userBaseline=$true;$script:sessionStartedUtc=[datetime]::UtcNow
     $script:inspectionActive=$false;$script:inspectionPath='';$script:inspectionMetadata=$null;$script:inspectionMetadataTask=$null;$ui.InspectionPath.Text='';$ui.InspectionMetadata.Text='Wähle eine lokale EXE.'

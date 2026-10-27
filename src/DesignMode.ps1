@@ -7,8 +7,8 @@ function Get-EffectivePalette([bool]$dark){
     }
     return $palette
 }
-function Get-ApplicationIcon([string]$path){
-    if($script:designStyle -ne 'Future' -or -not [Netzblick.AccessQueue]::CanAllow($path)){return $null}
+function Get-ApplicationIcon([string]$path,[switch]$Always){
+    if(($script:designStyle -ne 'Future' -and -not $Always) -or -not [Netzblick.AccessQueue]::CanAllow($path)){return $null}
     if($null -eq $script:appIconCache){$script:appIconCache=@{}}
     $key=[Netzblick.ProcessLineage]::Normalize($path)
     if($appIconCache.ContainsKey($key)){return $appIconCache[$key]}
@@ -76,17 +76,18 @@ function Set-DesignAppearance {
     $ui.ProgramIcon.Source=Get-ApplicationIcon $(if($ui.Programs.SelectedItem){$ui.Programs.SelectedItem.Path}else{''})
     $ui.ProgramInfoGrid.Visibility=if(-not $future -or $ui.ProgramInfoToggle.IsExpanded){'Visible'}else{'Collapsed'}
     [Windows.Controls.DockPanel]::SetDock($ui.OverviewFooterButtons,$(if($future){'Top'}else{'Right'}))
-    $ui.OverviewPrograms.RowHeight=if($future){64}else{82}
+    $ui.OverviewPrograms.RowHeight=if($future){78}else{90}
     $ui.OverviewPrograms.Columns[0].MinWidth=if($future){170}else{260}
     $ui.OverviewPrograms.Columns[1].Width=[Windows.Controls.DataGridLength]::new($(if($future){135}else{155}))
     for($i=2;$i -le 5;$i++){$ui.OverviewPrograms.Columns[$i].Visibility=$cleanVisible}
     $ui.OverviewPrograms.Columns[6].Visibility=$visible
-    foreach($name in @('OverviewTab','AccessTab','InspectionTab','OpenSetupRules','OpenSetupHistory','UpdatesTab')){
+    foreach($name in @('DashboardTab','OverviewTab','AccessTab','InspectionTab','OpenSetupRules','OpenSetupHistory','UpdatesTab')){
         $ui[$name].HorizontalContentAlignment=if($future){'Left'}else{'Center'}
         $ui[$name].FontSize=if($future){13}else{12};$ui[$name].Height=if($future){40}else{[double]::NaN}
     }
     Update-OverviewFilterChrome
     Set-WorkspaceLayout $script:activePanel
+    if($script:dashboardReady){Draw-Dashboard}
 }
 function Set-DesignStyle([string]$style){
     if($style -notin @('Clean','Future')){throw 'Unbekanntes Design.'}

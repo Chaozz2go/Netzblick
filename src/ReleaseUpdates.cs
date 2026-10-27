@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,7 +20,7 @@ namespace Netzblick {
   public string Message {get;set;} public UpdateRelease Release {get;set;} public bool Available {get;set;}
  }
  public static class ReleaseUpdates {
-  public const string CurrentVersion="0.15.1";
+  public const string CurrentVersion="0.16.0";
   public const string RepositoryUrl="https://github.com/Chaozz2go/Netzblick";
   public static int CurrentBuild {get{
    var entry=Assembly.GetEntryAssembly();if(entry==null)return 0;

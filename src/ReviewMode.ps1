@@ -3,7 +3,7 @@ function Save-ReviewDecision([string]$path){
     $key=Normalize-ReviewPath $path;Mark-ProgramActivityReviewed $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
 }
 function Show-ReviewProgram([string]$path){
-    Show-NetzblickWindow;$ui.Search.Text='';$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel'
+    Show-NetzblickWindow;$ui.Search.Text='';$ui.ConnectionDirectionFilter.SelectedIndex=0;$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel'
     $key=Normalize-ReviewPath $path
     $match=$ui.Programs.Items | Where-Object {$_.Key -eq $key} | Select-Object -First 1
     if($match){$ui.Programs.SelectedItem=$match;Refresh-Detail}else{Show-Panel 'OverviewPanel';$ui.UserNotice.Text='Das Programm ist derzeit nicht erfasst. Die Prüfliste bleibt gespeichert.'}

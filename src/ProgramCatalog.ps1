@@ -40,7 +40,7 @@ function Get-ProgramBlockRows([string]$path,$status){
     if(-not $status){return}
     $key=[Netzblick.ProcessLineage]::Normalize($path)
     foreach($a in @($status.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $key})){
-        [pscustomobject]@{Key=('BLOCK|'+$a.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($a.Protocol);Local=$a.Direction;Remote=$a.Target;Address=$a.Address;Port=$a.Port;IsBlock=$true;Count=$a.Count;FirstUtc=$a.FirstUtc;LastUtc=$a.LastUtc;FilterId=$a.FilterId;BlockReason=$a.Evidence;State=('Blockiert · '+$a.Count+' Versuche · zuletzt '+$a.LastUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$a.Evidence)}
+        [pscustomobject]@{Key=('BLOCK|'+$a.Key);Pid='Blockereignis';Protocol=[Netzblick.SetupRule]::ProtocolName($a.Protocol);Local=$a.Direction;Remote=$a.Target;Address=$a.Address;Port=$a.Port;IsBlock=$true;Direction=$a.Direction;Count=$a.Count;FirstUtc=$a.FirstUtc;LastUtc=$a.LastUtc;FilterId=$a.FilterId;BlockReason=$a.Evidence;State=('Blockiert · '+$a.Count+' Versuche · zuletzt '+$a.LastUtc.ToLocalTime().ToString('HH:mm:ss')+' · '+$a.Evidence)}
     }
 }
 

@@ -10,7 +10,7 @@ using Microsoft.Diagnostics.Tracing.Session;
 namespace Netzblick.Capture {
  public sealed class NetworkCapture : IDisposable {
   sealed class Cached {public ProcessIdentity Identity;public DateTime Checked;}
-  readonly TrafficStore store=new TrafficStore();readonly Dictionary<int,Cached> identities=new Dictionary<int,Cached>();
+  readonly TrafficStore store=new TrafficStore();readonly FlowStore flows=new FlowStore();readonly Dictionary<int,Cached> identities=new Dictionary<int,Cached>();
   readonly object gate=new object();TraceEventSession session;Task reader;bool disposed;string error="";
   public string Error {get{lock(gate)return error;}}
   public bool Running {get{return !disposed && reader!=null && !reader.IsCompleted && Error.Length==0;}}
@@ -27,6 +27,12 @@ namespace Netzblick.Capture {
     c.session.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP|KernelTraceEventParser.Keywords.Process);
     var kernel=c.session.Source.Kernel;
     kernel.ProcessStart+=e=>c.Invalidate(e.ProcessID);kernel.ProcessStop+=e=>c.Invalidate(e.ProcessID);
+    kernel.TcpIpConnect+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv4",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,false,false);
+    kernel.TcpIpAccept+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv4",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,true,false);
+    kernel.TcpIpDisconnect+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv4",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,false,true);
+    kernel.TcpIpConnectIPV6+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv6",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,false,false);
+    kernel.TcpIpAcceptIPV6+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv6",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,true,false);
+    kernel.TcpIpDisconnectIPV6+=e=>c.Flow(e.ProcessID,e.TimeStamp,"TCPv6",e.saddr.ToString(),e.sport,e.daddr.ToString(),e.dport,false,true);
     kernel.TcpIpSend+=e=>c.Add(e.ProcessID,e.TimeStamp,true,e.size,e.daddr.ToString(),e.dport,"TCPv4");
     kernel.TcpIpRecv+=e=>c.Add(e.ProcessID,e.TimeStamp,false,e.size,e.saddr.ToString(),e.sport,"TCPv4");
     kernel.TcpIpSendIPV6+=e=>c.Add(e.ProcessID,e.TimeStamp,true,e.size,e.daddr.ToString(),e.dport,"TCPv6");
@@ -65,8 +71,13 @@ namespace Netzblick.Capture {
    try{DateTime utc=time.ToUniversalTime();store.Add(Resolve(pid,utc),utc,send,size,address,port,protocol);}
    catch(Exception e){lock(gate)error="Ereignis konnte nicht gezählt werden: "+e.Message;}
   }
+  void Flow(int pid,DateTime time,string protocol,string a,int ap,string b,int bp,bool incoming,bool close){
+   try{DateTime utc=time.ToUniversalTime();flows.Observe(Resolve(pid,utc),utc,protocol,a,ap,b,bp,incoming,close);}catch(Exception e){lock(gate)error="Verbindungsrichtung nicht erfasst: "+e.Message;}
+  }
+  public List<FlowRow> Directions(){return flows.Snapshot();}
   public List<TrafficRow> Snapshot(){return store.Snapshot();}
   public List<PeerRow> Peers(){return store.Peers();}
   public void Dispose(){if(disposed)return;disposed=true;if(session!=null){try{session.Source.StopProcessing();}finally{session.Dispose();}}if(reader!=null)try{reader.Wait(1000);}catch{} }
  }
 }
+

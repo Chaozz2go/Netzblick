@@ -41,6 +41,21 @@ public static class UserModeChecks {
   check(traffic.Snapshot().Find(r=>r.Path==reused.Path)==null,"late event not assigned to replacement PID");
   check(traffic.Snapshot().Find(r=>r.Key=="PID:100").Sent==400,"unattributed bytes shown separately");
   check(TrafficStore.Rate(100,300,2)==100,"rate from measured delta");check(TrafficStore.Rate(100,50,2)==0,"counter reset bounded");check(TrafficStore.Rate(0,50,0)==0,"zero interval bounded");
+  var flows=new FlowStore();
+  string fk=FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc,"TCPv4","127.0.0.1",50000,"127.0.0.1",443);
+  flows.Observe(app,time.AddSeconds(1),"TCPv4","127.0.0.1",50000,"127.0.0.1",443,false,false);
+  check(flows.Snapshot().Count==1 && flows.Snapshot()[0].Direction=="Ausgehend","connect defines initiation, not received bytes");
+  check(fk==FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc,"TCPv4","127.0.0.1",443,"127.0.0.1",50000),"accept/connect endpoint orientation does not affect tuple identity");
+  check(fk!=FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc.AddSeconds(10),"TCPv4","127.0.0.1",443,"127.0.0.1",50000),"PID reuse/start time cannot inherit direction");
+  check(fk!=FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc,"TCPv4","127.0.0.1",443,"127.0.0.1",50001),"different local ephemeral port is a separate flow");
+  flows.Observe(app,time.AddSeconds(2),"TCPv4","127.0.0.1",443,"127.0.0.1",50000,true,false);
+  check(flows.Snapshot()[0].Direction=="Unbekannt","same-process ambiguous loopback roles stay unknown");
+  flows.Observe(app,time.AddSeconds(3),"TCPv4","127.0.0.1",443,"127.0.0.1",50000,false,true);
+  check(flows.Snapshot().Count==0,"disconnect removes stale tuple role");
+  flows.Observe(reused,time.AddSeconds(1),"TCPv4","1.1.1.1",50001,"8.8.8.8",443,false,false);
+  check(flows.Snapshot().Count==0,"late flow event rejected for a replacement process");
+  check(FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc,"TCPv6","::ffff:127.0.0.1",50000,"::ffff:127.0.0.1",443)==FlowStore.KeyFor(app.Path,app.Pid,app.StartUtc,"TCPv6","127.0.0.1",50000,"127.0.0.1",443),"mapped IPv6 endpoints normalized");
   Console.WriteLine("PASS: "+count+" policy/traffic checks.");return count;
  }
 }
+

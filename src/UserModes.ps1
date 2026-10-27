@@ -92,7 +92,7 @@ function Save-UserState {
 function Initialize-UserModes {
     $script:allProgramItems=@();$script:policyReady=$true;$script:changes=New-Object 'System.Collections.Generic.List[object]'
     $script:knownPrograms=@{};$script:newPrograms=@{};$script:notifyObserved=$true;$script:darkMode=$true;$script:designStyle=Get-StartupDesignStyle $null;$script:traffic=$null;$script:trafficProblem=''
-    $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow
+    $script:trafficTotals=@{};$script:trafficSamples=@{};$script:trafficPeers=@();$script:trafficSampleUtc=[datetime]::UtcNow;$script:connectionDirectionIndex=@{}
     $script:sessionStartedUtc=[datetime]::UtcNow;$script:userBaseline=$false
     $script:targetLedger=@{};$script:blockBaselines=@{};$script:targetReviewCounts=$null
     $script:userStateDirectory=Join-Path $env:LOCALAPPDATA 'Netzblick';$script:userStateFile=Join-Path $userStateDirectory 'user-state.json'
@@ -175,8 +175,10 @@ function Format-Bytes([double]$bytes) {
     return '{0:N0} B' -f $bytes
 }
 function Update-Traffic {
-    if($null -eq $traffic){return}
+    if($null -eq $traffic){$script:connectionDirectionIndex=@{};return}
     $now=[datetime]::UtcNow;$seconds=($now-$trafficSampleUtc).TotalSeconds
+    $script:connectionDirectionIndex=@{}
+    if($traffic.PSObject.Methods['Directions']){foreach($flow in $traffic.Directions()){$script:connectionDirectionIndex[$flow.Key]=$flow.Direction}}
     $values=$traffic.Snapshot();$result=@{}
     foreach($value in $values){
         $old=$trafficTotals[$value.Key]
@@ -212,8 +214,9 @@ function Refresh-Overview {
         $needsReview=$reviewActivity.NeedsReview
         $signal=Get-PermissionStatus $program.Path
         $activity=Get-ProgramActivity $program $sample
+        $directionSummary=Get-ProgramDirectionSummary $program
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;AppIcon=(Get-ApplicationIcon $program.Path);FutureActivity=$(if($program.BlockCount){$program.BlockCount.ToString()+' Blockversuche'}elseif($sample -and $sample.RateReady){'↓ '+(Format-Rate $sample.ReceivedRate)}else{'Nicht gemessen'});Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');NeedsReview=$needsReview;ReviewReason=$reviewActivity.Reason;ReviewColor=$(if($needsReview){Get-ThemeColor '#996000'}else{Get-ThemeColor '#57677B'});NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;AppIcon=(Get-ApplicationIcon $program.Path);FutureActivity=$(if($program.BlockCount){$program.BlockCount.ToString()+' Blockversuche'}elseif($sample -and $sample.RateReady){'↓ '+(Format-Rate $sample.ReceivedRate)}else{'Nicht gemessen'});Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');DirectionSummary=$directionSummary;NeedsReview=$needsReview;ReviewReason=$reviewActivity.Reason;ReviewColor=$(if($needsReview){Get-ThemeColor '#996000'}else{Get-ThemeColor '#57677B'});NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $overviewKey=if($ui.OverviewPrograms.SelectedItem){$ui.OverviewPrograms.SelectedItem.Key}else{''}
     $allCount=$items.Count

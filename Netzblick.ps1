@@ -29,13 +29,13 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.15.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.16.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -72,6 +72,8 @@ try {
 
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
     . (Join-Path $appRoot 'src\DesignMode.ps1')
+    . (Join-Path $appRoot 'src\DirectionMode.ps1')
+    . (Join-Path $appRoot 'src\DashboardMode.ps1')
     . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
     . (Join-Path $appRoot 'src\ActivityReview.ps1')
     . (Join-Path $appRoot 'src\VisualModes.ps1')
@@ -187,10 +189,11 @@ try {
         if(-not $ui.OnlyProgramBlocks.IsChecked){$displayRows+=@(Get-UnreviewedTargetRows $program.Path $displayRows)}
         $endpointIndex=0
         $displayRows=@($displayRows | ForEach-Object {
-            $endpointIndex++
-            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;TargetReview=(Get-TargetReviewLabel $program.Path $_);IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
+            $endpointIndex++;$connectionRole=Get-ConnectionDirection $_ $program.Path
+            [pscustomobject]@{Key=$_.Key;Pid=$_.Pid;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;Address=$_.Address;Port=$_.Port;State=$_.State;ConnectionDirection=$connectionRole.Label;DirectionLabel=$(switch($connectionRole.Label){'Ausgehend'{'→ Ausgehend'} 'Eingehend'{'← Eingehend'} default{$connectionRole.Label}});DirectionColor=$window.Resources[$(switch($connectionRole.Label){'Ausgehend'{'Accent'} 'Eingehend'{'Inbound'} default{'Muted'}})];DirectionEvidence=$connectionRole.Source;TargetReview=(Get-TargetReviewLabel $program.Path $_);IsBlock=[bool]$_.IsBlock;BlockReason=$_.BlockReason;Count=$_.Count;FirstUtc=$_.FirstUtc;LastUtc=$_.LastUtc;FilterId=$_.FilterId;PeerName=$(if($ui.ResolveNames.IsChecked -and $endpointIndex -gt 100){'DNS: nur die ersten 100 Einträge'}else{Get-EndpointName $_.Address});ServiceHint=([Netzblick.EndpointInfo]::Service($_.Protocol,[int]$_.Port))}
         })
         if($ui.OnlyProgramUnreviewed.IsChecked){$displayRows=@($displayRows | Where-Object TargetReview);$ui.ProgramBlockHint.Text='Ungeprüfte Ziele und neue Blockversuche: '+$displayRows.Count+'. Frühere Ziele sind ausdrücklich gekennzeichnet. Nach der Prüfung kannst du das Programm als geprüft markieren.'}
+        $displayRows=@(Select-ConnectionDirection $displayRows $ui.ConnectionDirectionFilter.SelectedIndex)
         $ui.Connections.ItemsSource=$displayRows
         $restore=$displayRows | Where-Object {$_.Key -eq $socketKey} | Select-Object -First 1
         if($restore){$ui.Connections.SelectedItem=$restore}elseif($ui.OnlyProgramBlocks.IsChecked -and $displayRows.Count){$ui.Connections.SelectedIndex=0}
@@ -248,17 +251,18 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
-        $compact=$name -in @('AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
+        $compact=$name -in @('DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
         Set-NavigationTheme $name
-        foreach($key in @('OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
         Set-WorkspaceLayout $name
         if($name -eq 'OverviewPanel'){Refresh-Overview}
+        if($name -eq 'DashboardPanel'){Update-Dashboard}
     }
     $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
     $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
@@ -311,12 +315,14 @@ try {
     $script:programCatalogReady=$true
     Initialize-AccessMode
     Initialize-ReviewMode
+    Initialize-DirectionMode
+    Initialize-DashboardMode
     Initialize-QuickActions
     Initialize-BlockDetails
     Initialize-Updates
     $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})
     Initialize-TrayMode
-    Show-Panel 'OverviewPanel'
+    Show-Panel 'DashboardPanel'
     $timer=New-Object Windows.Threading.DispatcherTimer
     $timer.Interval=[timespan]::FromMilliseconds(250)
     $script:nextSample=[datetime]::MinValue
@@ -330,17 +336,20 @@ try {
                 $current=New-Object 'System.Collections.Generic.HashSet[string]'
                 foreach($row in $rows){[void]$current.Add($row.Key);if(-not $seen.Contains($row.Key)){Add-Event 'Socket beobachtet' $row.Program ($row.Protocol+' · '+$row.Remote+' · '+$row.State)}}
                 $script:seen=$current
+                $rateReady=$false;$rxRate=0.0;$txRate=0.0;$matchedAdapters=0
                 if($null -ne $previous){
                     $seconds=($snapshot.Time-$previous.Time).TotalSeconds
                     if($seconds -gt 0){
                         [double]$rx=0;[double]$tx=0
                         foreach($adapter in $snapshot.Adapters){
                             $old=$previous.Adapters | Where-Object {$_.Id -eq $adapter.Id} | Select-Object -First 1
-                            if($old){$rx += [Math]::Max(0,$adapter.Received-$old.Received);$tx += [Math]::Max(0,$adapter.Sent-$old.Sent)}
+                            if($old){$matchedAdapters++;$rx += [Math]::Max(0,$adapter.Received-$old.Received);$tx += [Math]::Max(0,$adapter.Sent-$old.Sent)}
                         }
-                        $ui.Download.Text=Format-Rate ($rx/$seconds);$ui.Upload.Text=Format-Rate ($tx/$seconds)
+                        $rateReady=$matchedAdapters -gt 0;$rxRate=$rx/$seconds;$txRate=$tx/$seconds
+                        $ui.Download.Text=Format-Rate $rxRate;$ui.Upload.Text=Format-Rate $txRate
                     }
                 }else{$ui.Download.Text='Messung …';$ui.Upload.Text='Messung …'}
+                Add-DashboardSample $snapshot.Time $rxRate $txRate $rateReady
                 $script:previous=$snapshot
                 $tcp=@($rows | Where-Object {$_.State -eq 'Verbunden'}).Count
                 $udp=@($rows | Where-Object {$_.Protocol.StartsWith('UDP')}).Count
@@ -348,6 +357,7 @@ try {
                 if(((Get-Date)-$lastRuleRead).TotalSeconds -gt 5){Refresh-Rules}
                 Update-Traffic
                 Refresh-Programs
+                Update-Dashboard
                 if($ui.WorldPanel.Visibility -eq 'Visible'){Refresh-World -Rebuild}
                 if($ui.HistoryPanel.Visibility -eq 'Visible'){$ui.History.ItemsSource=$events.ToArray()}
                 $ui.Status.Text='Aktualisiert '+(Get-Date -Format 'HH:mm:ss')+' · IPv4 + IPv6 · 2-Sekunden-Stichproben · Adapterwerte können VPN/virtuelle Adapter doppelt zählen.'
