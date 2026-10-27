@@ -44,12 +44,13 @@ function Add-DashboardLabel($canvas,[string]$text,[double]$x,[double]$y,[double]
     $t=[Windows.Controls.TextBlock]::new();$t.Text=$text;$t.Foreground=$window.Resources[$role];$t.FontSize=$size;$t.Width=$width;$t.TextAlignment='Center';$t.TextTrimming='CharacterEllipsis';$t.ToolTip=$text
     [Windows.Controls.Canvas]::SetLeft($t,$x);[Windows.Controls.Canvas]::SetTop($t,$y);[void]$canvas.Children.Add($t)
 }
-function Add-DashboardEdge($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$y2,[string]$direction,[bool]$blocked,[double]$offset){
+function Add-DashboardEdge($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$y2,[string]$direction,[bool]$blocked,[double]$offset,[double]$thickness=2.2){
     $dx=$x2-$x1;$dy=$y2-$y1;$length=[Math]::Sqrt($dx*$dx+$dy*$dy);if($length -lt 1){return}
     $ux=$dx/$length;$uy=$dy/$length
-    $a=[Windows.Point]::new(($x1+$ux*38-$uy*$offset),($y1+$uy*38+$ux*$offset));$b=[Windows.Point]::new(($x2-$ux*38-$uy*$offset),($y2-$uy*38+$ux*$offset))
-    $role=if($blocked){'Danger'}elseif($direction -eq 'Ausgehend'){'Accent'}elseif($direction -eq 'Eingehend'){'Blue'}else{'Muted'}
-    $line=[Windows.Shapes.Line]::new();$line.X1=$a.X;$line.Y1=$a.Y;$line.X2=$b.X;$line.Y2=$b.Y;$line.Stroke=$window.Resources[$role];$line.StrokeThickness=2.2
+    $trimX=if([Math]::Abs($ux) -gt 0.001){68/[Math]::Abs($ux)}else{100000};$trimY=if([Math]::Abs($uy) -gt 0.001){24/[Math]::Abs($uy)}else{100000};$targetTrim=[Math]::Min($trimX,$trimY)+8
+    $a=[Windows.Point]::new(($x1+$ux*38-$uy*$offset),($y1+$uy*38+$ux*$offset));$b=[Windows.Point]::new(($x2-$ux*$targetTrim-$uy*$offset),($y2-$uy*$targetTrim+$ux*$offset))
+    $role=if($blocked){'Danger'}elseif($direction -eq 'Ausgehend'){'Accent'}elseif($direction -eq 'Eingehend'){'Inbound'}else{'Muted'}
+    $line=[Windows.Shapes.Line]::new();$line.X1=$a.X;$line.Y1=$a.Y;$line.X2=$b.X;$line.Y2=$b.Y;$line.Stroke=$window.Resources[$role];$line.StrokeThickness=$thickness
     if($blocked){$line.StrokeDashArray=[Windows.Media.DoubleCollection]::new([double[]]@(5,4))};[void]$canvas.Children.Add($line)
     if($direction -notin @('Ausgehend','Eingehend')){return}
     $tip=if($direction -eq 'Eingehend'){$a}else{$b};$sign=if($direction -eq 'Eingehend'){-1}else{1}
@@ -70,7 +71,8 @@ function Draw-DashboardNetwork {
         $x=480+190*[Math]::Cos($angle);$y=260+140*[Math]::Sin($angle);$tx=480+365*[Math]::Cos($angle);$ty=260+210*[Math]::Sin($angle)
         $spoke=[Windows.Shapes.Line]::new();$spoke.X1=480;$spoke.Y1=260;$spoke.X2=$x;$spoke.Y2=$y;$spoke.Stroke=$window.Resources['Border'];[void]$canvas.Children.Insert(0,$spoke)
         $groups=@($p.Edges | Group-Object Direction,Blocked | Select-Object -First 4);$offset=-($groups.Count-1)*4
-        foreach($g in $groups){Add-DashboardEdge $canvas $x $y $tx $ty $g.Group[0].Direction $g.Group[0].Blocked $offset;$offset+=8}
+        $edgeWidth=if($p.RateReady){[Math]::Min(4.5,1.5+[Math]::Log10(1+($p.Rx+$p.Tx)/1024))}else{1.5}
+        foreach($g in $groups){Add-DashboardEdge $canvas $x $y $tx $ty $g.Group[0].Direction $g.Group[0].Blocked $offset $edgeWidth;$offset+=8}
         if($p.Edges.Count){
             $targets=@($p.Edges.Address | Select-Object -Unique);$scopes=@($targets | ForEach-Object {[Netzblick.EndpointInfo]::Scope($_)})
             $kind=if(@($scopes | Where-Object {$_ -eq 'Öffentliche / sonstige Adresse'}).Count -eq $scopes.Count){'Internet'}elseif(@($scopes | Where-Object {$_ -eq 'Öffentliche / sonstige Adresse'}).Count){'LAN / Internet'}else{'Lokal / LAN'}
@@ -80,6 +82,7 @@ function Draw-DashboardNetwork {
         }
         $button=[Windows.Controls.Button]::new();$button.Width=66;$button.Height=66;$button.Padding='6';$button.Margin='0';$button.Background=$window.Resources['Raised'];$button.BorderBrush=$window.Resources[$(if($p.Key -eq $script:dashboardSelectedKey){'Accent'}else{'Border'})];$button.Tag=$p.Key;$button.ToolTip=$p.Name+' · '+$p.State
         $button.Template=[Windows.Markup.XamlReader]::Parse('<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="2" CornerRadius="33"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate>')
+        if($p.Key -eq $script:dashboardSelectedKey){$glow=[Windows.Media.Effects.DropShadowEffect]::new();$glow.Color=$window.Resources['Accent'].Color;$glow.BlurRadius=16;$glow.ShadowDepth=0;$glow.Opacity=0.45;$button.Effect=$glow}
         if($p.Icon){$im=[Windows.Controls.Image]::new();$im.Source=$p.Icon;$im.Width=36;$im.Height=36;$button.Content=$im}else{$button.Content=$p.Name.Substring(0,1).ToUpperInvariant();$button.FontSize=25}
         [Windows.Automation.AutomationProperties]::SetName($button,$p.Name+' auswählen')
         $button.Add_Click({param($sender,$e) $script:dashboardSelectedKey=[string]$sender.Tag;Draw-Dashboard})
