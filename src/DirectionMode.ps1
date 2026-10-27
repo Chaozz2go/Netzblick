@@ -17,7 +17,7 @@ function Get-ConnectionDirection($row,[string]$path){
     return [pscustomobject]@{Label='Unbekannt';Source=$(if($row.Protocol -like 'UDP*'){'UDP: Datenrichtung ist kein Verbindungsaufbau'}else{'Aufbau nicht sicher erfasst; keine Ableitung aus Ports oder Empfang/Versand'})}
 }
 function Select-ConnectionDirection($rows,[int]$filter){
-    @($rows | Where-Object {switch($filter){1{$_.ConnectionDirection -eq 'Ausgehend'} 2{$_.ConnectionDirection -eq 'Eingehend'} 3{$_.ConnectionDirection -eq 'Lauschend'} 4{$_.ConnectionDirection -eq 'Unbekannt'} default{$true}}})
+    @($rows | Where-Object {$entry=$_;switch($filter){1{$entry.ConnectionDirection -eq 'Ausgehend'} 2{$entry.ConnectionDirection -eq 'Eingehend'} 3{$entry.ConnectionDirection -eq 'Lauschend'} 4{$entry.ConnectionDirection -eq 'Unbekannt'} default{$true}}})
 }
 function Initialize-DirectionMode {
     $ui.ConnectionDirectionFilter.Add_SelectionChanged({Refresh-Detail})
