@@ -10,8 +10,8 @@ Netzblick ist eine Windows-App, mit der du Netzwerkverbindungen deiner Programme
 
 | Variante | Download | Für wen? |
 | --- | --- | --- |
-| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.16.0-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
-| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.16.0-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
+| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.16.1-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
+| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.16.1-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
 
 **Voraussetzungen:** Windows 10/11 mit 64 Bit, .NET Framework 4.8 und Windows PowerShell 5.1. Für Netzwerküberwachung und Firewallsteuerung sind Administratorrechte nötig. Python oder eine zusätzliche PowerShell-Installation werden nicht benötigt.
 
@@ -19,7 +19,7 @@ Die fertigen Pakete findest du unter **Releases**. Der grüne GitHub-Knopf **Cod
 
 ## Das Dashboard: dein Netzwerk live
 
-Die Startseite zeigt bis zu sechs aktive Programme mit ihren lokalen EXE-Icons rund um deinen PC. Die Linien führen zu zusammengefassten lokalen oder Internet-Gegenstellen. Pfeile zeigen sicher erfassten **ausgehenden oder eingehenden Verbindungsaufbau**; blockierte Versuche erscheinen rot gestrichelt. Ohne sicheren Richtungsnachweis bleibt die Verbindung als unbekannt markiert.
+Die Startseite zeigt alle aktuell erfassten aktiven Programme mit ihren lokalen EXE-Icons rund um deinen PC. Die Linien führen zu zusammengefassten lokalen oder Internet-Gegenstellen. **Mausrad** zoomt am Mauszeiger, **Ziehen auf freier Fläche** verschiebt die Ansicht. **Alles anzeigen** passt alle aktiven Programme ein; **Auswahl zentrieren** macht die gewählte App lesbar. Die Plätze bleiben während der Sitzung fest und wechseln nicht mit der Datenrate. Zoom und Ausschnitt bleiben bei Live-Updates erhalten. Pfeile zeigen sicher erfassten **ausgehenden oder eingehenden Verbindungsaufbau**; blockierte Versuche erscheinen rot gestrichelt. Ohne sicheren Richtungsnachweis bleibt die Verbindung als unbekannt markiert.
 
 Ein Klick auf ein Programm zeigt seine Ziele, aktuellen Zugriffsstatus, Datenrate und Prüfgründe. **Programmdetails** und **Zeitweise sperren** führen zu den bestehenden Aktionen. Die Zähler öffnen aktive Programme, den letzten erfassten Blockversuch oder die Prüfliste.
 
@@ -97,7 +97,7 @@ Windows-Builds prüfen unter anderem Oberfläche, native Sperr- und Freigabefunk
 ## Hilfe, Hintergründe und Entwicklung
 
 - [Bedienung und technische Details](docs/Bedienung-und-Technik.md)
-- [Neuerungen in Version 0.16.0](docs/Release-0.16.0.md)
+- [Neuerungen in Version 0.16.1](docs/Release-0.16.1.md)
 - [Alle Veröffentlichungen](https://github.com/Chaozz2go/Netzblick/releases)
 - [Fehler melden oder eine Idee vorschlagen](https://github.com/Chaozz2go/Netzblick/issues)
 - [Drittanbieter und Datenlizenzen](THIRD-PARTY-NOTICES.txt)

@@ -23,6 +23,7 @@ function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\DesignMode.ps1')
 . (Join-Path $appRoot 'src\DirectionMode.ps1')
 . (Join-Path $appRoot 'src\DashboardMode.ps1')
+    . (Join-Path $appRoot 'src\DashboardNavigation.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
 . (Join-Path $appRoot 'src\ActivityReview.ps1')
 . (Join-Path $appRoot 'src\AccessMode.ps1')
@@ -399,12 +400,12 @@ if($dashboardHistory.Count -gt 154){throw 'Dashboard-Historie ist nicht zeitlich
 Reset-DashboardHistory
 for($i=0;$i -lt 61;$i++){Add-DashboardSample $now.AddSeconds(($i-61)*2) (2000000+[Math]::Abs([Math]::Sin($i/5))*6000000) (120000+[Math]::Abs([Math]::Sin($i/7))*300000) $true}
 Set-DesignStyle 'Future';Show-RealPanel 'DashboardPanel';Update-Dashboard
-if($dashboardFrame.ActiveCount -ne 5 -or $dashboardFrame.Programs.Count -ne 5 -or $ui.DashboardActiveCount.Text -ne '5' -or $ui.DashboardBlockedCount.Text -ne '2' -or @($ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]}).Count -ne 5){throw 'Dashboard zählt nicht die aktive Erfassung oder zeichnet keine anklickbaren App-Knoten.'}
-$internetNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Border] -and $_.Child -is [Windows.Controls.TextBlock] -and $_.Child.Text -eq "Internet`n2 Gegenstellen"}
+if($dashboardFrame.ActiveCount -ne 5 -or $dashboardFrame.Programs.Count -ne 5 -or $ui.DashboardActiveCount.Text -ne '5' -or $ui.DashboardBlockedCount.Text -ne '2' -or $script:dashboardNodeVisuals.Count -ne 5){throw 'Dashboard zählt nicht die aktive Erfassung oder zeichnet keine anklickbaren App-Knoten.'}
+$internetNode=$ui.DashboardLinks.Children | Where-Object {$_ -is [Windows.Controls.Border] -and $_.Child -is [Windows.Controls.TextBlock] -and $_.Child.Text -eq "Internet`n2 Gegenstellen"}
 if(-not $internetNode){throw 'Internet-Ziele werden im Dashboard falsch als LAN oder nur einzeln zusammengefasst.'}
 $flowModel=$dashboardFrame.Programs | Where-Object Path -eq $testExe | Select-Object -First 1
 if($flowModel.Outgoing -ne 1 -or $flowModel.Incoming -ne 0 -or $flowModel.Rx -le $flowModel.Tx -or -not @($flowModel.Edges | Where-Object Blocked).Count){throw 'Download wird als eingehender Aufbau dargestellt oder Blockkante fehlt.'}
-$node=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -Last 1;$nodeKey=$node.Tag;$node.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+$node=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -Last 1;$nodeKey=$node.Tag;$node.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
 if($dashboardSelectedKey -ne $nodeKey -or $ui.DashboardProgramName.Text -eq 'Programm auswählen'){throw 'App-Knoten öffnet keine Dashboard-Details.'}
 $policyBeforeDashboard=$serializer.Serialize($setupStatus.Config)
 $ui.DashboardFreeze.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent));$frozenFrame=$dashboardFrame
@@ -422,6 +423,45 @@ if($ui.Connections.Items.Count){throw 'Download-App erhält erfundene eingehende
 $ui.Programs.SelectedItem=$allProgramItems | Where-Object Path -eq $fixturePaths[1] | Select-Object -First 1;Refresh-Detail
 if($ui.Connections.Items.Count -ne 1 -or $ui.Connections.Items[0].ConnectionDirection -ne 'Eingehend'){throw 'Eingehende Serververbindung fehlt im Richtungsfilter.'}
 $ui.ConnectionDirectionFilter.SelectedIndex=0
+
+# More than six apps, stable slots/controls, independent camera and retained selection.
+$originalDashboardItems=@($script:allProgramItems);$extraDashboardItems=@()
+for($i=1;$i -le 24;$i++){
+ $path='C:\Beispiel\Programm-'+$i.ToString('00')+'.exe';$key=[Netzblick.ProcessLineage]::Normalize($path)
+ $socket=[Netzblick.SocketRow]@{Path=$path;Program=('Programm '+$i.ToString('00'));Pid=(8000+$i);Protocol='TCPv4';Local=('192.0.2.5:'+(51000+$i));Address='198.51.100.70';Remote='198.51.100.70:443';Port=443;State='Verbunden'}
+ $extraDashboardItems+=@(Get-ProgramCatalog @($socket) @() @() $setupStatus @() | Where-Object Path -eq $path)
+}
+$script:allProgramItems=$originalDashboardItems+$extraDashboardItems
+$ui.DashboardViewport.Measure([Windows.Size]::new(800,400));$ui.DashboardViewport.Arrange([Windows.Rect]::new(0,0,800,400));$ui.DashboardViewport.UpdateLayout()
+Update-Dashboard
+if($dashboardFrame.ActiveCount -ne 29 -or $dashboardFrame.Programs.Count -ne 29 -or $dashboardNodeVisuals.Count -ne 29){throw 'Dashboard blendet Programme oberhalb der bisherigen Sechsergrenze aus.'}
+$target=$extraDashboardItems[17];$key=$target.Key;$posBefore=Get-DashboardPosition $key;$buttonBefore=$dashboardNodeVisuals[$key].Button
+$buttonBefore.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+Set-DashboardTransform 0.8 120 -40
+$anchorX=(250-$dashboardOffsetX)/$dashboardScale;$anchorY=(150-$dashboardOffsetY)/$dashboardScale
+Zoom-Dashboard 120 250 150
+if([Math]::Abs((250-$dashboardOffsetX)/$dashboardScale-$anchorX) -gt 0.0001 -or [Math]::Abs((150-$dashboardOffsetY)/$dashboardScale-$anchorY) -gt 0.0001){throw 'Dashboard-Zoom hält den Weltpunkt unter dem Mauszeiger nicht fest.'}
+$cameraBefore=@($dashboardScale,$dashboardOffsetX,$dashboardOffsetY)
+$script:trafficSamples[[Netzblick.ProcessLineage]::Normalize($testExe)].ReceivedRate=99999999
+$script:allProgramItems=@($script:allProgramItems | Sort-Object Name -Descending);Update-Dashboard
+$posAfter=Get-DashboardPosition $key
+if($dashboardSelectedKey -ne $key -or $posBefore.X -ne $posAfter.X -or $posBefore.Y -ne $posAfter.Y -or -not [object]::ReferenceEquals($buttonBefore,$dashboardNodeVisuals[$key].Button) -or $dashboardScale -ne $cameraBefore[0] -or $dashboardOffsetX -ne $cameraBefore[1] -or $dashboardOffsetY -ne $cameraBefore[2]){throw 'Datenrate/Sortierung versetzt Knoten, Kamera oder Auswahl.'}
+$script:allProgramItems=@($script:allProgramItems | Where-Object Key -ne $key);Update-Dashboard
+if($dashboardSelectedKey -ne $key -or $ui.DashboardProgramName.Text -ne $target.Name -or $ui.DashboardProgramStatus.Text -notlike '*nicht aktiv*' -or $ui.DashboardTemporaryBlock.IsEnabled){throw 'Inaktive Auswahl springt auf ein anderes Programm oder zeigt veraltete Sperraktion.'}
+$script:allProgramItems+=@($target);Update-Dashboard
+$posAfter=Get-DashboardPosition $key
+if($posBefore.X -ne $posAfter.X -or $posBefore.Y -ne $posAfter.Y){throw 'Zurückgekehrtes Programm verliert seinen festen Platz.'}
+$ui.DashboardFit.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent));$b=Get-DashboardBounds
+if($b.Left*$dashboardScale+$dashboardOffsetX -lt -1 -or $b.Right*$dashboardScale+$dashboardOffsetX -gt $ui.DashboardViewport.ActualWidth+1 -or $b.Top*$dashboardScale+$dashboardOffsetY -lt -1 -or $b.Bottom*$dashboardScale+$dashboardOffsetY -gt $ui.DashboardViewport.ActualHeight+1){throw 'Alles anzeigen umfasst nicht alle aktiven Knoten.'}
+$ui.DashboardCenter.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($dashboardScale -lt 1 -or $dashboardSelectedKey -ne $key){throw 'Auswahl zentrieren macht das gewählte Programm nicht lesbar.'}
+Zoom-Dashboard 100000 250 150;if($dashboardScale -ne 8){throw 'Dashboard-Zoom hat keine obere Grenze.'}
+Zoom-Dashboard -100000 250 150;if($dashboardScale -ne 0.002){throw 'Dashboard-Zoom hat keine untere Grenze.'}
+if($serializer.Serialize($setupStatus.Config) -ne $policyBeforeDashboard){throw 'Dashboard-Navigation verändert Firewallregeln.'}
+$script:allProgramItems=$originalDashboardItems+@($extraDashboardItems | Select-Object -First 7);$ui.Programs.ItemsSource=$script:allProgramItems
+$script:trafficSamples[[Netzblick.ProcessLineage]::Normalize($testExe)].ReceivedRate=8200000
+Write-Output 'PASS: 29 aktive Programme ohne Auswahlgrenze, stabile Knoten und Controls, Kameraanker, Fit/Zoom/Fokus und erhaltene inaktive Auswahl ohne Regeländerung.'
+
 # Restore representative graph samples after freeze tests; no fixture values enter production.
 Reset-DashboardHistory
 for($i=0;$i -lt 61;$i++){Add-DashboardSample $now.AddSeconds(($i-61)*2) (2000000+[Math]::Abs([Math]::Sin($i/5))*6000000) (120000+[Math]::Abs([Math]::Sin($i/7))*300000) $true}
@@ -444,7 +484,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
-   if($panelName -eq 'Dashboard'){Draw-Dashboard;$renderHost.UpdateLayout();$renderedNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'}}
+   if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ('setup-'+$scenario+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
@@ -456,11 +496,11 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Dashboard','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
-  $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}else{$panelName}
+ foreach($panelName in @('Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+  $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
-  if($panelName -eq 'Dashboard'){[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode;$setupStatus.Attempts.Add($attempt)}
+  if($panelName -like 'Dashboard*'){[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode;$setupStatus.Attempts.Add($attempt)}
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
   Show-RealPanel ($renderPanel+'Panel')
@@ -477,7 +517,7 @@ try{
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
-   if($panelName -eq 'Dashboard'){Draw-Dashboard;$renderHost.UpdateLayout();$renderedNode=$ui.DashboardNetwork.Children | Where-Object {$_ -is [Windows.Controls.Button]} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'}}
+   if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
    $encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($image))
    $file=[IO.File]::Create((Join-Path $OutputDirectory ($(if($designPreview -eq 'Future'){'Future-'}else{''})+$(if($darkPreview){'Dark-'}else{''})+$panelName+'-'+$size[0]+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}

@@ -1,4 +1,4 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Netzblick · 0.16.0" Width="1480" Height="920" MinWidth="1280" MinHeight="800" Background="{DynamicResource AppBg}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Netzblick · 0.16.1" Width="1480" Height="920" MinWidth="1280" MinHeight="800" Background="{DynamicResource AppBg}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
  <Window.Resources>
   <SolidColorBrush x:Key="AppBg" Color="#F4F7FA"/>
   <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
