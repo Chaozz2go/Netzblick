@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Readable Windows Firewall rule names and ownership
+        shell: powershell
+        run: ./tools/Test-FirewallNames.ps1
       - name: Core logic
         shell: pwsh
         run: dotnet run --project tools/CoreChecks.csproj -c Release -- data
@@ -47,3 +50,4 @@ jobs:
           name: wpf-previews
           retention-days: 1
           path: tools/ui-preview/*.png
+

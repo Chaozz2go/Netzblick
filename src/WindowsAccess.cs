@@ -187,7 +187,7 @@ namespace Netzblick {
   Expected AddSpecs(Guid layer,uint action,ulong weight,List<Spec> specs,string name){
    using(var mem=new Memory()){
     IntPtr w=mem.Alloc(8);Marshal.WriteInt64(w,unchecked((long)weight));
-    var filter=new Filter{Key=Guid.NewGuid(),Display=new Display{Name="Netzblick: "+name},Layer=layer,SubLayer=subLayer,Weight=new Value{Type=4,Data=new ValueUnion{Pointer=w}},Action=new Action{Type=action}};
+    var filter=new Filter{Key=Guid.NewGuid(),Display=new Display{Name="Netzblick · "+CleanName(name),Description=name},Layer=layer,SubLayer=subLayer,Weight=new Value{Type=4,Data=new ValueUnion{Pointer=w}},Action=new Action{Type=action}};
     int stride=Marshal.SizeOf(typeof(Condition));
     if(specs.Count>0){filter.Count=(uint)specs.Count;filter.Conditions=mem.Alloc(stride*specs.Count);}
     for(int i=0;i<specs.Count;i++){
@@ -205,15 +205,19 @@ namespace Netzblick {
   byte[] AppId(string path){if(File.Exists(path))path=CanonicalPath(path);IntPtr blob=IntPtr.Zero;try{Check(FwpmGetAppIdFromFileName0(path,out blob),"Programm-ID lesen");return ReadBlob(blob);}finally{if(blob!=IntPtr.Zero)FwpmFreeMemory0(ref blob);}}
   static Expected Planned(Guid layer,uint action,ulong weight,List<Spec> specs,string name){return new Expected{Layer=layer,Action=action,Weight=weight,Specs=specs,Name=name};}
   List<Expected> InstallPlan(List<Expected> plan){return plan.Select(p=>AddSpecs(p.Layer,p.Action,p.Weight,p.Specs,p.Name)).ToList();}
+  public static string ReadableFilterName(string path,string action,string direction,bool v6,string detail){
+   string program=path=="*"?"Alle Programme":Path.GetFileName((path??"").Replace('\\','/'));
+   return CleanName(program)+" · "+action+" · "+direction+" · "+(v6?"IPv6":"IPv4")+(String.IsNullOrEmpty(detail)?"":" · "+CleanName(detail));
+  }
   List<Expected> Plan(SetupConfig config){
    config.Validate();var result=new List<Expected>();
    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6}){
-    if(config.Ask)result.Add(Planned(target,Block,1,new List<Spec>(),"ohne Freigabe blockieren"));
-    result.Add(Planned(target,Permit,200,new List<Spec>{new Spec{Field=FlagsField,Type=3,UInt=1}},"Kommunikation auf diesem PC"));
+    if(config.Ask)result.Add(Planned(target,Block,1,new List<Spec>(),ReadableFilterName("*","Ohne Freigabe gesperrt",target==Connect4||target==Connect6?"Ausgehend":"Eingehend",target==Connect6||target==Receive6,"Nachfragen")));
+    result.Add(Planned(target,Permit,200,new List<Spec>{new Spec{Field=FlagsField,Type=3,UInt=1}},ReadableFilterName("*","Erlaubt",target==Connect4||target==Connect6?"Ausgehend":"Eingehend",target==Connect6||target==Receive6,"Kommunikation auf diesem PC")));
    }
    foreach(string path in config.WatchedPaths){
     var specs=new List<Spec>{new Spec{Field=AppField,Type=12,Bytes=AppId(path)}};
-    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6})result.Add(Planned(target,Block,10,specs,"Programmprüfung"));
+    foreach(Guid target in new Guid[]{Connect4,Connect6,Receive4,Receive6})result.Add(Planned(target,Block,10,specs,ReadableFilterName(path,"Gesperrt",target==Connect4||target==Connect6?"Ausgehend":"Eingehend",target==Connect6||target==Receive6,"Prüfsperre")));
    }
    foreach(SetupRule r in config.Rules){
     if(r.ExpiresUtc.HasValue&&r.ExpiresUtc.Value<=DateTime.UtcNow)continue;
@@ -231,7 +235,7 @@ namespace Netzblick {
      if(ip!=null&&(ip.GetAddressBytes().Length==16)!=v6)continue;
      if((r.Protocol==1&&v6)||(r.Protocol==58&&!v6))continue;
      Guid layer=outbound?(v6?Connect6:Connect4):(v6?Receive6:Receive4);
-     result.Add(Planned(layer,r.Action=="Allow"?Permit:Block,r.Action=="Allow"?100ul:150ul,specs,r.Name));
+     result.Add(Planned(layer,r.Action=="Allow"?Permit:Block,r.Action=="Allow"?100ul:150ul,specs,ReadableFilterName(r.Path,r.Action=="Allow"?"Erlaubt":"Gesperrt",r.Direction,v6,r.Name+" · "+r.Address+" · "+SetupRule.ProtocolName(r.Protocol)+(r.Port>0?" "+r.Port:""))));
     }
    }
    return result;
@@ -266,7 +270,7 @@ namespace Netzblick {
    try{
     Check(FwpmGetAppIdFromFileName0(Path.GetFullPath(path),out blob),"WFP-App-ID lesen");byte[] bytes=ReadBlob(blob);
     Check(FwpmTransactionBegin0(engine,0),"Freigabe starten");
-    try{foreach(Guid layer in new Guid[]{Connect4,Connect6})filters.Add(Add(layer,Permit,100,2,blob,bytes));Check(FwpmTransactionCommit0(engine),"Freigabe bestätigen");}
+    try{foreach(Guid layer in new Guid[]{Connect4,Connect6})filters.Add(AddSpecs(layer,Permit,100,new List<Spec>{new Spec{Field=AppField,Type=12,Bytes=bytes}},ReadableFilterName(path,"Erlaubt","Ausgehend",layer==Connect6,"Sitzungsfreigabe")));Check(FwpmTransactionCommit0(engine),"Freigabe bestätigen");}
     catch{FwpmTransactionAbort0(engine);throw;}
     allowed.Add(key,filters);expected.AddRange(filters);Verify();
    }finally{if(blob!=IntPtr.Zero)FwpmFreeMemory0(ref blob);}

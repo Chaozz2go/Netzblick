@@ -83,6 +83,9 @@ public static class SetupChecks {
   SetupChanges.TemporaryBlockProgram(pause,app,30,now);var stalePause=SetupChanges.CaptureProgram(pause,app);SetupChanges.AllowProgram(pause,app);
   try{SetupChanges.EndProgramLease(pause,app,stalePause,now);throw new Exception("stale pause ended");}catch(InvalidOperationException){check(ProgramPolicy.Category(pause,app)=="Allowed","stale resume cannot override later decision");}
   try{SetupChanges.TemporaryBlockProgram(pause,app,7,now);throw new Exception("invalid duration");}catch(ArgumentException){count++;}
+  string label=WfpGate.ReadableFilterName(@"C:\Programme\Steam\steam.exe","Gesperrt","Ausgehend",false,"Download-Test");
+  check(label.StartsWith("steam.exe · Gesperrt · Ausgehend · IPv4")&&label.Contains("Download-Test"),"filter label shows program, action, direction and family");
+  check(WfpGate.ReadableFilterName("*","Erlaubt","Eingehend",true,"Ping").StartsWith("Alle Programme · Erlaubt · Eingehend · IPv6"),"global rules labelled as global");
   return count;
  }
 }

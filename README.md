@@ -1,4 +1,4 @@
-﻿# Netzblick 0.14.0 – Windows-EXE, portabel und installierbar
+﻿# Netzblick 0.15.0 – Windows-EXE, portabel und installierbar
 
 **Entwicklungsversion für lokal bediente Windows-Testgeräte.** Die Oberfläche wurde vereinfacht und die Regelsteuerung in einen eigenen Windows-Dienst verlagert. Kompilierung und Logikprüfungen bestehen; die reale WFP-Sperrwirkung und der Dienstbetrieb müssen vor einem produktiven Einsatz auf Windows geprüft werden. Kein Ersatz für einen Gerätetest, Virenschutz oder eine Sandbox.
 
@@ -185,3 +185,15 @@ Programm-Aktionen und Prüfmarken (0.13.0)
 Programm auswählen → **Zeitweise sperren …** → 10/30/60 Minuten oder bis zur Aufhebung wählen. **Zeitweise beenden …** stellt vorherige Programmregeln wieder her; das beendet auch eine laufende zeitweise Freigabe. Der Rückweg wird mit der Konfiguration gespeichert und übersteht einen Neustart. Bei einer ausdrücklich dauerhaft gewählten Freigabe/Sperre/Standard entfällt der alte Rückweg.
 
 Die Sperre betrifft die gewählte EXE und auch ihr LAN. Bereits bestehende Verbindungen werden nicht garantiert getrennt. Für einen Offline-Test das Programm nach dem Sperren neu starten. Andere EXEs eines Pakets, etwa Hilfsprogramme, werden getrennt verwaltet.
+
+
+## Lesbare Regelnamen (0.14.1)
+
+Windows-Regeln zeigen Programmname, Aktion und Richtung. Eigene ältere, unverändert verwaltete Windows-Firewallregeln erhalten beim Start Namen wie **Netzblick · steam.exe · Gesperrt · Ausgehend [NB-…]**. Der kurze Zusatz unterscheidet gleiche Dateinamen aus verschiedenen Ordnern. Fremde oder extern veränderte Regeln werden nicht automatisch umbenannt. Die Gruppierung und die Sperrwirkung bleiben erhalten. Aktuelle WFP-Dienstfilter zeigen zusätzlich IPv4/IPv6 und den eigenen Regelnamen beziehungsweise den Prüfgrund. Diese Dienstfilter sind keine zusätzlichen gespeicherten Regeln in der normalen Windows-Firewall-Regelliste.
+
+
+## Clean oder Future (0.15.0)
+
+Links unten unter **Design** zwischen **Clean** und **Future** wählen. **Hell/Dunkel** bleibt davon unabhängig. Ohne gespeicherte Wahl bleibt Clean aktiv; beide Einstellungen werden gespeichert und bei „Alles neu prüfen“ behalten.
+
+Future zeigt Liste und ausgewähltes Programm nebeneinander, mit App-Symbolen aus den lokalen EXE-Dateien, klaren Statuskarten, einer kompakten Offline-Karte und dem letzten erfassten Blockgrund. Das Vergrößern-Symbol macht bei Bedarf Platz für die Detailtabellen. Alle bisherigen Aktionen bleiben unter „Weitere Aktionen“ erreichbar. Der Designwechsel setzt keine Firewallbefehle ab und verändert keine Regeln. Die Karte markiert grobe Länderzuordnungen und das manuell gewählte Startland; sie belegt keine exakten Serverpositionen oder tatsächlichen Datenwege.
