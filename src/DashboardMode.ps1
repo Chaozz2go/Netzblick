@@ -1,7 +1,8 @@
 ﻿# A bounded, local presentation of observed activity. No firewall mutations here.
 function Reset-DashboardHistory {
     $script:dashboardHistory=New-Object 'System.Collections.Generic.List[object]'
-    $script:dashboardFrame=$null;$script:dashboardFrozen=$false;$script:dashboardSelectedKey=''
+    $script:dashboardFrame=$null;$script:dashboardFrozen=$false;$script:dashboardSelectedKey='';$script:dashboardSelectionSnapshot=$null
+    if($script:dashboardReady){$ui.DashboardNodes.Children.Clear();Initialize-DashboardCamera}
     if($ui.ContainsKey('DashboardFreeze')){$ui.DashboardFreeze.Content='Ⅱ Einfrieren'}
 }
 function Add-DashboardSample([datetime]$time,$received,$sent,[bool]$ready){
@@ -32,12 +33,13 @@ function Get-DashboardProgram($program){
 function Update-Dashboard {
     if(-not $script:dashboardReady -or $script:dashboardFrozen -or ($script:activePanel -and $script:activePanel -ne 'DashboardPanel')){return}
     $active=@($script:allProgramItems | Where-Object {(Get-ProgramActivity $_ $script:trafficSamples[$_.Key]).Active})
-    $ordered=@($active | Sort-Object -Property @{Expression={if($script:trafficSamples[$_.Key]){$script:trafficSamples[$_.Key].SentRate+$script:trafficSamples[$_.Key].ReceivedRate}else{0}};Descending=$true},Name)
-    $programs=@($ordered | Select-Object -First 6 | ForEach-Object {Get-DashboardProgram $_})
+    $programs=@($active | Sort-Object Name,Key | ForEach-Object {Get-DashboardProgram $_})
     $blocks=[long]0;if($script:setupStatus){foreach($attempt in @($setupStatus.Attempts)){$blocks+=[long]$attempt.Count}}
     $review=@($script:allProgramItems | Where-Object {(Get-ProgramReviewState $_.Path).NeedsReview}).Count
     $script:dashboardFrame=[pscustomobject]@{Time=[datetime]::UtcNow;Programs=$programs;ActiveCount=$active.Count;BlockCount=$blocks;ReviewCount=$review;History=@($script:dashboardHistory.ToArray());Problem=$script:trafficProblem}
-    if(-not @($programs | Where-Object Key -eq $script:dashboardSelectedKey).Count){$script:dashboardSelectedKey=if($programs.Count){$programs[0].Key}else{''}}
+    if(-not $script:dashboardSelectedKey -and $programs.Count){$script:dashboardSelectedKey=$programs[0].Key}
+    $selected=$programs | Where-Object Key -eq $script:dashboardSelectedKey | Select-Object -First 1
+    if($selected){$script:dashboardSelectionSnapshot=$selected}
     Draw-Dashboard
 }
 function Add-DashboardLabel($canvas,[string]$text,[double]$x,[double]$y,[double]$width,[string]$role='Text',[double]$size=14){
@@ -59,17 +61,18 @@ function Add-DashboardEdge($canvas,[double]$x1,[double]$y1,[double]$x2,[double]$
     [void]$canvas.Children.Add($triangle)
 }
 function Draw-DashboardNetwork {
-    $canvas=$ui.DashboardNetwork;$canvas.Children.Clear();$frame=$script:dashboardFrame
-    for($x=0;$x -le 960;$x+=80){$l=[Windows.Shapes.Line]::new();$l.X1=$x;$l.X2=$x;$l.Y2=520;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
-    for($y=0;$y -le 520;$y+=65){$l=[Windows.Shapes.Line]::new();$l.Y1=$y;$l.Y2=$y;$l.X2=960;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
+    $canvas=$ui.DashboardLinks;$canvas.Children.Clear();$frame=$script:dashboardFrame
+    $bounds=Get-DashboardBounds
+    for($x=[Math]::Floor($bounds.Left/120)*120;$x -le $bounds.Right;$x+=120){$l=[Windows.Shapes.Line]::new();$l.X1=$x;$l.X2=$x;$l.Y1=$bounds.Top;$l.Y2=$bounds.Bottom;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
+    for($y=[Math]::Floor($bounds.Top/120)*120;$y -le $bounds.Bottom;$y+=120){$l=[Windows.Shapes.Line]::new();$l.Y1=$y;$l.Y2=$y;$l.X1=$bounds.Left;$l.X2=$bounds.Right;$l.Stroke=$window.Resources['Border'];$l.Opacity=0.18;[void]$canvas.Children.Add($l)}
+    $present=@{};if($frame){foreach($p in $frame.Programs){$present[$p.Key]=$true}}
+    foreach($key in @($script:dashboardNodeVisuals.Keys)){if(-not $present.ContainsKey($key)){$ui.DashboardNodes.Children.Remove($dashboardNodeVisuals[$key].Container);$dashboardNodeVisuals.Remove($key)}}
     $pc=[Windows.Controls.Border]::new();$pc.Width=78;$pc.Height=78;$pc.CornerRadius=[Windows.CornerRadius]::new(39);$pc.Background=$window.Resources['Raised'];$pc.BorderBrush=$window.Resources['Accent'];$pc.BorderThickness='2';$label=[Windows.Controls.TextBlock]::new();$label.Text="▣`nDein PC";$label.TextAlignment='Center';$label.FontSize=20;$label.VerticalAlignment='Center';$label.Foreground=$window.Resources['Text'];$pc.Child=$label
-    [Windows.Controls.Canvas]::SetLeft($pc,441);[Windows.Controls.Canvas]::SetTop($pc,221);[void]$canvas.Children.Add($pc)
-    if(-not $frame -or -not $frame.Programs.Count){Add-DashboardLabel $canvas 'Noch keine aktive Netzwerkkommunikation erfasst' 200 390 560 'Muted' 18;return}
-    $index=0;$count=$frame.Programs.Count
+    [Windows.Controls.Canvas]::SetLeft($pc,-39);[Windows.Controls.Canvas]::SetTop($pc,-39);[void]$canvas.Children.Add($pc)
+    if(-not $frame -or -not $frame.Programs.Count){Add-DashboardLabel $canvas 'Noch keine aktive Netzwerkkommunikation erfasst' -280 70 560 'Muted' 18;return}
     foreach($p in $frame.Programs){
-        $angle=-[Math]::PI/2+$index*2*[Math]::PI/[Math]::Max(3,$count);$index++
-        $x=480+145*[Math]::Cos($angle);$y=260+95*[Math]::Sin($angle);$tx=480+375*[Math]::Cos($angle);$ty=260+220*[Math]::Sin($angle)
-        $spoke=[Windows.Shapes.Line]::new();$spoke.X1=480;$spoke.Y1=260;$spoke.X2=$x;$spoke.Y2=$y;$spoke.Stroke=$window.Resources['Border'];[void]$canvas.Children.Insert(0,$spoke)
+        $pos=Get-DashboardPosition $p.Key;$x=$pos.X;$y=$pos.Y;$tx=$pos.TargetX;$ty=$pos.TargetY
+        $spoke=[Windows.Shapes.Line]::new();$spoke.X1=0;$spoke.Y1=0;$spoke.X2=$x;$spoke.Y2=$y;$spoke.Stroke=$window.Resources['Border'];[void]$canvas.Children.Insert(0,$spoke)
         $groups=@($p.Edges | Group-Object Direction,Blocked);$offset=-($groups.Count-1)*4
         $edgeWidth=if($p.RateReady){[Math]::Min(4.5,1.5+[Math]::Log10(1+($p.Rx+$p.Tx)/1024))}else{1.5}
         foreach($g in $groups){Add-DashboardEdge $canvas $x $y $tx $ty $g.Group[0].Direction $g.Group[0].Blocked $offset $edgeWidth;$offset+=8}
@@ -80,14 +83,24 @@ function Draw-DashboardNetwork {
             $t=[Windows.Controls.TextBlock]::new();$t.Text=$kind+"`n"+$targets.Count+$(if($targets.Count -eq 1){' Gegenstelle'}else{' Gegenstellen'});$t.FontSize=15;$t.TextAlignment='Center';$t.VerticalAlignment='Center';$t.Foreground=$window.Resources['Text'];$endpoint.Child=$t
             [Windows.Controls.Canvas]::SetLeft($endpoint,($tx-68));[Windows.Controls.Canvas]::SetTop($endpoint,($ty-29));[void]$canvas.Children.Add($endpoint)
         }
-        $button=[Windows.Controls.Button]::new();$button.Width=66;$button.Height=66;$button.Padding='6';$button.Margin='0';$button.Background=$window.Resources['Raised'];$button.BorderBrush=$window.Resources[$(if($p.Key -eq $script:dashboardSelectedKey){'Accent'}else{'Border'})];$button.Tag=$p.Key;$button.ToolTip=$p.Name+' · '+$p.State
-        $button.Template=[Windows.Markup.XamlReader]::Parse('<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="2" CornerRadius="33"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate>')
+        if(-not $dashboardNodeVisuals.ContainsKey($p.Key)){
+            $container=[Windows.Controls.Canvas]::new();$container.Width=180;$container.Height=104
+            $button=[Windows.Controls.Button]::new();$button.Width=66;$button.Height=66;$button.Padding='6';$button.Margin='0';$button.Tag=$p.Key
+            $button.Template=[Windows.Markup.XamlReader]::Parse('<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="2" CornerRadius="33"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate>')
+            $button.Add_Click({param($sender,$e) $script:dashboardSelectedKey=[string]$sender.Tag;$script:dashboardSelectionSnapshot=$dashboardFrame.Programs | Where-Object Key -eq $script:dashboardSelectedKey | Select-Object -First 1;Draw-Dashboard})
+            [Windows.Controls.Canvas]::SetLeft($button,57);[void]$container.Children.Add($button)
+            $name=[Windows.Controls.TextBlock]::new();$name.Width=180;$name.TextAlignment='Center';$name.FontSize=18;$name.TextTrimming='CharacterEllipsis';[Windows.Controls.Canvas]::SetTop($name,70);[void]$container.Children.Add($name)
+            [void]$ui.DashboardNodes.Children.Add($container);$dashboardNodeVisuals[$p.Key]=[pscustomobject]@{Container=$container;Button=$button;Label=$name}
+        }
+        $visual=$dashboardNodeVisuals[$p.Key];$button=$visual.Button
+        $button.Background=$window.Resources['Raised'];$button.BorderBrush=$window.Resources[$(if($p.Key -eq $script:dashboardSelectedKey){'Accent'}else{'Border'})];$button.ToolTip=$p.Name+' · '+$p.State
+        $button.Effect=$null
         if($p.Key -eq $script:dashboardSelectedKey){$glow=[Windows.Media.Effects.DropShadowEffect]::new();$glow.Color=$window.Resources['Accent'].Color;$glow.BlurRadius=16;$glow.ShadowDepth=0;$glow.Opacity=0.45;$button.Effect=$glow}
         if($p.Icon){$im=[Windows.Controls.Image]::new();$im.Source=$p.Icon;$im.Width=36;$im.Height=36;$button.Content=$im}else{$button.Content=$p.Name.Substring(0,1).ToUpperInvariant();$button.FontSize=25}
         [Windows.Automation.AutomationProperties]::SetName($button,$p.Name+' auswählen')
-        $button.Add_Click({param($sender,$e) $script:dashboardSelectedKey=[string]$sender.Tag;Draw-Dashboard})
-        [Windows.Controls.Canvas]::SetLeft($button,($x-33));[Windows.Controls.Canvas]::SetTop($button,($y-33));[void]$canvas.Children.Add($button)
-        Add-DashboardLabel $canvas $p.Name ($x-90) ($y+36) 180 'Text' 18
+        $visual.Label.Text=$p.Name;$visual.Label.ToolTip=$p.Name;$visual.Label.Foreground=$window.Resources['Text']
+        [Windows.Controls.Canvas]::SetLeft($visual.Container,($x-90));[Windows.Controls.Canvas]::SetTop($visual.Container,($y-33))
+
     }
 }
 function Draw-DashboardChart($canvas,[string]$property,[string]$role){
@@ -110,20 +123,25 @@ function Draw-Dashboard {
     if(-not $script:dashboardReady){return}
     $frame=$script:dashboardFrame
     $ui.DashboardActiveCount.Text=if($frame){[string]$frame.ActiveCount}else{'0'};$ui.DashboardBlockedCount.Text=if($frame){[string]$frame.BlockCount}else{'0'};$ui.DashboardReviewCount.Text=if($frame){[string]$frame.ReviewCount}else{'0'}
-    $ui.DashboardGraphHint.Text=$(if($script:dashboardFrozen){'Eingefroren · '+$frame.Time.ToLocalTime().ToString('HH:mm:ss')+' · '}else{''})+'Aufbau, nicht Datenrichtung · bis zu 6 aktive Programme · Ziele zusammengefasst'
+    $ui.DashboardGraphHint.Text=$(if($script:dashboardFrozen){'Eingefroren · '+$frame.Time.ToLocalTime().ToString('HH:mm:ss')+' · '}else{''})+'Alle aktiven Programme · Mausrad: Zoom · Fläche ziehen · Ziele zusammengefasst'
     $p=if($frame){$frame.Programs | Where-Object Key -eq $script:dashboardSelectedKey | Select-Object -First 1}else{$null}
-    $ui.DashboardProgramName.Text=if($p){$p.Name}else{'Programm auswählen'};$ui.DashboardProgramIcon.Source=if($p){$p.Icon}else{$null};$ui.DashboardProgramStatus.Text=if($p){$p.State}else{'Aktive Programme erscheinen automatisch.'}
-    $ui.DashboardDirections.Text=if($p){$p.Outgoing.ToString()+' ausgehend · '+$p.Incoming+' eingehend'+"`n"+$p.Unknown+' unbekannt · '+$p.Listening+' lauschend'}else{'Noch keine Verbindungen erfasst.'}
-    $ui.DashboardTargets.Text=if($p -and $p.Edges.Count){($p.Edges | Select-Object -First 4 | ForEach-Object {$_.Direction+' · '+$_.Address+':'+$_.Port+$(if($_.Blocked){' · blockiert'})}) -join "`n"}else{'Aufbau nicht erfasst oder keine aktuelle Gegenstelle.'}
-    $ui.DashboardProgramRx.Text='↓ Empfang '+$(if($p -and $p.RateReady){Format-Rate $p.Rx}else{'nicht gemessen'});$ui.DashboardProgramTx.Text='↑ Versand '+$(if($p -and $p.RateReady){Format-Rate $p.Tx}else{'nicht gemessen'});$ui.DashboardProgramReview.Text=if($p){$p.Review}else{''}
-    $ui.DashboardDetails.IsEnabled=[bool]$p;$ui.DashboardTemporaryBlock.IsEnabled=[bool]($p -and -not $script:dashboardFrozen -and $script:setupStatus -and $setupStatus.Verified -and [IO.File]::Exists($p.Path) -and -not(Is-Protected $p.Path))
+    $inactiveSelection=-not $p -and $script:dashboardSelectionSnapshot
+    if($inactiveSelection){$p=$script:dashboardSelectionSnapshot}
+    $ui.DashboardProgramName.Text=if($p){$p.Name}else{'Programm auswählen'};$ui.DashboardProgramIcon.Source=if($p){$p.Icon}else{$null};$ui.DashboardProgramStatus.Text=if($inactiveSelection){'Letzte Auswahl · derzeit nicht aktiv'}elseif($p){$p.State}else{'Aktive Programme erscheinen automatisch.'}
+    $ui.DashboardDirections.Text=if($inactiveSelection){'Keine aktuelle Aktivität erfasst.'}elseif($p){$p.Outgoing.ToString()+' ausgehend · '+$p.Incoming+' eingehend'+"`n"+$p.Unknown+' unbekannt · '+$p.Listening+' lauschend'}else{'Noch keine Verbindungen erfasst.'}
+    $ui.DashboardTargets.Text=if($inactiveSelection){'Die Auswahl bleibt erhalten. Wähle ein aktives Programm im Netzwerkbild.'}elseif($p -and $p.Edges.Count){($p.Edges | Select-Object -First 4 | ForEach-Object {$_.Direction+' · '+$_.Address+':'+$_.Port+$(if($_.Blocked){' · blockiert'})}) -join "`n"}else{'Aufbau nicht erfasst oder keine aktuelle Gegenstelle.'}
+    $ui.DashboardProgramRx.Text='↓ Empfang '+$(if($p -and -not $inactiveSelection -and $p.RateReady){Format-Rate $p.Rx}else{'nicht gemessen'});$ui.DashboardProgramTx.Text='↑ Versand '+$(if($p -and -not $inactiveSelection -and $p.RateReady){Format-Rate $p.Tx}else{'nicht gemessen'});$ui.DashboardProgramReview.Text=if($inactiveSelection){''}elseif($p){$p.Review}else{''}
+    $ui.DashboardDetails.IsEnabled=[bool]($p -and -not $inactiveSelection);$ui.DashboardTemporaryBlock.IsEnabled=[bool]($p -and -not $inactiveSelection -and -not $script:dashboardFrozen -and $script:setupStatus -and $setupStatus.Verified -and [IO.File]::Exists($p.Path) -and -not(Is-Protected $p.Path))
     $last=if($frame){$frame.History | Select-Object -Last 1}else{$null}
     $ui.DashboardRx.Text=if($last -and $null -ne $last.Rx){Format-Rate $last.Rx}else{'Messung …'};$ui.DashboardTx.Text=if($last -and $null -ne $last.Tx){Format-Rate $last.Tx}else{'Messung …'}
-    Draw-DashboardNetwork;Draw-DashboardChart $ui.DashboardRxGraph 'Rx' 'Accent';Draw-DashboardChart $ui.DashboardTxGraph 'Tx' 'Blue'
+    Draw-DashboardNetwork
+    if(-not $script:dashboardCameraReady -or (-not $script:dashboardFittedPrograms -and $frame -and $frame.Programs.Count)){Fit-Dashboard}
+    $ui.DashboardCenter.IsEnabled=[bool]($p -and -not $inactiveSelection)
+    Draw-DashboardChart $ui.DashboardRxGraph 'Rx' 'Accent';Draw-DashboardChart $ui.DashboardTxGraph 'Tx' 'Blue'
     if($frame -and $frame.Problem){$ui.DashboardProgramRx.Text='↓ Empfang: Erfassung eingeschränkt';$ui.DashboardProgramTx.Text='↑ Versand: Erfassung eingeschränkt';$ui.DashboardProgramRx.ToolTip=$frame.Problem;$ui.DashboardProgramTx.ToolTip=$frame.Problem}
 }
 function Initialize-DashboardMode {
-    Reset-DashboardHistory;$script:dashboardReady=$true
+    Reset-DashboardHistory;Initialize-DashboardNavigation;$script:dashboardReady=$true
     $ui.DashboardTab.Add_Click({Show-Panel 'DashboardPanel'})
     $ui.DashboardFreeze.Add_Click({$script:dashboardFrozen=-not $script:dashboardFrozen;$ui.DashboardFreeze.Content=if($dashboardFrozen){'▶ Fortsetzen'}else{'Ⅱ Einfrieren'};if($dashboardFrozen){Draw-Dashboard}else{Update-Dashboard}})
     $ui.DashboardPeriod.Add_SelectionChanged({Draw-Dashboard})
