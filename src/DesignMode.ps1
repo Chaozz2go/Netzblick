@@ -1,4 +1,5 @@
-﻿function Get-EffectivePalette([bool]$dark){
+﻿function Get-StartupDesignStyle($savedStyle){if($savedStyle -in @('Clean','Future')){return $savedStyle};return 'Future'}
+function Get-EffectivePalette([bool]$dark){
     $palette=Get-ThemePalette $dark
     if($script:designStyle -eq 'Future'){
         $overrides=if($dark){@{AppBg='#07121C';Surface='#0C1B28';Sidebar='#08151F';Raised='#112A3B';Alternate='#0D202E';Input='#081824';Text='#EDF8FF';Muted='#ADC5D7';Border='#2B4F65';Accent='#10D9EC';AccentSoft='#103D49';OnAccent='#032029';Blue='#75CFFF';Danger='#FF7B87';DangerSoft='#3B222E';Warning='#FFC16B';WarningSoft='#372D20';Success='#63E5B0';SuccessSoft='#143C33'}}else{@{AppBg='#EAF2F8';Surface='#F9FDFF';Sidebar='#DFEDF4';Raised='#E0EEF6';Alternate='#EDF6FA';Input='#F5FBFF';Text='#102C40';Muted='#426276';Border='#9FBECD';Accent='#006A84';AccentSoft='#CAEAF1';OnAccent='#FFFFFF';Blue='#006D9B';Danger='#AD243B';DangerSoft='#F9DFE6';Warning='#835100';WarningSoft='#FFF0CE';Success='#006747';SuccessSoft='#D4EFE3'}}
@@ -82,6 +83,7 @@ function Set-DesignAppearance {
         $ui[$name].HorizontalContentAlignment=if($future){'Left'}else{'Center'}
         $ui[$name].FontSize=if($future){13}else{12};$ui[$name].Height=if($future){40}else{[double]::NaN}
     }
+    Update-OverviewFilterChrome
     Set-WorkspaceLayout $script:activePanel
 }
 function Set-DesignStyle([string]$style){

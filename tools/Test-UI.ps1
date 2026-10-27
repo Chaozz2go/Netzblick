@@ -49,9 +49,10 @@ Initialize-BlockDetails
 $script:allProgramItems=@([pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Neue Test-App';Rows=@()})
 $ui.Programs.ItemsSource=$allProgramItems
 Initialize-ReviewMode
+Initialize-WorkspaceMode
 Track-ObservedPrograms $allProgramItems
 Refresh-Overview
-if($newPrograms.Count -ne 1 -or $ui.PendingPrograms.Items.Count -ne 1 -or $ui.ReviewTargets.Text -notmatch '8.8.8.8'){throw 'Prüfliste oder Gegenstellen fehlen.'}
+if($newPrograms.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewPrograms.Items[0].ReviewReason -notmatch 'Neues Programm' -or (Get-ReviewTargets $testExe) -notmatch '8.8.8.8'){throw 'Einheitliche Prüfliste oder Gegenstellen fehlen.'}
 Show-ReviewProgram $testExe
 if($lastPanel -ne 'LivePanel' -or $ui.Programs.SelectedItem.Path -ne $testExe){throw 'Anzeigen öffnet nicht das ausgewählte Programm.'}
 $saved=Get-Content -LiteralPath $userStateFile -Raw | ConvertFrom-Json
@@ -312,6 +313,55 @@ if($savedDesign.DesignStyle -ne 'Future' -or $savedDesign.DarkMode){throw 'Desig
 $ui.DesignSelector.SelectedIndex=0
 if($script:designStyle -ne 'Clean'){throw 'Designauswahl wechselt nicht zu Clean.'}
 Write-Output 'PASS: Clean/Future plus Hell/Dunkel, sichere Auswahl, geteilte/vergrößerte Details, Leerzustand und gespeicherte unabhängige Auswahl ohne Regeländerung.'
+
+if((Get-StartupDesignStyle $null) -ne 'Future' -or (Get-StartupDesignStyle 'invalid') -ne 'Future' -or (Get-StartupDesignStyle 'Clean') -ne 'Clean'){throw 'Future-Standard überschreibt gespeichertes Clean oder fehlt.'}
+# Reproduce the screenshot: no new program, but an existing app has an unreviewed target.
+[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
+$script:newPrograms=@{};$script:targetLedger=@{};$script:blockBaselines=@{};$script:targetReviewCounts=$null
+$script:rows=@();$script:trafficSamples=@{}
+$script:trafficPeers=@([pscustomobject]@{Path=$testExe;Protocol='TCPv4';Address='8.8.8.8';Port=443})
+$blockedPath='C:\Beispiel\Gesperrt.exe';$newPath='C:\Beispiel\Neue-App.exe'
+[Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,$blockedPath)
+$script:allProgramItems=@(
+ [pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($testExe);Path=$testExe;Name='Bekannte App';Rows=@()},
+ [pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($blockedPath);Path=$blockedPath;Name='Gesperrte App';Rows=@()},
+ [pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($newPath);Path=$newPath;Name='Neue App';Rows=@()}
+)
+$ui.Programs.ItemsSource=$allProgramItems
+Set-DesignStyle 'Future';Set-NetzblickTheme $false;Refresh-Overview
+$beforeReviewConfig=$serializer.Serialize($setupStatus.Config)
+$ui.OverviewSearch.Text='does-not-exist';$ui.ReviewOptions.IsExpanded=$true
+$ui.FutureReviewFilter.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewFilter.SelectedIndex -ne 2 -or $ui.OverviewSearch.Text -or $ui.ReviewOptions.IsExpanded -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewNew.Text -notlike '1 Programme*' -or $ui.NewProgramsNotice.Text -like '*leer*'){throw 'Kartenfilter/Prüfzähler widersprüchlich bei neuer Gegenstelle einer bekannten App.'}
+if($ui.OverviewPrograms.SelectedItem.ReviewReason -ne '1 neues Ziel' -or $ui.ReviewListActions.Visibility -ne 'Visible'){throw 'Prüfgrund oder direkte Prüfaktionen fehlen.'}
+$ui.OverviewReviewDetails.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.ProgramDetailTabs.SelectedIndex -ne 1 -or -not $ui.OnlyProgramUnreviewed.IsChecked -or $ui.OnlyProgramBlocks.IsChecked -or $ui.Connections.Items.Count -ne 1 -or $ui.Connections.Items[0].TargetReview -ne 'Neues Ziel'){throw 'Prüfdetails führen nicht zur neuen Gegenstelle.'}
+$ui.OverviewReviewDone.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.FutureReviewCount.Text -ne '0' -or $ui.OverviewPrograms.Items.Count -ne 0 -or $ui.OverviewNew.Text -ne 'Alles geprüft'){throw 'Geprüfte Gegenstelle verbleibt in der Prüfliste.'}
+$ui.FutureBlockedFilter.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewFilter.SelectedIndex -ne 1 -or $ui.OverviewPrograms.Items.Count -ne 1 -or $ui.OverviewPrograms.Items[0].Path -ne $blockedPath){throw 'Gesperrt-Karte zeigt falsche Programme.'}
+$ui.FutureAllFilter.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewFilter.SelectedIndex -ne 0 -or $ui.OverviewPrograms.Items.Count -ne 3 -or $serializer.Serialize($setupStatus.Config) -ne $beforeReviewConfig){throw 'Alle-Karte oder Filter/Prüfmarke verändert Firewallkonfiguration.'}
+# Persisted unreviewed targets keep an inactive app visible without inventing sockets.
+$script:trafficPeers=@([pscustomobject]@{Path=$testExe;Protocol='TCPv4';Address='1.1.1.1';Port=443});Update-ActivityLedger
+$historical=@(Get-ProgramCatalog @() @() @(Get-ReviewCatalogEntries) $null @())
+if($historical.Count -ne 1 -or $historical[0].Rows.Count -ne 0 -or $historical[0].Observed -or $historical[0].Summary -notlike 'Früher beobachtet*'){throw 'Gespeicherte offene Prüfung einer beendeten App fehlt oder erfindet Aktivität.'}
+$attempt=New-Object Netzblick.SetupAttempt;$attempt.Key='review-repeat';$attempt.Path=$testExe;$attempt.Address='8.8.8.8';$attempt.Protocol=6;$attempt.Port=443;$attempt.Count=3;$attempt.FirstUtc=[datetime]::UtcNow;$attempt.LastUtc=[datetime]::UtcNow
+$setupStatus.Attempts.Add($attempt)
+Mark-ProgramActivityReviewed $testExe
+$attempt.Count=5
+$blockRow=Get-ProgramBlockRows $testExe $setupStatus | Select-Object -First 1
+if((Get-TargetReviewLabel $testExe $blockRow) -ne 'Neue Blockversuche' -or (Get-ProgramReviewState $testExe).Reason -ne '2 neue Blockversuche'){throw 'Neue Versuche eines bereits geprüften Ziels fehlen als Prüfgrund.'}
+$ui.Programs.SelectedItem=$allProgramItems[0];$ui.OnlyProgramUnreviewed.IsChecked=$true;Refresh-Detail
+if($ui.Connections.Items.Count -ne 1 -or -not $ui.Connections.Items[0].IsBlock){throw 'Ungeprüft-Filter verschluckt wiederholte Blockversuche.'}
+$ui.OnlyProgramUnreviewed.IsChecked=$false
+$script:newPrograms[[Netzblick.ProcessLineage]::Normalize($newPath)]=[pscustomobject]@{Key=[Netzblick.ProcessLineage]::Normalize($newPath);Name='Neue App';Path=$newPath;FirstUtc=[datetime]::UtcNow}
+Refresh-Overview
+if($ui.FutureReviewCount.Text -ne '2'){throw 'Neue Programme und neue Blockversuche sind nicht in einer gemeinsamen Prüfliste.'}
+$ui.ReviewShow.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+if($ui.OverviewPrograms.Items.Count -ne 2 -or $ui.OverviewFilter.SelectedIndex -ne 2){throw 'Prüfliste-Knopf zeigt nicht alle offenen Prüfgründe.'}
+Write-Output 'PASS: Future-Standard, anklickbare Zähler, gemeinsame Prüfliste für Programme/Ziele/Blockversuche, historische Prüfungen und Detailfilter ohne Regeländerung.'
+
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -337,8 +387,9 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Overview','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
-  $renderPanel=if($panelName -like 'Live*'){'Live'}else{$panelName}
+ foreach($panelName in @('Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+  $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}else{$panelName}
+  $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
   Show-RealPanel ($renderPanel+'Panel')

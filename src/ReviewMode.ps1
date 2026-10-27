@@ -26,11 +26,17 @@ function Get-ReviewTargets([string]$path){
     $unique=@($targets | Select-Object -Unique)
     return $(if($unique.Count){($unique | Select-Object -First 5)-join ' · '}else{'Keine Gegenstelle in dieser Sitzung erfasst. Anzeigen öffnet die Programmübersicht.'})
 }
-function Refresh-ReviewSelection {
-    $entry=$ui.PendingPrograms.SelectedItem
-    foreach($n in @('ReviewShow','ReviewBlock','ReviewDone')){$ui[$n].IsEnabled=[bool]$entry}
-    if($entry){$ui.ReviewTargets.Text=$entry.Path+[Environment]::NewLine+(Get-ReviewTargets $entry.Path);$ui.ReviewBlock.IsEnabled=[bool]($script:setupStatus -and $setupStatus.Verified -and -not(Is-Protected $entry.Path))}
-    else{$ui.ReviewTargets.Text='Keine Programme in der Prüfliste.'}
+function Update-OverviewReviewActions {
+    $entry=$ui.OverviewPrograms.SelectedItem
+    $ready=[bool]($entry -and $entry.NeedsReview)
+    $ui.OverviewReviewDetails.IsEnabled=$ready;$ui.OverviewReviewDone.IsEnabled=$ready
+}
+function Open-OverviewReviewDetails {
+    $entry=$ui.OverviewPrograms.SelectedItem
+    if(-not $entry){return}
+    Show-ReviewProgram $entry.Path
+    $ui.OnlyProgramBlocks.IsChecked=$false;$ui.OnlyProgramUnreviewed.IsChecked=$true
+    $ui.ProgramDetailTabs.SelectedIndex=1;Refresh-Detail
 }
 function Refresh-ReviewPolicy {
     if(-not $ui.ContainsKey('ReviewPolicy')){return}
@@ -63,10 +69,12 @@ function Initialize-ReviewMode {
     $script:reviewToast=$null;$script:reviewToastPath='';$script:reviewPolicyRefreshing=$false
     $ui.NotifyObservedPrograms.IsChecked=$script:notifyObserved
     $ui.NotifyObservedPrograms.Add_Click({$script:notifyObserved=[bool]$ui.NotifyObservedPrograms.IsChecked;Save-UserState;if(-not $notifyObserved -and $script:reviewToast){$reviewToast.Close()}})
-    $ui.PendingPrograms.Add_SelectionChanged({Refresh-ReviewSelection})
-    $ui.ReviewShow.Add_Click({if($ui.PendingPrograms.SelectedItem){Show-ReviewProgram $ui.PendingPrograms.SelectedItem.Path}})
-    $ui.ReviewBlock.Add_Click({if($ui.PendingPrograms.SelectedItem){Block-ReviewProgram $ui.PendingPrograms.SelectedItem.Path}})
-    $ui.ReviewDone.Add_Click({if($ui.PendingPrograms.SelectedItem){Save-ReviewDecision $ui.PendingPrograms.SelectedItem.Path}})
+    $ui.ReviewShow.Add_Click({Set-OverviewFilter 2})
+    $ui.OverviewPrograms.Add_SelectionChanged({if(-not $script:overviewItemsChanging){Update-OverviewReviewActions}})
+    $ui.OverviewReviewDetails.Add_Click({Open-OverviewReviewDetails})
+    $ui.OverviewReviewDone.Add_Click({if($ui.OverviewPrograms.SelectedItem){Save-ReviewDecision $ui.OverviewPrograms.SelectedItem.Path;Refresh-Detail}})
+    $ui.ProgramReviewDetails.Add_Click({if($ui.Programs.SelectedItem){$ui.OnlyProgramBlocks.IsChecked=$false;$ui.OnlyProgramUnreviewed.IsChecked=$true;$ui.ProgramDetailTabs.SelectedIndex=1;Refresh-Detail}})
+    $ui.OnlyProgramUnreviewed.Add_Click({Refresh-Detail})
     $ui.ReviewPolicy.Add_SelectionChanged({
         if($script:reviewPolicyRefreshing){return}
         if($ui.ReviewPolicy.SelectedIndex -eq 1 -and -not $script:accessActive){Start-AccessMode;if($script:accessActive){Show-Panel 'AccessPanel'}}

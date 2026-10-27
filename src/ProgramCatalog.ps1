@@ -12,7 +12,7 @@ function Get-ProgramCatalog($socketRows,$samples,$pending,$status,$legacyRules){
     foreach($item in $sources){
         if(-not $item -or -not [Netzblick.AccessQueue]::CanAllow($item.Path)){continue}
         $key=[Netzblick.ProcessLineage]::Normalize($item.Path)
-        if(-not $catalog.ContainsKey($key)){$catalog[$key]=[pscustomobject]@{Key=$key;Name=$item.Name;Path=$item.Path;Summary='';Rows=@();Observed=$true;Saved=$false;BlockCount=[long]0;BlockSummary='';LastBlockUtc=$null;BlockedTargets=''}}
+        if(-not $catalog.ContainsKey($key)){$catalog[$key]=[pscustomobject]@{Key=$key;Name=$item.Name;Path=$item.Path;Summary='';Rows=@();Observed=(-not $item.Historical);Saved=$false;BlockCount=[long]0;BlockSummary='';LastBlockUtc=$null;BlockedTargets=''}}
     }
     $paths=@($legacyRules | ForEach-Object {$_.Path})
     if($status -and $status.Config){$paths+=@($status.Config.WatchedPaths)+@($status.Config.Rules | ForEach-Object {$_.Path})}
@@ -31,7 +31,7 @@ function Get-ProgramCatalog($socketRows,$samples,$pending,$status,$legacyRules){
         $p.BlockedTargets+=' '+$attempt.Target
     }}
     foreach($p in $catalog.Values){
-        $base=if($p.Rows.Count){$p.Rows.Count.ToString()+' sichtbare Sockets'}elseif($p.Saved){'Gespeicherte Regel · kein Socket sichtbar'}else{'In dieser Sitzung erfasst · kein Socket sichtbar'}
+        $base=if($p.Rows.Count){$p.Rows.Count.ToString()+' sichtbare Sockets'}elseif($p.Saved){'Gespeicherte Regel · kein Socket sichtbar'}elseif(-not $p.Observed){'Früher beobachtet · kein Socket sichtbar'}else{'In dieser Sitzung erfasst · kein Socket sichtbar'}
         if($p.BlockCount){$p.BlockSummary=$p.BlockCount.ToString()+' blockierte Versuche · zuletzt '+$p.LastBlockUtc.ToLocalTime().ToString('HH:mm:ss');$p.Summary=$p.BlockSummary+[Environment]::NewLine+$base}else{$p.Summary=$base}
         $p
     }

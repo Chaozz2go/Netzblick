@@ -10,8 +10,8 @@ Netzblick ist eine Windows-App, mit der du Netzwerkverbindungen deiner Programme
 
 | Variante | Download | Für wen? |
 | --- | --- | --- |
-| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.15.0-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
-| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.15.0-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
+| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.15.1-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
+| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.15.1-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
 
 **Voraussetzungen:** Windows 10/11 mit 64 Bit, .NET Framework 4.8 und Windows PowerShell 5.1. Für Netzwerküberwachung und Firewallsteuerung sind Administratorrechte nötig. Python oder eine zusätzliche PowerShell-Installation werden nicht benötigt.
 
@@ -20,10 +20,10 @@ Die fertigen Pakete findest du unter **Releases**. Der grüne GitHub-Knopf **Cod
 ## Was kannst du damit machen?
 
 - **Programme und Verbindungen ansehen:** Nach Name oder Dateipfad suchen, aktive Programme finden und Ziele, Ports, Protokolle, Richtung sowie verfügbare Datenmengen prüfen.
-- **Sperren und Freigaben schnell ändern:** Gesperrte und noch ungeprüfte Programme filtern. Ein Programm dauerhaft sperren, erlauben oder auf den Windows-Standard zurücksetzen. Eigene Änderungen lassen sich unter den angezeigten Bedingungen rückgängig machen.
+- **Sperren und Freigaben schnell ändern:** Gesperrte und noch ungeprüfte Programme filtern. Ein Programm dauerhaft sperren, erlauben oder auf den Windows-Standard zurücksetzen. Die Zähler **Programme**, **gesperrt** und **zu prüfen** filtern die Liste per Klick. Eigene Änderungen lassen sich unter den angezeigten Bedingungen rückgängig machen.
 - **Ein Programm zeitweise offline nehmen:** Zum Beispiel Steam für 10, 30 oder 60 Minuten oder bis zur manuellen Aufhebung sperren. Anschließend werden die vorherigen Netzblick-Programmregeln wiederhergestellt. Auch eine Freigabe für zehn Minuten ist möglich.
 - **Neue Software vor dem Start prüfen:** Eine EXE auswählen, zuerst sperren und erst danach selbst starten. So kannst du ihre erfassten Netzwerkversuche ansehen und benötigte Verbindungen gezielt freigeben.
-- **Neue Programme bewerten:** Optional auf neue Programme hinweisen lassen, direkt zu ihren Details wechseln und sie als geprüft markieren. Die Prüfmarke allein verändert keine Netzwerkregel.
+- **Neue Programme bewerten:** Optional auf neue Programme hinweisen lassen, direkt zu ihren Details wechseln und sie als geprüft markieren. In derselben Prüfliste stehen auch bekannte Programme mit neuen Zielen oder Blockversuchen. Der konkrete Grund steht beim Namen; **Prüfdetails ansehen** zeigt die ungeprüften Ziele und Versuche. Die Prüfmarke allein verändert keine Netzwerkregel.
 - **Erst fragen, dann verbinden:** Optional neue externe Verbindungen ohne passende Netzblick-Freigabe sperren. Anfragen lassen sich nach Programm, Ziel-IP, Richtung, Protokoll und Port prüfen und mit benannten Regeln freigeben. Standardmäßig wird zunächst zugelassen und anschließend geprüft.
 - **Sperrgründe nachvollziehen:** Bei erfassten Blockversuchen Ziel, Zeitpunkt, Anzahl und verfügbaren Windows-Filter bzw. Netzblick-Regel ansehen. Fehlende Zuordnungen werden als solche angezeigt.
 - **Ziele auf der Weltkarte ansehen:** Grobe Länderzuordnung der Gegenstellen, mit Mausrad-Zoom und Verschieben der Karte. Ping und Traceroute stehen für weitere Prüfungen bereit.
@@ -52,7 +52,7 @@ Der optionale Nachfragemodus unter **Einrichten & testen** betrifft auch LAN, DN
 
 ## Dein Design: Clean oder Future
 
-Links unten unter **Design** kannst du jederzeit wählen:
+**Future ist bei einer neuen Einrichtung der Standard.** Eine bereits gespeicherte Designwahl bleibt erhalten. Links unten unter **Design** kannst du jederzeit wählen:
 
 - **Clean:** die schlichte, aufgeräumte Oberfläche.
 - **Future:** eine technische Gestaltung mit türkisfarbenen Akzenten, echten Programm-Icons aus den lokalen EXE-Dateien und Programmliste und Details nebeneinander. Dazu kommen Statuskarten und eine kompakte Offline-Weltkarte.
@@ -87,7 +87,7 @@ Windows-Builds prüfen unter anderem Oberfläche, native Sperr- und Freigabefunk
 ## Hilfe, Hintergründe und Entwicklung
 
 - [Bedienung und technische Details](docs/Bedienung-und-Technik.md)
-- [Neuerungen in Version 0.15.0](docs/Release-0.15.0.md)
+- [Neuerungen in Version 0.15.1](docs/Release-0.15.1.md)
 - [Alle Veröffentlichungen](https://github.com/Chaozz2go/Netzblick/releases)
 - [Fehler melden oder eine Idee vorschlagen](https://github.com/Chaozz2go/Netzblick/issues)
 - [Drittanbieter und Datenlizenzen](THIRD-PARTY-NOTICES.txt)
