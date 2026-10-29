@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([string]$OutputDirectory=(Join-Path $PSScriptRoot 'ui-preview'),[switch]$LogPreview)
 $ErrorActionPreference='Stop'
-trap {Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
+trap {Write-Output $_.Exception.GetBaseException().Message;Write-Output $_.ScriptStackTrace;Write-Output $_.InvocationInfo.PositionMessage;throw}
 Add-Type -AssemblyName @('PresentationFramework','PresentationCore','WindowsBase')
 $appRoot=Split-Path $PSScriptRoot -Parent
 $sources=@('NetworkReader.cs','GeoDatabase.cs','ProbeSession.cs','InspectionCore.cs','WindowsInspection.cs','NetworkPolicyCore.cs','EndpointInfo.cs','AccessCore.cs','WindowsAccess.cs','AccessWatch.cs','SetupCore.cs','ReleaseUpdates.cs','TrafficCore.cs') | ForEach-Object {Join-Path $appRoot ('src\'+$_)}
@@ -12,7 +12,7 @@ Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll'
 $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($xaml)))
 $ui=@{}
 $xaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$control=$window.FindName($name);if($control){$ui[$name]=$control}}}
-foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow')){
+foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup')){
  [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
  $panel=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($panelXaml)));$ui[$panelName+'Panel'].Content=$panel
  $panelXaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$ui[$name]=$panel.FindName($name)}}
@@ -22,7 +22,11 @@ function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
 . (Join-Path $appRoot 'src\DesignMode.ps1')
 . (Join-Path $appRoot 'src\DirectionMode.ps1')
-. (Join-Path $appRoot 'src\ExperienceState.ps1')
+. (Join-Path $appRoot 'src\NavigationMode.ps1')
+    . (Join-Path $appRoot 'src\ProgramWorkspace.ps1')
+    . (Join-Path $appRoot 'src\FileChanges.ps1')
+    . (Join-Path $appRoot 'src\BackupMode.ps1')
+    . (Join-Path $appRoot 'src\ExperienceState.ps1')
     . (Join-Path $appRoot 'src\GuideMode.ps1')
     . (Join-Path $appRoot 'src\ChangePreview.ps1')
     . (Join-Path $appRoot 'src\HostsMode.ps1')
@@ -60,6 +64,9 @@ Initialize-WorkspaceMode
 Initialize-DirectionMode
 Initialize-ExperienceState
 Initialize-WorkflowMode
+Initialize-ProgramWorkspace
+Initialize-BackupMode
+Initialize-NavigationMode
 Track-ObservedPrograms $allProgramItems
 Refresh-Overview
 if($newPrograms.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewPrograms.Items[0].ReviewReason -notmatch 'Neues Programm' -or (Get-ReviewTargets $testExe) -notmatch '8.8.8.8'){throw 'Einheitliche Prüfliste oder Gegenstellen fehlen.'}
@@ -176,7 +183,7 @@ foreach($panel in @('DashboardPanel','OverviewPanel','AccessPanel','InspectionPa
  Show-RealPanel $panel
  foreach($dark in @($true,$false,$true,$false)){
   Set-NetzblickTheme $dark
-  foreach($name in @('OverviewTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+  foreach($name in @('DashboardTab','OverviewTab','WorkflowTab','SettingsTab','OpenSetupRules','OpenSetupHistory')){
    $button=$ui[$name];$bg=Get-TestLuminance $button.Background.Color;$fg=Get-TestLuminance $button.Foreground.Color
    if(([math]::Max($bg,$fg)+0.05)/([math]::Min($bg,$fg)+0.05) -lt 4.5){throw ('Navigation nach Themewechsel nicht lesbar: '+$name)}
   }
@@ -301,7 +308,7 @@ foreach($design in @('Future','Clean','Future','Clean')){
  foreach($dark in @($true,$false)){
   Set-NetzblickTheme $dark;Refresh-Overview;Refresh-Detail
   if($serializer.Serialize($setupStatus.Config) -ne $configurationBefore){throw 'Designwechsel ändert Firewallregeln.'}
-  foreach($name in @('OverviewTab','AccessTab','InspectionTab','UpdatesTab','OpenSetupRules','OpenSetupHistory')){
+  foreach($name in @('DashboardTab','OverviewTab','WorkflowTab','SettingsTab','OpenSetupRules','OpenSetupHistory')){
    $button=$ui[$name];$bg=Get-TestLuminance $button.Background.Color;$fg=Get-TestLuminance $button.Foreground.Color
    if(([math]::Max($bg,$fg)+0.05)/([math]::Min($bg,$fg)+0.05) -lt 4.5){throw ('Design-Kontrast zu niedrig: '+$design+' / '+$name)}
   }
@@ -524,6 +531,7 @@ $ui.HostsList.SelectedIndex=0
 Write-Output 'PASS: Hostprozesse mit Dienstsuche, PID-/Startzeit-Isolation, Richtungen, ehrlichen gemeinsamen Sperrbelegen und sicherer leerer Auswahl; keine Firewalländerung.'
 
 . (Join-Path $PSScriptRoot 'Test-ExperienceFixtures.ps1')
+. (Join-Path $PSScriptRoot 'Test-WorkspaceFixtures.ps1')
 
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
@@ -555,7 +563,7 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Workflow','Favorites','Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules','LiveTimeline')){
+ foreach($panelName in @('Groups','Backup','Workflow','Favorites','Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules','LiveTimeline')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -eq 'Favorites'){'Workflow'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
@@ -574,7 +582,7 @@ try{
    Refresh-Permissions
   }
   $ui.AccessViews.SelectedIndex=1
-  $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0);$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
+  Update-WorkspaceNavigation ($renderPanel+'Panel');$ui.MainShell.RowDefinitions[2].Height=[Windows.GridLength]::new(0)
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}

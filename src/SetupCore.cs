@@ -9,6 +9,27 @@ namespace Netzblick {
   public SetupChangeFailure(string text,bool restored,Exception inner):base(text,inner){Restored=restored;}
  }
  public static class SetupChanges {
+  public static bool IsProtectedProgram(string path){
+   if(String.IsNullOrWhiteSpace(path))return true;
+   string p=path.Replace('/','\\');string name=p.Substring(p.LastIndexOf('\\')+1).ToLowerInvariant();
+   return new[]{"svchost.exe","lsass.exe","services.exe","wininit.exe","winlogon.exe","smss.exe","system","msmpeng.exe","mpssvc.exe"}.Contains(name);
+  }
+  public static SetupConfig GroupChange(SetupConfig current,IEnumerable<string> paths,string operation,int minutes,DateTime now){
+   var members=paths==null?new List<string>():paths.ToList();
+   if(members.Count<1||members.Count>16||members.Select(ProcessLineage.Normalize).Distinct(StringComparer.Ordinal).Count()!=members.Count)throw new ArgumentException("Gruppe: 1 bis 16 unterschiedliche Programmpfade auswählen.");
+   foreach(string p in members)if(!AccessQueue.CanAllow(p)||p.Length>1024||IsProtectedProgram(p))throw new ArgumentException("Gruppe enthält einen ungültigen Pfad oder geschützten Windows-Sammelprozess.");
+   var next=CopyConfig(current);
+   foreach(string p in members){
+    if(operation=="GroupTemporaryBlock")TemporaryBlockProgram(next,p,minutes,now);
+    else if(operation=="GroupEndLeases")EndProgramLease(next,p,CaptureProgram(next,p),now);
+    else throw new ArgumentException("Unbekannte Gruppenaktion.");
+   }
+   next.Validate();return next;
+  }
+  public static SetupConfig RestoreOwnedConfig(SetupConfig current,SetupConfig saved,DateTime now){
+   if(saved==null)throw new ArgumentException("Sicherung enthält keine Dienstregeln.");
+   var next=CopyConfig(saved);next.Validate();next.Expire(now);next.Ask=current.Ask;next.Validate();return next;
+  }
   public static SetupConfig CopyConfig(SetupConfig c){
    return new SetupConfig{Version=c.Version,Ask=c.Ask,WatchedPaths=new List<string>(c.WatchedPaths),Rules=c.Rules.Select(CopyRule).ToList(),ProgramLeases=c.ProgramLeases.Select(CopyLease).ToList()};
   }
@@ -231,8 +252,29 @@ namespace Netzblick {
  }
  public sealed class SetupCommand {
   public string Operation {get;set;} public bool Enabled {get;set;} public string Path {get;set;}
-  public string ExpectedConfigKey {get;set;} public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
+  public List<string> Paths {get;set;} public SetupConfig RestoreConfig {get;set;} public string ExpectedConfigKey {get;set;} public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
   public int DurationMinutes {get;set;} public SetupProgramState BeforeProgram {get;set;} public SetupProgramState ExpectedProgram {get;set;}
  }
 }
 
+
+namespace Netzblick {
+ public sealed class BackupPending {public string Path {get;set;} public DateTime FirstUtc {get;set;}}
+ public sealed class BackupTarget {
+  public string Path {get;set;} public string Address {get;set;} public int Protocol {get;set;} public int Port {get;set;} public bool Reviewed {get;set;} public DateTime FirstUtc {get;set;}
+ }
+ public sealed class BackupBundle {
+  public string Format {get;set;} public int Version {get;set;} public DateTime CreatedUtc {get;set;} public SetupConfig Control {get;set;}
+  public List<string> Favorites {get;set;} public List<ProgramGroup> Groups {get;set;} public List<string> Seen {get;set;} public List<BackupPending> Pending {get;set;} public List<BackupTarget> Targets {get;set;}
+  public BackupBundle(){Format="Netzblick.Backup";Version=1;CreatedUtc=DateTime.UtcNow;Favorites=new List<string>();Groups=new List<ProgramGroup>();Seen=new List<string>();Pending=new List<BackupPending>();Targets=new List<BackupTarget>();}
+  static void Paths(IEnumerable<string> paths,int max){var seen=new HashSet<string>(StringComparer.Ordinal);foreach(string p in paths)if(!AccessQueue.CanAllow(p)||p.Length>max||!seen.Add(ProcessLineage.Normalize(p)))throw new ArgumentException("Sicherung enthält ungültige oder doppelte Programmpfade.");}
+  public void Validate(){
+   if(Format!="Netzblick.Backup"||Version!=1||CreatedUtc.Kind!=DateTimeKind.Utc||Favorites==null||Groups==null||Seen==null||Pending==null||Targets==null||Favorites.Count>50||Groups.Count>32||Seen.Count>10000||Pending.Count>1000||Targets.Count>5000)throw new ArgumentException("Unbekannte oder zu große Netzblick-Sicherung.");
+   if(Control!=null)Control.Validate();Paths(Favorites,1024);Paths(Seen,32767);Paths(Pending.Select(p=>p==null?null:p.Path),32767);
+   foreach(var p in Pending)if(p.FirstUtc.Kind!=DateTimeKind.Utc)throw new ArgumentException("Prüfzeitpunkt muss UTC sein.");
+   var groups=new WorkspaceSettings{Groups=Groups};groups.Validate();
+   var targets=new HashSet<string>(StringComparer.Ordinal);
+   foreach(var t in Targets){IPAddress ip;if(t==null||!AccessQueue.CanAllow(t.Path)||!IPAddress.TryParse(t.Address,out ip)||!(t.Protocol==6||t.Protocol==17||t.Protocol==1||t.Protocol==58)||t.Port<0||t.Port>65535||t.FirstUtc.Kind!=DateTimeKind.Utc)throw new ArgumentException("Ungültige Ziel-Prüfentscheidung in Sicherung.");if(ip.IsIPv4MappedToIPv6)ip=ip.MapToIPv4();string key=ProcessLineage.Normalize(t.Path)+"|"+ip+"|"+t.Protocol+"|"+t.Port;if(!targets.Add(key))throw new ArgumentException("Doppelte Ziel-Prüfentscheidung.");}
+  }
+ }
+}

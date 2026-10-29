@@ -97,6 +97,24 @@ public static class SetupChecks {
   try{SetupChanges.AssertPreview(previewCopy,fingerprint);throw new Exception("stale preview accepted");}catch(InvalidOperationException){count++;}
   SetupChanges.TemporaryBlockProgram(previewCopy,app,10,now);var leaseCopy=SetupChanges.CopyConfig(previewCopy);leaseCopy.ProgramLeases[0].PreviousRules[0].Name="Changed";
   check(SetupChanges.ConfigKey(previewCopy)!=SetupChanges.ConfigKey(leaseCopy),"preview key includes exact restoration plan and deep clone");
+
+  var groupSource=new SetupConfig();SetupChanges.AllowProgram(groupSource,app);SetupChanges.BlockProgram(groupSource,peer);string groupKey=SetupChanges.ConfigKey(groupSource);
+  var groupPause=SetupChanges.GroupChange(groupSource,new[]{app,peer},"GroupTemporaryBlock",10,now);
+  check(groupPause.ProgramLeases.Count==2&&ProgramPolicy.Category(groupPause,app)=="Blocked"&&SetupChanges.ConfigKey(groupSource)==groupKey,"group change is complete and does not mutate input");
+  var groupResume=SetupChanges.GroupChange(groupPause,new[]{app,peer},"GroupEndLeases",0,now);
+  check(SetupChanges.ConfigKey(groupResume)==groupKey,"group restores each distinct prior rule state");
+  try{SetupChanges.GroupChange(groupSource,new[]{app,@"C:\Windows\System32\svchost.exe"},"GroupTemporaryBlock",10,now);throw new Exception("protected group accepted");}catch(ArgumentException){check(SetupChanges.ConfigKey(groupSource)==groupKey,"protected member rejection leaves input untouched");}
+  try{SetupChanges.GroupChange(groupPause,new[]{app,peer},"GroupTemporaryBlock",10,now);throw new Exception("leased group accepted");}catch(InvalidOperationException){check(groupPause.ProgramLeases.Count==2,"group lease conflict has no partial change");}
+  try{SetupChanges.GroupChange(groupSource,new[]{app,app.ToUpperInvariant()},"GroupTemporaryBlock",10,now);throw new Exception("duplicate accepted");}catch(ArgumentException){count++;}
+  var oldBackup=new SetupConfig{Ask=true};SetupChanges.BlockProgram(oldBackup,app);SetupChanges.TemporaryAllowProgram(oldBackup,app,now.AddMinutes(-1),now.AddMinutes(-11));
+  var restoredBackup=SetupChanges.RestoreOwnedConfig(new SetupConfig(),oldBackup,now);
+  check(!restoredBackup.Ask&&restoredBackup.ProgramLeases.Count==0&&ProgramPolicy.Category(restoredBackup,app)=="Blocked","backup expires timed permission and preserves current global mode");
+  check(SetupChanges.RestoreOwnedConfig(new SetupConfig{Ask=true},new SetupConfig(),now).Ask,"backup cannot silently disable active global mode");
+  var savedGroup=new ProgramGroup{Id=Guid.NewGuid().ToString(),Name="Test",Paths=new System.Collections.Generic.List<string>{app,peer}};savedGroup.Validate();count++;
+  var bundle=new BackupBundle{Control=oldBackup};bundle.Groups.Add(savedGroup);bundle.Favorites.Add(app);bundle.Seen.Add(app);bundle.Validate();count++;
+  bundle.Favorites.Add(@"\\host\share\app.exe");try{bundle.Validate();throw new Exception("remote backup favorite accepted");}catch(ArgumentException){count++;}bundle.Favorites.RemoveAt(1);
+  var metadata=new FileReference{Path=app,Hash=new string('A',64),Company="Beispiel",FileVersion="1",Signer="ungeprüft",Length=1,LastWriteUtc=now,CapturedUtc=now};metadata.Validate();count++;
+  metadata.Hash="not-a-hash";try{metadata.Validate();throw new Exception("invalid reference accepted");}catch(ArgumentException){count++;}
   return count;
  }
 }

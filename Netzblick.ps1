@@ -29,13 +29,13 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.18.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.19.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -73,6 +73,10 @@ try {
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
     . (Join-Path $appRoot 'src\DesignMode.ps1')
     . (Join-Path $appRoot 'src\DirectionMode.ps1')
+    . (Join-Path $appRoot 'src\NavigationMode.ps1')
+    . (Join-Path $appRoot 'src\ProgramWorkspace.ps1')
+    . (Join-Path $appRoot 'src\FileChanges.ps1')
+    . (Join-Path $appRoot 'src\BackupMode.ps1')
     . (Join-Path $appRoot 'src\ExperienceState.ps1')
     . (Join-Path $appRoot 'src\GuideMode.ps1')
     . (Join-Path $appRoot 'src\ChangePreview.ps1')
@@ -179,7 +183,7 @@ try {
         if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 (Get-ThemeColor '#57677B') 11 }
     }
     function Refresh-Detail {
-        Update-ProgramTimeline;Update-FavoriteButtons
+        Update-ProgramTimeline;Update-FavoriteButtons;Update-ProgramFileCard
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
         if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramActivityReview.Text='';$ui.ProgramReviewDetails.Visibility='Collapsed';$ui.ProgramRules.ItemsSource=@();Update-FutureProgramPresentation $null $null $null;Update-QuickActions;Draw-Map $null @();return}
@@ -222,7 +226,7 @@ try {
     }
     function Refresh-Programs {
         $selected=$ui.Programs.SelectedItem;$selectedKey=if($selected){$selected.Key}else{''}
-        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) (@($script:newPrograms.Values)+@(Get-ReviewCatalogEntries)+@(Get-FavoriteCatalogEntries)) $script:setupStatus $script:ownRules | Sort-Object Name)
+        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) (@($script:newPrograms.Values)+@(Get-ReviewCatalogEntries)+@(Get-FavoriteCatalogEntries)+@(Get-GroupCatalogEntries)) $script:setupStatus $script:ownRules | Sort-Object Name)
         foreach($p in $allProgramItems){Set-ProgramSignal $p}
         Track-ObservedPrograms @($allProgramItems | Where-Object Observed)
         $term=$ui.Search.Text.Trim()
@@ -257,12 +261,12 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
-        $compact=$name -in @('WorkflowPanel','HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
+        $compact=$name -in @('GroupsPanel','BackupPanel','WorkflowPanel','HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
         Set-NavigationTheme $name
-        foreach($key in @('WorkflowPanel','HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('GroupsPanel','BackupPanel','WorkflowPanel','HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
@@ -271,6 +275,8 @@ try {
         if($name -eq 'DashboardPanel'){Update-Dashboard}
         if($name -eq 'HostsPanel'){Update-HostCapture;Refresh-Hosts}
         if($name -eq 'WorkflowPanel'){Refresh-Guide;Refresh-Favorites}
+        if($name -eq 'GroupsPanel'){Refresh-Groups}
+        if($name -eq 'BackupPanel'){Refresh-BackupView}
     }
     $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
     $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
@@ -335,6 +341,9 @@ try {
     Initialize-Updates
     Initialize-ExperienceState
     Initialize-WorkflowMode
+    Initialize-ProgramWorkspace
+    Initialize-BackupMode
+    Initialize-NavigationMode
     Refresh-Programs
     $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})
     Initialize-TrayMode
@@ -346,6 +355,7 @@ try {
         try {
             if($script:paused){return}
             Update-HostCapture
+            Update-FileScans
             if($null -ne $script:job -and $script:job.IsCompleted){
                 if($script:job.IsFaulted){$failure=$script:job.Exception.GetBaseException().Message;$script:job=$null;throw $failure}
                 $snapshot=$script:job.Result;$script:job=$null

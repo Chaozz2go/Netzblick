@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 trap {$failure=$_;Write-Output $failure.ToString();Write-Output $failure.ScriptStackTrace;Write-Output $failure.InvocationInfo.PositionMessage;throw $failure}
 if($env:GITHUB_ACTIONS -ne 'true'){throw 'Nur auf isolierten Windows-Runnern ausführen.'}
 $root=Split-Path $PSScriptRoot -Parent
-Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Numerics.dll') -Path @((Join-Path $root 'src\InspectionCore.cs'),(Join-Path $root 'src\NetworkPolicyCore.cs'))
+Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll','System.Numerics.dll') -Path @((Join-Path $root 'src\InspectionCore.cs'),(Join-Path $root 'src\AccessCore.cs'),(Join-Path $root 'src\NetworkPolicyCore.cs'))
 $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'Netzblick.ps1'),[ref]$tokens,[ref]$errors)
 $definition=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Rule-Base'},$true)
 Invoke-Expression $definition.Extent.Text

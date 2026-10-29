@@ -16,6 +16,8 @@ namespace Netzblick {
    if(command.Operation!="Status"&&command.Operation!="ObserveBlocks")SetupChanges.AssertPreview(status.Config,command.ExpectedConfigKey);
    if(command.Operation=="Status"||command.Operation=="Recheck"||command.Operation=="ObserveBlocks")return status;
    if(command.Operation=="Watch"){if(!status.Verified)throw new InvalidOperationException("Test: Filterprüfung fehlgeschlagen");status.Config.WatchedPaths.Add(command.Path);return status;}
+   if(command.Operation=="GroupTemporaryBlock"||command.Operation=="GroupEndLeases"){if(String.IsNullOrEmpty(command.ExpectedConfigKey))throw new InvalidOperationException("Gruppenvorschau fehlt");status.Config=SetupChanges.GroupChange(status.Config,command.Paths,command.Operation,command.DurationMinutes,DateTime.UtcNow);return status;}
+   if(command.Operation=="RestoreOwnedConfig"){if(String.IsNullOrEmpty(command.ExpectedConfigKey))throw new InvalidOperationException("Wiederherstellungsvorschau fehlt");status.Config=SetupChanges.RestoreOwnedConfig(status.Config,command.RestoreConfig,DateTime.UtcNow);return status;}
    if(command.Operation=="AllowProgram"){SetupChanges.AllowProgram(status.Config,command.Path);return status;}
    if(command.Operation=="BlockProgram"){SetupChanges.BlockProgram(status.Config,command.Path);return status;}
    if(command.Operation=="TemporaryAllowProgram"){SetupChanges.TemporaryAllowProgram(status.Config,command.Path,DateTime.UtcNow.AddMinutes(10),DateTime.UtcNow);return status;}

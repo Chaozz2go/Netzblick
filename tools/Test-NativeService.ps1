@@ -105,6 +105,22 @@ try{
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'})
     if($fresh.Config.Ask -or $fresh.Config.Rules.Count -or $fresh.Config.WatchedPaths.Count -or $fresh.Attempts.Count){throw 'Reset lässt alte Regeln oder Ereignisse stehen.'}
     if(-not (Connect-Fixture)){throw 'Reset gibt die Baseline-Verbindung nicht wieder frei.'}
+
+    $otherMember=Join-Path ([IO.Path]::GetDirectoryName($fixture)) 'Group-Helper.exe';Copy-Item -LiteralPath $fixture -Destination $otherMember
+    $paths=[System.Collections.Generic.List[string]]@($fixture,$otherMember)
+    $grouped=Send-Control ([Netzblick.SetupCommand]@{Operation='GroupTemporaryBlock';Paths=$paths;DurationMinutes=10;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($fresh.Config)})
+    if($grouped.Config.ProgramLeases.Count -ne 2 -or (Connect-Fixture)){throw 'Gruppensperre ist nicht vollständig oder sperrt reale Verbindung nicht.'}
+    $groupedKey=[Netzblick.SetupChanges]::ConfigKey($grouped.Config)
+    $badGroup=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='GroupTemporaryBlock';Paths=[System.Collections.Generic.List[string]]@($fixture,(Join-Path $env:SystemRoot 'System32\svchost.exe'));DurationMinutes=10;ExpectedConfigKey=$groupedKey})
+    if($badGroup.Ok -or [Netzblick.SetupChanges]::ConfigKey((Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})).Config) -ne $groupedKey){throw 'Abgelehnte Gruppe verändert teilweise Regeln.'}
+    $resumedGroup=Send-Control ([Netzblick.SetupCommand]@{Operation='GroupEndLeases';Paths=$paths;ExpectedConfigKey=$groupedKey})
+    if($resumedGroup.Config.ProgramLeases.Count -or -not (Connect-Fixture)){throw 'Gruppen-Rückweg stellt vorherige Konfiguration nicht wieder her.'}
+    $backupConfig=New-Object Netzblick.SetupConfig;$backupConfig.Ask=$true;[Netzblick.SetupChanges]::BlockProgram($backupConfig,$fixture)
+    $restored=Send-Control ([Netzblick.SetupCommand]@{Operation='RestoreOwnedConfig';RestoreConfig=$backupConfig;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($resumedGroup.Config)})
+    if($restored.Config.Ask -or (Connect-Fixture)){throw 'Wiederherstellung aktiviert globales Nachfragen oder verliert echte Sperrwirkung.'}
+    $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='RestoreOwnedConfig';RestoreConfig=(New-Object Netzblick.SetupConfig);ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($restored.Config)})
+    if(-not (Connect-Fixture)){throw 'Rücksicherung eigener Regeln bleibt ohne Wirkung.'}
+    Write-Output 'PASS: native atomare Gruppensperre, Ablehnung geschützter Mitglieder ohne Teiländerung, exakter Rückweg und eigene Konfigurations-Wiederherstellung bei unverändertem globalem Modus.'
     $fresh=Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'})
     if(-not $fresh.Verified){throw 'Erneute Filterprüfung nach Reset nicht bestätigt.'}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='ObserveBlocks';Enabled=$true}))

@@ -29,6 +29,28 @@ namespace Netzblick {
    return result;
   }
  }
+ public sealed class FileObservation {
+  public FileReference File {get;set;} public string Error {get;set;} public bool StampUnchanged {get;set;}
+  static string Limit(string s,int n){s=s??"";return s.Length>n?s.Substring(0,n):s;}
+  public static Task<FileObservation> Start(string path,long knownLength,DateTime knownWrite,bool force){return Task.Run(()=>Read(path,knownLength,knownWrite,force));}
+  static FileObservation Read(string path,long knownLength,DateTime knownWrite,bool force){
+   try{
+    if(!AccessQueue.CanAllow(path)||path.Length>1024)throw new ArgumentException("Vollständiger lokaler EXE-Pfad fehlt.");
+    var drive=new DriveInfo(System.IO.Path.GetPathRoot(path));if(drive.DriveType==DriveType.Network)throw new IOException("Automatischer Abgleich von Netzlaufwerken ist deaktiviert.");
+    var before=new FileInfo(path);if(!before.Exists)throw new FileNotFoundException("Datei nicht vorhanden.");
+    if(before.Length>268435456)throw new IOException("Datei größer als 256 MB; automatischer Hash-Abgleich ausgelassen.");
+    if(!force&&before.Length==knownLength&&before.LastWriteTimeUtc==knownWrite)return new FileObservation{StampUnchanged=true};
+    var value=new FileReference{Path=path,Length=before.Length,LastWriteUtc=before.LastWriteTimeUtc,CapturedUtc=DateTime.UtcNow,Signer="Keine eingebettete Signatur erkannt; Katalogsignaturen und Vertrauen nicht geprüft"};
+    using(var stream=System.IO.File.Open(path,FileMode.Open,FileAccess.Read,FileShare.Read)){
+     using(var hash=SHA256.Create())value.Hash=BitConverter.ToString(hash.ComputeHash(stream)).Replace("-","");
+     var info=FileVersionInfo.GetVersionInfo(path);value.Company=Limit(info.CompanyName,256);value.FileVersion=Limit(info.FileVersion,128);
+     try{using(var cert=new X509Certificate2(X509Certificate.CreateFromSignedFile(path)))value.Signer=Limit("Eingebetteter Unterzeichner: "+cert.Subject+" · Vertrauen/Gültigkeit nicht geprüft",1024);}catch(CryptographicException){}
+     var after=new FileInfo(path);if(after.Length!=value.Length||after.LastWriteTimeUtc!=value.LastWriteUtc)throw new IOException("Datei während des Abgleichs verändert; erneut prüfen.");
+    }
+    value.Validate();return new FileObservation{File=value};
+   }catch(Exception e){return new FileObservation{Error=e.Message};}
+  }
+ }
  public static class WindowsAudit {
   public static readonly Guid FilteringConnection=new Guid("0CCE9226-69AE-11D9-BED3-505054503030");
   [StructLayout(LayoutKind.Sequential)] struct AuditPolicy {public Guid SubCategory;public uint Flags;public Guid Category;}
