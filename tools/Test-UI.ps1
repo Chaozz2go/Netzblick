@@ -12,7 +12,7 @@ Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll'
 $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($xaml)))
 $ui=@{}
 $xaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$control=$window.FindName($name);if($control){$ui[$name]=$control}}}
-foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard')){
+foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts')){
  [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
  $panel=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($panelXaml)));$ui[$panelName+'Panel'].Content=$panel
  $panelXaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$ui[$name]=$panel.FindName($name)}}
@@ -22,7 +22,8 @@ function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
 . (Join-Path $appRoot 'src\DesignMode.ps1')
 . (Join-Path $appRoot 'src\DirectionMode.ps1')
-. (Join-Path $appRoot 'src\DashboardMode.ps1')
+. (Join-Path $appRoot 'src\HostsMode.ps1')
+    . (Join-Path $appRoot 'src\DashboardMode.ps1')
     . (Join-Path $appRoot 'src\DashboardNavigation.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
 . (Join-Path $appRoot 'src\ActivityReview.ps1')
@@ -469,6 +470,54 @@ $ui.UserNotice.Text='UI-Testdaten · keine realen Netzwerkverbindungen dargestel
 Show-RealPanel 'DashboardPanel';Update-Dashboard
 Write-Output 'PASS: echtes Dashboard-XAML mit App-Auswahl, getrennten Daten-/Aufbaurichtungen, bounded Historie, Freeze/Fortsetzen und Richtungsfiltern ohne Firewalländerung.'
 
+
+Initialize-HostsMode
+$hostPolicyBefore=$serializer.Serialize($setupStatus.Config)
+$hostFixture=New-Object Netzblick.HostSnapshot
+$hostStart=[datetime]::UtcNow.AddMinutes(-5)
+foreach($n in @(1,2)){
+ $h=New-Object Netzblick.HostProcess;$h.Pid=4200+$n;$h.StartUtc=$hostStart;$h.Name='svchost';$h.Path=$testExe
+ foreach($serviceName in @('Dnscache','Beispieldienst')){$service=New-Object Netzblick.HostedService;$service.Name=$serviceName+$n;$service.DisplayName=$(if($serviceName -eq 'Dnscache'){'DNS-Client'}else{'Beispieldienst für Netzblick-Vorschau'});$service.Description='Windows-Beschreibung: Dieser Dienst stellt Funktionen für andere Programme bereit. Die Netzwerkverbindung ist nur dem gemeinsamen Hostprozess zugeordnet.';$service.State='Läuft';$h.Services.Add($service)}
+ $hostFixture.Hosts.Add($h)
+}
+$script:hostSnapshot=$hostFixture
+$hostRowsBefore=$script:rows
+$script:rows=@(
+ [pscustomobject]@{Pid=4201;ProcessStartUtc=$hostStart;Path=$testExe;Protocol='TCPv4';Local='192.0.2.10:51001';Remote='198.51.100.4:443';Address='198.51.100.4';Port=443;State='SYN gesendet'},
+ [pscustomobject]@{Pid=4202;ProcessStartUtc=$hostStart;Path=$testExe;Protocol='TCPv4';Local='192.0.2.10:443';Remote='198.51.100.5:51002';Address='198.51.100.5';Port=51002;State='SYN empfangen'},
+ [pscustomobject]@{Pid=4201;ProcessStartUtc=$hostStart.AddMinutes(1);Path=$testExe;Protocol='TCPv4';Local='192.0.2.10:51003';Remote='203.0.113.6:443';Address='203.0.113.6';Port=443;State='Verbunden'})
+$script:hostNextRead=[datetime]::UtcNow.AddHours(1)
+$hostPreviewRows=@($script:rows)
+Show-RealPanel 'HostsPanel'
+# Do not start a native background scan in the fictional UI fixture.
+$script:hostJob=$null;$script:hostNextRead=[datetime]::UtcNow.AddHours(1);Refresh-Hosts
+if($ui.HostsList.Items.Count -ne 2 -or $ui.HostServices.Items.Count -ne 2 -or $ui.HostConnections.Items.Count -ne 1 -or $ui.HostConnections.Items[0].Direction -ne 'Ausgehend'){throw 'Hostansicht vermischt PID, Startzeit oder Dienste.'}
+$key=$ui.HostsList.SelectedItem.Key
+$ui.HostsList.SelectedIndex=1
+if($ui.HostConnections.Items.Count -ne 1 -or $ui.HostConnections.Items[0].Direction -ne 'Eingehend' -or $ui.HostBlocks.Items.Count -lt 1 -or $ui.HostBlockHint.Text -notlike '*Keine sichere Zuordnung*'){throw 'Hostansicht erfindet Dienstzuordnung oder verliert gemeinsame Blockbelege.'}
+$ui.HostsList.SelectedItem.HostProcess.Services[0].Expanded=$true
+$expandedService=$ui.HostServices.Items[0]
+Refresh-Hosts
+if(-not [object]::ReferenceEquals($expandedService,$ui.HostServices.Items[0]) -or -not $ui.HostsList.SelectedItem.HostProcess.Services[0].Expanded){throw 'Socket-Aktualisierung setzt Dienstbeschreibung zurück.'}
+$ui.HostsFilter.SelectedIndex=2
+if($ui.HostsList.Items.Count -ne 0){throw 'Host-Sperrfilter verwechselt vergangene Versuche mit aktueller Sperre.'}
+$ui.HostsFilter.SelectedIndex=3
+if($ui.HostsList.Items.Count -ne 2){throw 'Offene Prüfungen werden für gemeinsamen Host-Dateipfad nicht angezeigt.'}
+$ui.HostsFilter.SelectedIndex=0
+$ui.HostsSearch.Text='Dnscache2'
+if($ui.HostsList.Items.Count -ne 1){throw 'Dienstsuche fehlt.'}
+$ui.HostsSearch.Text='nicht vorhanden'
+if($ui.HostServices.Items.Count -ne 0 -or $ui.HostConnections.Items.Count -ne 0 -or $ui.HostProgramDetails.IsEnabled -or $ui.HostRules.IsEnabled){throw 'Leere Hostauswahl zeigt alte Details oder aktive Aktionen.'}
+$ui.HostsSearch.Text='';$ui.HostsList.SelectedIndex=0
+$script:rows=@();$ui.HostsFilter.SelectedIndex=1
+if($ui.HostsList.Items.Count -ne 0){throw 'Host-Netzwerkfilter zeigt inaktive Sockets.'}
+$script:rows=$hostRowsBefore;$ui.HostsFilter.SelectedIndex=0
+$hostFixture.Hosts[0].StartUtc=$hostStart.AddMinutes(2);Refresh-Hosts
+if($ui.HostsList.SelectedItem -or $ui.HostServices.Items.Count){throw 'Wiederverwendete Host-PID übernimmt alte Auswahl.'}
+if($serializer.Serialize($setupStatus.Config) -ne $hostPolicyBefore){throw 'Hostansicht verändert Firewallregeln.'}
+$ui.HostsList.SelectedIndex=0
+Write-Output 'PASS: Hostprozesse mit Dienstsuche, PID-/Startzeit-Isolation, Richtungen, ehrlichen gemeinsamen Sperrbelegen und sicherer leerer Auswahl; keine Firewalländerung.'
+
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -483,6 +532,7 @@ try{
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
+   if($panelName -eq 'Hosts' -and $ui.HostsList.Columns[0].ActualWidth -lt 280){throw 'Hostprozess-Spalte ist nicht lesbar.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)
@@ -496,14 +546,16 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
+ foreach($panelName in @('Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
   if($panelName -like 'Dashboard*'){[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode;$setupStatus.Attempts.Add($attempt)}
   Set-NavigationTheme ($renderPanel+'Panel')
   if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
+  if($renderPanel -eq 'Hosts'){$script:rows=$hostPreviewRows;$hostFixture.Hosts[0].StartUtc=$hostStart;$hostFixture.Hosts[0].Services[0].Expanded=$true}
   Show-RealPanel ($renderPanel+'Panel')
+  if($renderPanel -eq 'Hosts'){Refresh-Hosts;$ui.HostsList.SelectedIndex=0;$script:rows=$hostRowsBefore}
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
    [Netzblick.SetupChanges]::BlockProgram($setupStatus.Config,'C:\Beispiel\Gesperrte-App.exe')
@@ -516,6 +568,7 @@ try{
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
+   if($panelName -eq 'Hosts' -and $ui.HostsList.Columns[0].ActualWidth -lt 280){throw 'Hostprozess-Spalte ist nicht lesbar.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}
    $image=New-Object Windows.Media.Imaging.RenderTargetBitmap($size[0],$size[1],96,96,[Windows.Media.PixelFormats]::Pbgra32);$image.Render($renderHost)

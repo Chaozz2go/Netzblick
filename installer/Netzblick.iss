@@ -1,4 +1,4 @@
-#define Version "0.16.1"
+#define Version "0.17.0"
 [Setup]
 AppId=Netzblick.Desktop
 AppName=Netzblick

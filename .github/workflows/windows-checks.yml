@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Read-only Windows host and service identity
+        shell: powershell
+        run: ./tools/Test-Hosts.ps1
       - name: Readable Windows Firewall rule names and ownership
         shell: powershell
         run: ./tools/Test-FirewallNames.ps1

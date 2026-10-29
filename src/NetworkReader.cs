@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -84,3 +84,71 @@ namespace Netzblick {
  }
 }
 
+
+namespace Netzblick {
+ public sealed class HostedService {
+  public bool Expanded {get;set;} public string Name {get;set;} public string DisplayName {get;set;} public string Description {get;set;} public string State {get;set;}
+ }
+ public sealed class HostProcess {
+  public int Pid {get;set;} public DateTime StartUtc {get;set;} public string Name {get;set;} public string Path {get;set;}
+  public List<HostedService> Services = new List<HostedService>();
+  public string Key {get {return Pid+"|"+StartUtc.Ticks;}}
+ }
+ public sealed class HostSnapshot {
+  public List<HostProcess> Hosts = new List<HostProcess>(); public List<string> Errors = new List<string>(); public DateTime Time=DateTime.UtcNow;
+ }
+ // Read-only Service Control Manager enumeration. No service start/stop or config access rights.
+ public static class HostReader {
+  [StructLayout(LayoutKind.Sequential)] struct Status {public uint Type,State,Controls,Exit,SpecificExit,Checkpoint,Wait,Pid,Flags;}
+  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] struct Entry {public IntPtr Name,Display;public Status Status;}
+  [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr OpenSCManager(string machine,string database,uint access);
+  [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool EnumServicesStatusEx(IntPtr scm,int level,uint type,uint state,IntPtr buffer,uint size,out uint needed,out uint count,ref uint resume,string group);
+  [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr OpenService(IntPtr scm,string name,uint access);
+  [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool QueryServiceConfig2(IntPtr service,uint level,IntPtr buffer,uint size,out uint needed);
+  [DllImport("advapi32.dll")] static extern bool CloseServiceHandle(IntPtr handle);
+  [DllImport("shlwapi.dll",CharSet=CharSet.Unicode)] static extern int SHLoadIndirectString(string source,System.Text.StringBuilder output,uint size,IntPtr reserved);
+  static string Description(IntPtr scm,string name) {
+   IntPtr service=OpenService(scm,name,1),buffer=IntPtr.Zero;
+   if(service==IntPtr.Zero)return "Beschreibung nicht verfügbar (Windows-Zugriff).";
+   try {uint size;QueryServiceConfig2(service,1,IntPtr.Zero,0,out size);if(size==0 || size>65536)return "Keine Beschreibung hinterlegt.";
+    buffer=Marshal.AllocHGlobal((int)size);if(!QueryServiceConfig2(service,1,buffer,size,out size))return "Beschreibung nicht verfügbar.";
+    IntPtr text=Marshal.ReadIntPtr(buffer);string value=text==IntPtr.Zero?"":Marshal.PtrToStringUni(text);
+    if(!String.IsNullOrEmpty(value) && value[0]=='@'){var localized=new System.Text.StringBuilder(8192);if(SHLoadIndirectString(value,localized,(uint)localized.Capacity,IntPtr.Zero)==0)value=localized.ToString();else value="Windows-Ressourcenbeschreibung nicht auflösbar: "+value;}
+    return String.IsNullOrWhiteSpace(value)?"Keine Beschreibung hinterlegt.":value;
+   }finally{if(buffer!=IntPtr.Zero)Marshal.FreeHGlobal(buffer);CloseServiceHandle(service);}
+  }
+  public static HostSnapshot Collect() {
+   var result=new HostSnapshot();IntPtr scm=OpenSCManager(null,null,5),buffer=IntPtr.Zero;
+   if(scm==IntPtr.Zero){result.Errors.Add("Windows-Dienste nicht lesbar: "+new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()).Message);return result;}
+   try {
+    uint resume=0,needed=0,count=0;int stride=Marshal.SizeOf(typeof(Entry));var hosts=new Dictionary<int,HostProcess>();
+    // SCM can return partial pages (ERROR_MORE_DATA). Process each page exactly once.
+    uint size=262144;buffer=Marshal.AllocHGlobal((int)size);
+    bool more=true;int pages=0;
+    while(more && pages++<32){
+     bool ok=EnumServicesStatusEx(scm,0,0x30,3,buffer,size,out needed,out count,ref resume,null);int error=ok?0:Marshal.GetLastWin32Error();
+     if(!ok && error!=234)throw new System.ComponentModel.Win32Exception(error);
+     if((long)count*stride>size)throw new InvalidOperationException("Ungültige Diensttabelle.");
+     for(int i=0;i<count;i++){
+      Entry e=(Entry)Marshal.PtrToStructure(IntPtr.Add(buffer,i*stride),typeof(Entry));if(e.Status.Pid==0 || e.Status.Pid>Int32.MaxValue)continue;
+      int processId=(int)e.Status.Pid;HostProcess host;
+      if(!hosts.TryGetValue(processId,out host)){
+       try {using(var process=System.Diagnostics.Process.GetProcessById(processId)){
+        DateTime start=process.StartTime.ToUniversalTime();if(start>result.Time)continue; // PID was reused after this enumeration began.
+        string path="";try{path=process.MainModule.FileName;}catch{}
+        host=new HostProcess{Pid=processId,StartUtc=start,Name=process.ProcessName,Path=path};hosts.Add(processId,host);
+       }}catch{continue;}
+      }
+      string name=Marshal.PtrToStringUni(e.Name);string[] states={"Unbekannt","Beendet","Startet","Beendet gerade","Läuft","Wird fortgesetzt","Wird angehalten","Angehalten"};
+      host.Services.Add(new HostedService{Name=name,DisplayName=Marshal.PtrToStringUni(e.Display),Description=Description(scm,name),State=e.Status.State<states.Length?states[e.Status.State]:"Unbekannt"});
+     }
+     more=!ok;if(more && count==0)throw new InvalidOperationException("Diensttabelle konnte nicht vollständig gelesen werden.");
+    }
+    if(more)result.Errors.Add("Diensttabelle unvollständig; Aktualisierung erneut versuchen.");
+    foreach(var host in hosts.Values){try{using(var p=System.Diagnostics.Process.GetProcessById(host.Pid)){if(p.StartTime.ToUniversalTime()!=host.StartUtc)continue;}}catch{continue;}result.Hosts.Add(host);}
+   }catch(Exception e){result.Errors.Add(e.Message);}finally{if(buffer!=IntPtr.Zero)Marshal.FreeHGlobal(buffer);CloseServiceHandle(scm);}
+   return result;
+  }
+  public static System.Threading.Tasks.Task<HostSnapshot> Start(){return System.Threading.Tasks.Task.Run<HostSnapshot>(()=>Collect());}
+ }
+}

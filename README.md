@@ -10,8 +10,8 @@ Netzblick ist eine Windows-App, mit der du Netzwerkverbindungen deiner Programme
 
 | Variante | Download | Für wen? |
 | --- | --- | --- |
-| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.16.1-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
-| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.16.1-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
+| **Installierbar** | [Setup-EXE herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Setup-0.17.0-win-x64.exe) | Für die regelmäßige Nutzung: mit Startmenü, Hintergrunddienst und Tray-Autostart. |
+| **Portabel** | [Portable ZIP herunterladen](https://github.com/Chaozz2go/Netzblick/releases/latest/download/Netzblick-Portable-0.17.0-win-x64.zip) | Entpacken und `Netzblick.exe` starten. Ohne Installation eines Dienstes oder Autostarts; Einstellungen bleiben im Ordner daneben. |
 
 **Voraussetzungen:** Windows 10/11 mit 64 Bit, .NET Framework 4.8 und Windows PowerShell 5.1. Für Netzwerküberwachung und Firewallsteuerung sind Administratorrechte nötig. Python oder eine zusätzliche PowerShell-Installation werden nicht benötigt.
 
@@ -97,9 +97,13 @@ Windows-Builds prüfen unter anderem Oberfläche, native Sperr- und Freigabefunk
 ## Hilfe, Hintergründe und Entwicklung
 
 - [Bedienung und technische Details](docs/Bedienung-und-Technik.md)
-- [Neuerungen in Version 0.16.1](docs/Release-0.16.1.md)
+- [Neuerungen in Version 0.17.0](docs/Release-0.17.0.md)
 - [Alle Veröffentlichungen](https://github.com/Chaozz2go/Netzblick/releases)
 - [Fehler melden oder eine Idee vorschlagen](https://github.com/Chaozz2go/Netzblick/issues)
 - [Drittanbieter und Datenlizenzen](THIRD-PARTY-NOTICES.txt)
 
 Für Entwickler: `tools/Build-Desktop.ps1` erstellt die Windows-EXE; `installer/Netzblick.iss` baut mit Inno Setup 6 das Setup. Die automatisierten Prüfungen liegen unter `tools` und in den GitHub-Actions-Workflows. Die Windows-Pakete lassen sich direkt nutzen, ohne das Projekt selbst zu kompilieren.
+
+### Hostprozesse & Dienste (ab 0.17.0)
+
+Eigene Übersicht für laufende Windows-Dienstprozesse mit PID, Startzeit, Dienstnamen, aufklappbaren Windows-Beschreibungen und Prozessverbindungen. Sperrgründe und Regeln bleiben klar als gemeinsame Angaben zum Dateipfad gekennzeichnet. Ohne KI und ohne Cloud-Abhängigkeit. Details: [Release 0.17.0](docs/Release-0.17.0.md).
