@@ -495,6 +495,15 @@ if($ui.HostsList.Items.Count -ne 2 -or $ui.HostServices.Items.Count -ne 2 -or $u
 $key=$ui.HostsList.SelectedItem.Key
 $ui.HostsList.SelectedIndex=1
 if($ui.HostConnections.Items.Count -ne 1 -or $ui.HostConnections.Items[0].Direction -ne 'Eingehend' -or $ui.HostBlocks.Items.Count -lt 1 -or $ui.HostBlockHint.Text -notlike '*Keine sichere Zuordnung*'){throw 'Hostansicht erfindet Dienstzuordnung oder verliert gemeinsame Blockbelege.'}
+$ui.HostsList.SelectedItem.HostProcess.Services[0].Expanded=$true
+$expandedService=$ui.HostServices.Items[0]
+Refresh-Hosts
+if(-not [object]::ReferenceEquals($expandedService,$ui.HostServices.Items[0]) -or -not $ui.HostsList.SelectedItem.HostProcess.Services[0].Expanded){throw 'Socket-Aktualisierung setzt Dienstbeschreibung zurück.'}
+$ui.HostsFilter.SelectedIndex=2
+if($ui.HostsList.Items.Count -ne 0){throw 'Host-Sperrfilter verwechselt vergangene Versuche mit aktueller Sperre.'}
+$ui.HostsFilter.SelectedIndex=3
+if($ui.HostsList.Items.Count -ne 2){throw 'Offene Prüfungen werden für gemeinsamen Host-Dateipfad nicht angezeigt.'}
+$ui.HostsFilter.SelectedIndex=0
 $ui.HostsSearch.Text='Dnscache2'
 if($ui.HostsList.Items.Count -ne 1){throw 'Dienstsuche fehlt.'}
 $ui.HostsSearch.Text='nicht vorhanden'

@@ -31,13 +31,15 @@ function Refresh-Hosts {
 }
 function Show-HostSelection {
     $p=$ui.HostsList.SelectedItem
-    $ui.HostProgramDetails.IsEnabled=[bool]($p -and $p.Path);$ui.HostRules.IsEnabled=[bool]($p -and $p.Path)
-    $ui.HostServices.ItemsSource=@();$ui.HostConnections.ItemsSource=@();$ui.HostBlocks.ItemsSource=@()
-    if(-not $p){$ui.HostTitle.Text='Kein Hostprozess ausgewählt';$ui.HostPath.Text='Auswahl beendet, ausgefiltert oder noch nicht erfasst. Einen Eintrag auswählen.';$ui.HostScope.Text='';$ui.HostBlockHint.Text='';return}
+    $known=$p -and @($ui.Programs.Items | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq [Netzblick.ProcessLineage]::Normalize($p.Path)}).Count -gt 0
+    $ui.HostProgramDetails.IsEnabled=[bool]$known;$ui.HostRules.IsEnabled=[bool]($p -and $p.Path)
+    $ui.HostProgramDetails.ToolTip=if($known){'Gemeinsame Angaben zu allen Instanzen dieses Dateipfads'}else{'Noch kein Eintrag in der Netzwerk-Programmübersicht; Dienste sind hier bereits einsehbar.'}
+    $ui.HostConnections.ItemsSource=@();$ui.HostBlocks.ItemsSource=@()
+    if(-not $p){$ui.HostServices.ItemsSource=@();$ui.HostServices.Tag=$null;$ui.HostTitle.Text='Kein Hostprozess ausgewählt';$ui.HostPath.Text='Auswahl beendet, ausgefiltert oder noch nicht erfasst. Einen Eintrag auswählen.';$ui.HostScope.Text='';$ui.HostBlockHint.Text='';return}
     $script:hostSelectedKey=$p.Key;$h=$p.HostProcess
     $ui.HostTitle.Text=$p.Title;$ui.HostPath.Text=$(if($h.Path){$h.Path}else{'Dateipfad nicht lesbar'})+' · Gestartet '+$h.StartUtc.ToLocalTime().ToString('dd.MM.yyyy HH:mm:ss')
     $ui.HostScope.Text='Aktueller Zugriff (Dateipfad): '+$p.Status+'. Dienst nicht eindeutig zugeordnet. Regeln und Prüffreigaben für diesen Dateipfad können mehrere Hostinstanzen und Dienste betreffen.'
-    $ui.HostServices.ItemsSource=@($h.Services | Sort-Object DisplayName)
+    if(-not [object]::ReferenceEquals($ui.HostServices.Tag,$h)){$ui.HostServices.ItemsSource=@($h.Services | Sort-Object DisplayName);$ui.HostServices.Tag=$h}
     $ui.HostConnections.ItemsSource=@(Get-HostSocketRows $h | ForEach-Object {$direction=Get-ConnectionDirection $_ $h.Path;[pscustomobject]@{Direction=$direction.Label;Protocol=$_.Protocol;Local=$_.Local;Remote=$_.Remote;State=$_.State}})
     $blocks=@(if($h.Path){Get-ProgramBlockRows $h.Path $script:setupStatus})
     $ui.HostBlocks.ItemsSource=$blocks
@@ -66,5 +68,5 @@ function Initialize-HostsMode {
     $ui.HostsSearch.Add_TextChanged({Refresh-Hosts});$ui.HostsFilter.Add_SelectionChanged({Refresh-Hosts})
     $ui.HostsList.Add_SelectionChanged({if(-not $script:hostsRefreshing){Show-HostSelection}})
     $ui.HostProgramDetails.Add_Click({if($ui.HostsList.SelectedItem){Show-ReviewProgram $ui.HostsList.SelectedItem.Path}})
-    $ui.HostRules.Add_Click({if($ui.HostsList.SelectedItem){Open-Permissions $ui.HostsList.SelectedItem.Path}})
+    $ui.HostRules.Add_Click({if($ui.HostsList.SelectedItem){$path=$ui.HostsList.SelectedItem.Path;Open-Permissions $path;$ui.PermissionSearch.Text=$path;Refresh-Permissions}})
 }
