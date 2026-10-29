@@ -1,6 +1,6 @@
 ﻿function Normalize-ReviewPath([string]$path){return [Netzblick.ProcessLineage]::Normalize($path)}
 function Save-ReviewDecision([string]$path){
-    $key=Normalize-ReviewPath $path;Mark-ProgramActivityReviewed $path;$script:newPrograms.Remove($key);Save-UserState;Refresh-Overview
+    $key=Normalize-ReviewPath $path;Mark-ProgramActivityReviewed $path;$script:newPrograms.Remove($key);Add-ProgramTimeline $path 'Programm geprüft' 'Aktuelle Beobachtungen als geprüft markiert; keine Firewalländerung.';Save-UserState;Refresh-Overview
 }
 function Show-ReviewProgram([string]$path){
     Show-NetzblickWindow;$ui.Search.Text='';$ui.ConnectionDirectionFilter.SelectedIndex=0;$ui.ProgramDetailTabs.SelectedIndex=0;Show-Panel 'LivePanel'

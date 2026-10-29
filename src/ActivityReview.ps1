@@ -19,6 +19,7 @@ function Update-ActivityLedger {
         $key=Get-TargetKey $p.Path $p.Address $p.Protocol $p.Port
         if(-not $key){continue}
         if(-not $targetLedger.ContainsKey($key) -and $targetLedger.Count -lt 5000){
+            Add-ProgramTimeline $p.Path 'Ziel erstmals erfasst' ($p.Address+' · '+$p.Protocol+' '+$p.Port+'. Beobachtung in Netzblick; nicht der tatsächliche erste Kontakt des Programms.')
             $targetLedger[$key]=[pscustomobject]@{Key=$key;PathKey=[Netzblick.ProcessLineage]::Normalize($p.Path);Address=$p.Address;Protocol=$p.Protocol;Port=[int]$p.Port;Reviewed=$false;FirstUtc=$now};$dirty=$true
         }
     }
@@ -92,11 +93,13 @@ function Save-ProgramChange([string]$path,$before,$after,[string]$label){
     $serializer=New-Object System.Web.Script.Serialization.JavaScriptSerializer
     $script:changes.Insert(0,[pscustomobject]@{Version=2;Path=$path;Label=$label;BeforeJson=$serializer.Serialize($before);AfterJson=$serializer.Serialize($after);TimeUtc=[datetime]::UtcNow})
     while($changes.Count -gt 20){$changes.RemoveAt($changes.Count-1)}
+    Add-ProgramTimeline $path 'Programmregeln geändert' ($label+' · Änderung vom Dienst bestätigt. Keine Aussage über danach beobachtete Verbindungserfolge.')
     Save-UserState
 }
 function Undo-ProgramChange($change){
     $before=Read-ProgramSnapshot $change.BeforeJson;$expected=Read-ProgramSnapshot $change.AfterJson
     [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='RestoreProgram';BeforeProgram=$before;ExpectedProgram=$expected}))
+    Add-ProgramTimeline $change.Path 'Änderung rückgängig' 'Vorherige Programmregeln vom Dienst wiederhergestellt.'
     $script:changes.Remove($change);Save-UserState;Update-AccessMode;Refresh-Overview;Refresh-Detail
     $ui.UserNotice.Text='Rückgängig: '+[IO.Path]::GetFileName($change.Path)+' · vorherige Programmregeln wiederhergestellt.'
 }

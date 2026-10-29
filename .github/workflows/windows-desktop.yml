@@ -1,7 +1,7 @@
 name: Windows EXE and installer
 on:
   push:
-    branches: [main, fix/powershell-host-result, fix/blocked-program-visibility, feat/block-reasons, feat/host-services]
+    branches: [main, fix/powershell-host-result, fix/blocked-program-visibility, feat/block-reasons, feat/host-services, feat/guided-review]
   workflow_dispatch:
 permissions:
   contents: write
@@ -48,7 +48,7 @@ jobs:
         shell: powershell
         run: |
           Remove-Item dist/Netzblick-Daten -Recurse -Force -ErrorAction SilentlyContinue
-          Compress-Archive -Path dist/Netzblick.exe,dist/Netzblick.exe.config,dist/README.md,dist/PRUEFSTAND.txt,dist/THIRD-PARTY-NOTICES.txt,dist/licenses -DestinationPath Netzblick-Portable-0.17.0-win-x64.zip
+          Compress-Archive -Path dist/Netzblick.exe,dist/Netzblick.exe.config,dist/README.md,dist/PRUEFSTAND.txt,dist/THIRD-PARTY-NOTICES.txt,dist/licenses -DestinationPath Netzblick-Portable-0.18.0-win-x64.zip
       - name: Compile installer
         shell: powershell
         run: |
@@ -67,24 +67,24 @@ jobs:
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: Netzblick-0.17.0-win-x64
+          name: Netzblick-0.18.0-win-x64
           path: |
-            Netzblick-Portable-0.17.0-win-x64.zip
-            dist-install/Netzblick-Setup-0.17.0-win-x64.exe
+            Netzblick-Portable-0.18.0-win-x64.zip
+            dist-install/Netzblick-Setup-0.18.0-win-x64.exe
       - name: Publish tested packages (public main) or retain draft (development)
         id: publish
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = 'v0.17.0-build-${{ github.run_number }}'
-          $packages = @('Netzblick-Portable-0.17.0-win-x64.zip','dist-install/Netzblick-Setup-0.17.0-win-x64.exe')
+          $tag = 'v0.18.0-build-${{ github.run_number }}'
+          $packages = @('Netzblick-Portable-0.18.0-win-x64.zip','dist-install/Netzblick-Setup-0.18.0-win-x64.exe')
           $checksums = foreach ($package in $packages) { $hash = Get-FileHash -LiteralPath $package -Algorithm SHA256; $hash.Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($package) }
           [IO.File]::WriteAllLines((Join-Path $PWD 'SHA256SUMS.txt'), $checksums, [Text.UTF8Encoding]::new($false))
           $private = gh api 'repos/Chaozz2go/Netzblick' --jq '.private'
           if ($LASTEXITCODE -ne 0) { throw 'Sichtbarkeit konnte nicht geprüft werden.' }
           [string[]]$releaseOptions = @(if ('${{ github.ref }}' -eq 'refs/heads/main' -and $private.Trim() -eq 'false') { '--latest' } else { '--draft' })
-          gh release create $tag @releaseOptions --target '${{ github.sha }}' --title 'Netzblick 0.17.0 – EXE, portable und Setup' --notes-file docs/Release-0.17.0.md Netzblick-Portable-0.17.0-win-x64.zip dist-install/Netzblick-Setup-0.17.0-win-x64.exe SHA256SUMS.txt
+          gh release create $tag @releaseOptions --target '${{ github.sha }}' --title 'Netzblick 0.18.0 – EXE, portable und Setup' --notes-file docs/Release-0.18.0.md Netzblick-Portable-0.18.0-win-x64.zip dist-install/Netzblick-Setup-0.18.0-win-x64.exe SHA256SUMS.txt
           if ($LASTEXITCODE -ne 0) { throw 'Release-Pakete konnten nicht bereitgestellt werden.' }
           if ($releaseOptions -contains '--latest') { 'public_release=true' >> $env:GITHUB_OUTPUT }
       - name: Verify anonymous public update discovery

@@ -63,9 +63,9 @@ function Save-SetupRule([switch]$Temporary,[switch]$Block) {
         elseif($ui.SetupHostIcmp.IsChecked -and $r.Protocol -in @(1,58)){$rule.Path='*'}
         if($Temporary){$rule.ExpiresUtc=[datetime]::UtcNow.AddMinutes(5)};$rule.Validate()
         $action=if($Block){'Sperren'}elseif($Temporary){'5 Minuten erlauben'}else{'Dauerhaft speichern'}
-        $warning=if($rule.Path -eq '*'){'Die ICMP-Regel gilt für den gesamten Rechner und alle ICMP-Typen zu diesem Ziel.'}elseif(Is-Protected $rule.Path){'Windows-Sammelprozess: Mehrere Dienste können denselben EXE-Pfad nutzen.'}else{'Alle Instanzen dieses EXE-Pfads sind betroffen; keine Bindung an einen Datei-Hash.'}
-        if([Windows.MessageBox]::Show($window,($action+': '+$rule.Name+[Environment]::NewLine+$rule.Scope+[Environment]::NewLine+$warning),'Regel prüfen','YesNo','Question') -ne 'Yes'){return}
-        [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Rule';Rule=$rule}));Add-Event 'Regel gespeichert' $r.Program $rule.Name;Update-AccessMode
+        $preview=Show-ChangePreview (Get-ChangePreview $rule.Path 'Rule' $rule)
+        if(-not $preview){return}
+        [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='Rule';Rule=$rule;ExpectedConfigKey=$preview.ExpectedConfigKey}));Add-Event 'Regel gespeichert' $r.Program $rule.Name;Add-ProgramTimeline $rule.Path 'Einzelregel gespeichert' ($rule.Name+' · '+$rule.Action+' · '+$rule.Scope+' · '+$rule.Lifetime);Update-AccessMode
     }catch{Show-Error $_.Exception.GetBaseException().Message}
 }
 function Update-AccessMode {
@@ -90,7 +90,7 @@ function Update-AccessMode {
     }catch{
         $script:accessProblem=$_.Exception.GetBaseException().Message;$script:setupStatus=$null;$script:accessVerified=$false;$script:accessActive=$false;$ui.AccessHeadline.Text='Hintergrunddienst nicht erreichbar';$ui.AccessExplanation.Text=$_.Exception.GetBaseException().Message
         $ui.AccessProof.Text='Aktuelle Sperrwirkung nicht bestätigt. Dienststatus prüfen.';$ui.AccessGlobalStatus.Text='Dienst nicht erreichbar · Status unbekannt';$script:trayStatusText='Dienst nicht erreichbar';$ui.InstallControlService.Visibility='Visible';$ui.StartAccess.IsEnabled=$false;$ui.StopAccess.IsEnabled=$false
-    };if(-not $script:setupStatus){Refresh-Permissions};if($script:programCatalogReady){Refresh-Programs}else{Refresh-ProgramSignals};Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
+    };if(-not $script:setupStatus){Refresh-Permissions};if($script:programCatalogReady){Refresh-Programs}else{Refresh-ProgramSignals};Update-ExperienceBlocks;Show-AccessRequest;if(Get-Command Update-Inspection -ErrorAction SilentlyContinue){Update-Inspection};if(Get-Command Refresh-ReviewPolicy -ErrorAction SilentlyContinue){Refresh-ReviewPolicy}
 }
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()

@@ -79,25 +79,19 @@ function Show-PermissionSelection {
 }
 function Confirm-PermissionChange([string]$operation,[string]$path=''){
     $p=if($path){[pscustomobject]@{Path=$path}}else{$ui.PermissionPrograms.SelectedItem};if(-not $p){return}
-    if($operation -eq 'TemporaryBlockProgram'){$duration=Show-TemporaryBlockDialog $p.Path;if($null -ne $duration){try{Set-PermissionProgram $p.Path $operation $duration}catch{Show-Error $_.Exception.GetBaseException().Message}};return}
-    $text=switch($operation){
-        'AllowProgram' {'Alle eigenen Sperren, Prüfsperren und Einzelregeln dieses Programms durch dauerhafte Freigaben ersetzen? Gilt für alle Ziele und Protokolle, ein- und ausgehend. Andere Firewall-Sperren bleiben bestehen.'}
-        'BlockProgram' {'Neue externe Verbindungen dieses Programms ein- und ausgehend sperren? Bestehende Verbindungen werden nicht sicher beendet. Loopback bleibt ausgenommen.'}
-        'EndProgramLease' {'Zeitweise Sperre oder Freigabe jetzt beenden und die vorherigen Netzblick-Regeln dieses Programms wiederherstellen? Der frühere Zustand kann ebenfalls eingeschränkt sein.'}
-        'TemporaryAllowProgram' {'Dieses Programm für 10 Minuten für alle Ziele und Protokolle ein- und ausgehend erlauben? Danach werden die vorherigen Netzblick-Regeln automatisch wiederhergestellt, auch nach einem Neustart. Andere Firewall-Sperren bleiben bestehen.'}
-        'ProgramDefault' {'Alle eigenen Dienstregeln und die Prüfsperre dieses Programms entfernen? Bei aktivem Nachfragen werden Verbindungen ohne Freigabe wieder gesperrt. Sonst gilt der Windows-Standard.'}
-    }
-    if([Windows.MessageBox]::Show($window,($p.Path+[Environment]::NewLine+[Environment]::NewLine+$text),'Programmzugriff ändern','YesNo','Question') -ne 'Yes'){return}
-    try{Set-PermissionProgram $p.Path $operation}catch{Show-Error $_.Exception.GetBaseException().Message}
+    try{
+        $preview=Show-ChangePreview (Get-ChangePreview $p.Path $operation)
+        if($preview){Set-PermissionProgram $p.Path $operation $preview.Minutes $preview.ExpectedConfigKey}
+    }catch{Show-Error $_.Exception.GetBaseException().Message}
 }
-function Set-PermissionProgram([string]$path,[string]$operation,[int]$durationMinutes=10){
+function Set-PermissionProgram([string]$path,[string]$operation,[int]$durationMinutes=10,[string]$expectedConfigKey=''){
     if($operation -notin @('AllowProgram','BlockProgram','ProgramDefault','TemporaryAllowProgram','TemporaryBlockProgram','EndProgramLease')){throw 'Unbekannte Programmaktion.'}
     if(-not $script:setupStatus -or -not $setupStatus.Verified){throw 'Filterstatus nicht bestätigt.'}
     $s=Get-PermissionStatus $path
     if($s.Legacy -and $operation -notin @('BlockProgram','TemporaryBlockProgram','EndProgramLease')){throw 'Zuerst die alten Windows-Regeln dieses Programms prüfen.'}
     if($operation -ne 'ProgramDefault' -and (Is-Protected $path)){throw 'System-Sammelprozess über einzelne Verbindungen verwalten.'}
     $before=[Netzblick.SetupChanges]::CaptureProgram($setupStatus.Config,$path)
-    $reply=Send-SetupCommand ([Netzblick.SetupCommand]@{Operation=$operation;Path=$path;DurationMinutes=$durationMinutes;ExpectedProgram=$before})
+    $reply=Send-SetupCommand ([Netzblick.SetupCommand]@{Operation=$operation;Path=$path;DurationMinutes=$durationMinutes;ExpectedProgram=$before;ExpectedConfigKey=$expectedConfigKey})
     $after=[Netzblick.SetupChanges]::CaptureProgram($reply.Config,$path)
     Save-ProgramChange $path $before $after $(if($operation -eq 'TemporaryAllowProgram'){'10 Minuten erlaubt'}elseif($operation -eq 'TemporaryBlockProgram'){'Zeitweise gesperrt · '+$(if($durationMinutes){$durationMinutes.ToString()+' Minuten'}else{'bis aufgehoben'})}elseif($operation -eq 'EndProgramLease'){'Zeitweise Entscheidung beendet'}else{(Get-PermissionStatus $path).Status})
     Update-AccessMode;Refresh-Overview;Refresh-Detail

@@ -12,7 +12,7 @@ Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll'
 $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($xaml)))
 $ui=@{}
 $xaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$control=$window.FindName($name);if($control){$ui[$name]=$control}}}
-foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts')){
+foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow')){
  [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
  $panel=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($panelXaml)));$ui[$panelName+'Panel'].Content=$panel
  $panelXaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$ui[$name]=$panel.FindName($name)}}
@@ -22,7 +22,10 @@ function Is-Protected([string]$path){return $false}
 . (Join-Path $appRoot 'src\ThemeMode.ps1')
 . (Join-Path $appRoot 'src\DesignMode.ps1')
 . (Join-Path $appRoot 'src\DirectionMode.ps1')
-. (Join-Path $appRoot 'src\HostsMode.ps1')
+. (Join-Path $appRoot 'src\ExperienceState.ps1')
+    . (Join-Path $appRoot 'src\GuideMode.ps1')
+    . (Join-Path $appRoot 'src\ChangePreview.ps1')
+    . (Join-Path $appRoot 'src\HostsMode.ps1')
     . (Join-Path $appRoot 'src\DashboardMode.ps1')
     . (Join-Path $appRoot 'src\DashboardNavigation.ps1')
 . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
@@ -55,6 +58,8 @@ $ui.Programs.ItemsSource=$allProgramItems
 Initialize-ReviewMode
 Initialize-WorkspaceMode
 Initialize-DirectionMode
+Initialize-ExperienceState
+Initialize-WorkflowMode
 Track-ObservedPrograms $allProgramItems
 Refresh-Overview
 if($newPrograms.Count -ne 1 -or $ui.FutureReviewCount.Text -ne '1' -or $ui.OverviewPrograms.Items[0].ReviewReason -notmatch 'Neues Programm' -or (Get-ReviewTargets $testExe) -notmatch '8.8.8.8'){throw 'Einheitliche Prüfliste oder Gegenstellen fehlen.'}
@@ -518,6 +523,8 @@ if($serializer.Serialize($setupStatus.Config) -ne $hostPolicyBefore){throw 'Host
 $ui.HostsList.SelectedIndex=0
 Write-Output 'PASS: Hostprozesse mit Dienstsuche, PID-/Startzeit-Isolation, Richtungen, ehrlichen gemeinsamen Sperrbelegen und sicherer leerer Auswahl; keine Firewalländerung.'
 
+. (Join-Path $PSScriptRoot 'Test-ExperienceFixtures.ps1')
+
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -532,6 +539,7 @@ try{
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
+   if($panelName -eq 'Workflow' -and $ui.GuideEvidence.ActualHeight -lt 160){throw 'Prüfassistent bietet zu wenig Platz für Beobachtungen.'}
    if($panelName -eq 'Hosts' -and $ui.HostsList.Columns[0].ActualWidth -lt 280){throw 'Hostprozess-Spalte ist nicht lesbar.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}
@@ -546,15 +554,16 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules')){
-  $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
+ foreach($panelName in @('Workflow','Favorites','Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules','LiveTimeline')){
+  $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -eq 'Favorites'){'Workflow'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}
   if($panelName -like 'Dashboard*'){[Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode;$setupStatus.Attempts.Add($attempt)}
   Set-NavigationTheme ($renderPanel+'Panel')
-  if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} default{1}}}
+  if($renderPanel -eq 'Live'){$ui.ProgramDetailTabs.SelectedIndex=switch($panelName){'LiveOverview'{0} 'LiveRules'{2} 'LiveTimeline'{3} default{1}}}
   if($renderPanel -eq 'Hosts'){$script:rows=$hostPreviewRows;$hostFixture.Hosts[0].StartUtc=$hostStart;$hostFixture.Hosts[0].Services[0].Expanded=$true}
   Show-RealPanel ($renderPanel+'Panel')
+  if($renderPanel -eq 'Workflow'){$ui.WorkflowViews.SelectedIndex=if($panelName -eq 'Favorites'){1}else{0};Refresh-Favorites;Refresh-Guide}
   if($renderPanel -eq 'Hosts'){Refresh-Hosts;$ui.HostsList.SelectedIndex=0;$script:rows=$hostRowsBefore}
   if($panelName -eq 'Access'){
    [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
@@ -568,6 +577,7 @@ try{
   foreach($size in @(@(1480,920),@(1280,800))){
    $renderHost.Width=$size[0];$renderHost.Height=$size[1];$renderHost.Measure((New-Object Windows.Size($size[0],$size[1])));$renderHost.Arrange((New-Object Windows.Rect(0,0,$size[0],$size[1])));$renderHost.UpdateLayout()
    if($designPreview -eq 'Future' -and $panelName -eq 'Review' -and $ui.OverviewPrograms.ActualHeight -lt 220){throw 'Prüfliste bietet im kleinen Future-Fenster zu wenig Platz.'}
+   if($panelName -eq 'Workflow' -and $ui.GuideEvidence.ActualHeight -lt 160){throw 'Prüfassistent bietet zu wenig Platz für Beobachtungen.'}
    if($panelName -eq 'Hosts' -and $ui.HostsList.Columns[0].ActualWidth -lt 280){throw 'Hostprozess-Spalte ist nicht lesbar.'}
    if($panelName -eq 'Access' -and $ui.PermissionPrograms.Columns[0].ActualWidth -lt 250){throw 'Programmspalte in Zugriffsübersicht abgeschnitten.'}
    if($panelName -like 'Dashboard*'){Draw-Dashboard;$renderHost.UpdateLayout();if($panelName -eq 'DashboardFocus'){Center-DashboardSelection}else{Fit-Dashboard};$renderHost.UpdateLayout();$renderedNode=$script:dashboardNodeVisuals.Values | ForEach-Object {$_.Button} | Select-Object -First 1;if(-not $renderedNode -or $renderedNode.ActualHeight -lt 60){throw 'Dashboard-Knoten wurden nicht arrangiert.'};if($panelName -eq 'Dashboard'){$point=$renderedNode.TransformToAncestor($ui.DashboardViewport).Transform([Windows.Point]::new(33,33));$hit=[Windows.Media.VisualTreeHelper]::HitTest($ui.DashboardViewport,$point);$target=if($hit){$hit.VisualHit}else{$null};while($target -and $target -ne $renderedNode){$target=[Windows.Media.VisualTreeHelper]::GetParent($target)};if(-not $target){throw 'Sichtbarer Dashboard-Knoten ist nach Zoom nicht anklickbar.'}}}

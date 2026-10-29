@@ -86,6 +86,7 @@ namespace Netzblick {
    }
    if(command.Operation=="ConfirmRecovery"){if(!verified)throw new InvalidOperationException("Einrichtung nicht bestätigt: Filterstatus unbekannt.");ClearRecovery();Log("Einrichtung bestätigt; Sicherheitsrückweg aufgehoben");return Status(true,problem);}
    if(!verified)throw new InvalidOperationException("Keine neue Änderung bei unbestätigtem Filterstatus: "+problem);
+   SetupChanges.AssertPreview(config,command.ExpectedConfigKey);
    var next=Clone(config);
    switch(command.Operation){
     case "Ask":

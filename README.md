@@ -107,3 +107,7 @@ Für Entwickler: `tools/Build-Desktop.ps1` erstellt die Windows-EXE; `installer/
 ### Hostprozesse & Dienste (ab 0.17.0)
 
 Eigene Übersicht für laufende Windows-Dienstprozesse mit PID, Startzeit, Dienstnamen, aufklappbaren Windows-Beschreibungen und Prozessverbindungen. Sperrgründe und Regeln bleiben klar als gemeinsame Angaben zum Dateipfad gekennzeichnet. Ohne KI und ohne Cloud-Abhängigkeit. Details: [Release 0.17.0](docs/Release-0.17.0.md).
+
+### In Vorbereitung: Prüfen & Favoriten (0.18.0)
+
+Ein geführter Prüfassistent, angeheftete Programme mit Restzeit zeitweiser Sperren, eine Vorschau vor Regeländerungen und ein lokaler Programm-Zeitstrahl erleichtern die Bewertung. Technische Grenzen und Speicherung: [Release 0.18.0](docs/Release-0.18.0.md). Die Downloadlinks oben bleiben bis zur Veröffentlichung bei 0.17.0.
