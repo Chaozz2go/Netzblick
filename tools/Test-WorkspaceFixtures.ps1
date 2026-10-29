@@ -61,7 +61,6 @@ if(-not [IO.File]::Exists($rescuePath) -or $favoritePrograms.Count -ne $loaded.F
 $staleLocal=Get-RestorePreview $loaded 2;$other=New-Object Netzblick.ProgramGroup;$other.Id=[guid]::NewGuid().ToString();$other.Name='Später angelegt';$other.Paths.Add($testExe);Save-ProgramGroup $other
 $rejected=$false;try{[void](Apply-RestorePreview $staleLocal)}catch{$rejected=$true};if(-not $rejected -or $workspaceSettings.Groups.Count -ne 2){throw 'Veraltete Gruppen-Wiederherstellung überschreibt spätere Änderungen.'}
 $freshGroupRestore=Get-RestorePreview $loaded 2
-Write-Output ('RESTORE_DIAGNOSTIC: '+($freshGroupRestore | ConvertTo-Json -Depth 2 -Compress))
 if(-not $freshGroupRestore.CanApply){throw ('Frische Gruppenvorschau: '+($freshGroupRestore | ConvertTo-Json -Depth 2 -Compress))}
 [void](Apply-RestorePreview $freshGroupRestore)
 # Disk failure rolls local restore back, while preserving the rescue backup and firewall state.

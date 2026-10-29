@@ -19,7 +19,13 @@ function Get-RestoreCategoryKey([int]$category){
     switch($category){
         0{if(-not $script:setupStatus -or -not $setupStatus.Verified){throw 'Filterstatus unbestätigt.'};[Netzblick.SetupChanges]::ConfigKey($setupStatus.Config)}
         1{Get-TextDigest ((@($favoritePrograms.Values | Sort-Object)) | ConvertTo-Json -Compress)}
-        2{Get-TextDigest ((Get-LocalJson).Serialize(@($workspaceSettings.Groups | Sort-Object Id)))}
+        2{
+            # Re-enter a typed DTO after the pipeline: Windows PowerShell wraps sorted objects
+            # in PSObject, which JavaScriptSerializer otherwise traverses as reflection metadata.
+            $ordered=New-Object Netzblick.WorkspaceSettings
+            foreach($group in @($workspaceSettings.Groups | Sort-Object Id)){$ordered.Groups.Add($group)}
+            Get-TextDigest ((Get-LocalJson).Serialize($ordered))
+        }
         3{Get-TextDigest (@{Seen=@($knownPrograms.Keys | Sort-Object);Pending=@($newPrograms.Values | Sort-Object Path);Targets=@($targetLedger.Values | Sort-Object Key);Blocks=@($blockBaselines.Values | Sort-Object Key)} | ConvertTo-Json -Depth 8 -Compress)}
         default{throw 'Unbekannte Wiederherstellungskategorie.'}
     }
