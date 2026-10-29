@@ -55,7 +55,7 @@ $replacement=Get-ChangePreview $testExe 'Rule' $rule
 if(-not $replacement.CanApply -or $replacement.Footprint -notlike '1 bisherige*' -or $replacement.Matches[0].After -notlike 'Netzblick-Freigabe*'){throw 'Gleicher Geltungsbereich wird nicht als Ersatz berechnet.'}
 $setupStatus.Config.Rules.Clear()
 $programPreview=Get-ChangePreview $testExe 'TemporaryBlockProgram'
-if(-not $programPreview.CanApply -or $programPreview.Matches.Count -ne 1){throw 'Programm-Vorschau fehlt oder bewertet unbekannte Richtung.'}
+if(-not $programPreview.CanApply -or $programPreview.Matches.Count -ne 2){throw 'Programm-Vorschau fehlt oder bewertet unbekannte Richtung.'}
 $dialog=New-ChangePreviewDialog $programPreview
 if(-not $dialog.FindName('ApplyPreview').IsEnabled -or $dialog.FindName('PreviewDuration').Visibility -ne 'Visible'){throw 'Echte Vorschau bietet zeitweise Sperre nicht an.'}
 $dialog.FindName('PreviewDuration').SelectedIndex=3

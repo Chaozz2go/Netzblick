@@ -1,4 +1,11 @@
-﻿# Preview only known observations. Never infer initiation from receive/send bytes or port numbers.
+﻿function Test-PreviewLoopback([string]$remote,[string]$local=''){
+    $peer=$null;if(-not [Net.IPAddress]::TryParse($remote,[ref]$peer)){return $false};if($peer.IsIPv4MappedToIPv6){$peer=$peer.MapToIPv4()}
+    if([Net.IPAddress]::IsLoopback($peer)){return $true}
+    $m=[regex]::Match($local,'^(?:\[(.+)\]|(.+)):(\d+)$')
+    if($m.Success){$address=if($m.Groups[1].Success){$m.Groups[1].Value}else{$m.Groups[2].Value};$bound=$null;if([Net.IPAddress]::TryParse($address,[ref]$bound)){if($bound.IsIPv4MappedToIPv6){$bound=$bound.MapToIPv4()};return $bound.Equals($peer)}}
+    return $false
+}
+# Preview only known observations. Never infer initiation from receive/send bytes or port numbers.
 function Get-PreviewObservations {
     $known=New-Object 'System.Collections.Generic.List[object]';$unknown=0;$seen=@{}
     foreach($row in @($script:rows)){
@@ -12,12 +19,13 @@ function Get-PreviewObservations {
         $ip=$null;if(-not [Net.IPAddress]::TryParse($row.Address,[ref]$ip)){$unknown++;continue};if($ip.IsIPv4MappedToIPv6){$ip=$ip.MapToIPv4()}
         $a=[Netzblick.SetupAttempt]@{Path=$row.Path;Address=$ip.ToString();Direction=$role.Label;Protocol=$protocol;Port=$port}
         $key=([Netzblick.ProcessLineage]::Normalize($a.Path))+'|'+$a.Direction+'|'+$a.Address+'|'+$a.Protocol+'|'+$a.Port
-        if(-not $seen.ContainsKey($key)){$seen[$key]=$true;$known.Add([pscustomobject]@{Attempt=$a;Source='Socket-Stichprobe';Evidence=$role.Source})}
+        if(-not $seen.ContainsKey($key)){$seen[$key]=$true;$known.Add([pscustomobject]@{Attempt=$a;Source='Socket-Stichprobe';Evidence=$role.Source;Loopback=(Test-PreviewLoopback $row.Address $row.Local)})}
     }
-    if($script:setupStatus){foreach($a in $setupStatus.Attempts){if($a.Direction -in @('Ausgehend','Eingehend')){$known.Add([pscustomobject]@{Attempt=$a;Source='Früheres Blockereignis';Evidence=$a.Evidence})}}}
+    if($script:setupStatus){foreach($a in $setupStatus.Attempts){if($a.Direction -in @('Ausgehend','Eingehend')){$known.Add([pscustomobject]@{Attempt=$a;Source='Früheres Blockereignis';Evidence=$a.Evidence;Loopback=(Test-PreviewLoopback $a.Address)})}}}
     [pscustomobject]@{Known=@($known.ToArray());Unknown=$unknown}
 }
-function Get-PreviewDecision($config,$attempt){
+function Get-PreviewDecision($config,$attempt,[bool]$loopback=$false){
+    if($loopback){return 'Loopback: von Netzblick-Filtern ausgenommen; fremde Filter unbekannt'}
     $now=[datetime]::UtcNow
     $rules=@($config.Rules | Where-Object {(-not $_.ExpiresUtc -or $_.ExpiresUtc -gt $now) -and $_.Matches($attempt)})
     $deny=$rules | Where-Object Action -eq 'Block' | Select-Object -First 1
@@ -48,7 +56,7 @@ function Get-ChangePreview([string]$path,[string]$operation,$rule=$null,[int]$mi
     foreach($o in $observations.Known){
         $a=$o.Attempt;$hit=if($rule){$rule.Matches($a)}else{[Netzblick.ProcessLineage]::Normalize($a.Path) -eq [Netzblick.ProcessLineage]::Normalize($path)}
         if(-not $hit){continue}
-        $matches+=[pscustomobject]@{Program=[IO.Path]::GetFileName($a.Path);Direction=$a.Direction;Target=$a.Target;Source=$o.Source;Before=(Get-PreviewDecision $before $a);After=$(if($error){'Änderung nicht anwendbar'}else{Get-PreviewDecision $after $a});Evidence=$o.Evidence}
+        $matches+=[pscustomobject]@{Program=[IO.Path]::GetFileName($a.Path);Direction=$a.Direction;Target=$a.Target;Source=$o.Source;Before=(Get-PreviewDecision $before $a ([bool]$o.Loopback));After=$(if($error){'Änderung nicht anwendbar'}else{Get-PreviewDecision $after $a ([bool]$o.Loopback)});Evidence=$o.Evidence}
     }
     $removed=@($before.Rules | Where-Object {$id=$_.Id;-not @($after.Rules | Where-Object Id -eq $id).Count})
     $added=@($after.Rules | Where-Object {$id=$_.Id;-not @($before.Rules | Where-Object Id -eq $id).Count})

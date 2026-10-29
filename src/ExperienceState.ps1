@@ -3,7 +3,7 @@ function Read-ExperienceState {
     $script:favoritePrograms=@{};$script:programTimeline=New-Object 'System.Collections.Generic.List[object]'
     if(-not [IO.File]::Exists($experienceFile)){return}
     $file=Get-Item -LiteralPath $experienceFile
-    if($file.Length -gt 2000000){throw 'Favoriten-/Zeitstrahldatei ist zu groß; vorhandene Datei bleibt erhalten.'}
+    if($file.Length -gt 4000000){throw 'Favoriten-/Zeitstrahldatei ist zu groß; vorhandene Datei bleibt erhalten.'}
     $saved=Get-Content -LiteralPath $experienceFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if($saved.Version -ne 1){throw 'Unbekanntes Favoriten-/Zeitstrahlformat; vorhandene Datei bleibt erhalten.'}
     foreach($p in @($saved.Favorites | Select-Object -First 50)){
@@ -117,6 +117,17 @@ function Update-ExperienceBlocks {
     $health=if($script:setupStatus){[string]$setupStatus.Verified+'|'+$setupStatus.Warning}else{'unreachable'}
     if($health -ne $script:timelineHealth){$script:timelineHealth=$health;Add-ProgramTimeline '*' 'Erfassungsstatus' $(if($script:setupStatus -and $setupStatus.Verified){'Filterstatus bestätigt. '+$setupStatus.Warning}else{'Filterdienst nicht bestätigt/erreichbar. Blockanzeige und Sperrwirkung können unvollständig sein.'})}
     if($script:setupStatus){
+        $currentConfig=$setupStatus.Config
+        if($script:timelinePreviousConfig){
+            $previous=$script:timelinePreviousConfig
+            if($previous.Ask -ne $currentConfig.Ask){Add-ProgramTimeline '*' 'Allgemeiner Modus geändert' $(if($currentConfig.Ask){'Nachfragen / Grundsperre in der Dienstkonfiguration aktiv.'}else{'Beobachten in der Dienstkonfiguration aktiv. Einzelregeln bleiben unabhängig wirksam.'})}
+            $paths=@(@($previous.Rules | ForEach-Object Path)+@($currentConfig.Rules | ForEach-Object Path)+@($previous.WatchedPaths)+@($currentConfig.WatchedPaths)+@($previous.ProgramLeases | ForEach-Object Path)+@($currentConfig.ProgramLeases | ForEach-Object Path) | Where-Object {$_ -ne '*' -and [Netzblick.AccessQueue]::CanAllow($_)} | Select-Object -Unique)
+            foreach($path in $paths){
+                $before=[Netzblick.SetupChanges]::CaptureProgram($previous,$path);$after=[Netzblick.SetupChanges]::CaptureProgram($currentConfig,$path)
+                if(-not [Netzblick.SetupChanges]::SameProgram($before,$after)){Add-ProgramTimeline $path 'Regelzustand geändert (beobachtet)' ($after.Rules.Count.ToString()+' Programmregeln · Prüfsperre '+$(if($after.Watched){'aktiv'}else{'keine'})+' · zeitweise Entscheidung '+$(if($after.Lease){'vorhanden'}else{'keine'})+'. Änderung zwischen zwei Dienstabfragen erkannt; Auslöser nicht sicher zugeordnet.')}
+            }
+        }
+        $script:timelinePreviousConfig=[Netzblick.SetupChanges]::CopyConfig($currentConfig)
         $fresh=@{}
         foreach($a in $setupStatus.Attempts){
             $key=$setupStatus.StartedUtc.ToString('o')+'|'+$a.Key;$prior=$script:timelineBlockCounts[$key];$fresh[$key]=[long]$a.Count
@@ -129,13 +140,13 @@ function Update-ExperienceBlocks {
 }
 function Reset-ExperienceHistory {
     if(-not $script:experienceReady){return}
-    $programTimeline.Clear();$script:timelineSockets=@{};$script:timelineBlockCounts=@{};$script:timelineHealth='';$script:guideQueue=@();$script:guideSnapshot=$null;$script:guideEpoch=[guid]::NewGuid().ToString('N')
+    $programTimeline.Clear();$script:timelineSockets=@{};$script:timelineBlockCounts=@{};$script:timelineHealth='';$script:timelinePreviousConfig=$null;$script:guideQueue=@();$script:guideSnapshot=$null;$script:guideEpoch=[guid]::NewGuid().ToString('N')
     Add-ProgramTimeline '*' 'Neu begonnen' 'Prüfungen und Zeitstrahl zurückgesetzt. Favoriten bleiben erhalten.'
     Save-ExperienceState;Update-ProgramTimeline;Refresh-Guide
 }
 function Initialize-ExperienceState {
     $script:experienceFile=Join-Path $userStateDirectory 'experience-state.json';$script:experienceReadOnly=$false
-    $script:experienceSavedUtc=[datetime]::UtcNow;$script:experienceDirty=$false;$script:timelineSockets=@{};$script:timelineBlockCounts=@{};$script:timelineHealth=''
+    $script:experienceSavedUtc=[datetime]::UtcNow;$script:experienceDirty=$false;$script:timelineSockets=@{};$script:timelineBlockCounts=@{};$script:timelineHealth='';$script:timelinePreviousConfig=$null
     try{Read-ExperienceState}catch{$script:experienceReadOnly=$true;$ui.UserNotice.Text='Favoriten/Zeitstrahl nicht geladen: '+$_.Exception.Message}
     $script:experienceReady=$true
     Add-ProgramTimeline '*' 'Erfassung begonnen' 'Netzblick gestartet. Zwischen Starts, bei Pausen oder Erfassungsfehlern besteht keine lückenlose Aufzeichnung. Maximal 400 Ereignisse für alle Programme zusammen.'

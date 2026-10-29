@@ -182,8 +182,8 @@ foreach($panel in @('DashboardPanel','OverviewPanel','AccessPanel','InspectionPa
   }
  }
 }
-$pauseDialog=New-TemporaryBlockDialog $testExe
-if($pauseDialog.FindName('Duration').Items.Count -ne 4 -or $pauseDialog.FindName('Duration').SelectedItem.Tag -ne '10' -or $pauseDialog.FindName('Duration').Items[3].Tag -ne '0' -or $pauseDialog.FindName('PathLabel').Text -ne $testExe){throw 'Auswahl der zeitweisen Sperrdauer fehlt oder falsches Programm.'}
+$pauseDialog=New-ChangePreviewDialog (Get-ChangePreview $testExe 'TemporaryBlockProgram')
+if($pauseDialog.FindName('PreviewDuration').Items.Count -ne 4 -or $pauseDialog.FindName('PreviewDuration').SelectedItem.Tag -ne '10' -or $pauseDialog.FindName('PreviewDuration').Items[3].Tag -ne '0' -or $pauseDialog.FindName('PreviewScope').Text -notlike ($testExe+'*')){throw 'Auswahl der zeitweisen Sperrdauer fehlt oder falsches Programm.'}
 $pauseDialog.Close()
 Write-Output 'PASS: produktive Navigation und mehrfacher Hell-/Dunkelwechsel behalten lesbaren Kontrast; Sperrdialog hat Dauer und eindeutigen Programmpfad.'
 # Review baseline distinguishes old denials from new attempts without changing policy.
