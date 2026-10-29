@@ -69,7 +69,7 @@ function Get-ChangePreview([string]$path,[string]$operation,$rule=$null,[int]$mi
     if(-not $rule -and $protected -and $operation -ne 'ProgramDefault'){$error='Windows-Sammelprozesse über einzelne Verbindungen verwalten.'}
     $state=if($key -ne '*'){Get-PermissionStatus $key}else{$null}
     if(-not $rule -and $state.Legacy -and $operation -notin @('BlockProgram','TemporaryBlockProgram','EndProgramLease')){$error='Zuerst die älteren Windows-Regeln dieses Programms prüfen.'}
-    if(-not $rule -and $operation -ne 'ProgramDefault' -and -not [IO.File]::Exists($path)){$error='Programmdatei nicht mehr vorhanden.'}
+    if(-not $rule -and $operation -notin @('ProgramDefault','EndProgramLease') -and -not [IO.File]::Exists($path)){$error='Programmdatei nicht mehr vorhanden.'}
     $scope=if($rule){$rule.Scope+' · '+$rule.Lifetime}else{$path+' · alle Ziele / Protokolle · ein- und ausgehend · Loopback ausgenommen'}
     $footprint=$removed.Count.ToString()+' bisherige Dienstregeln werden entfernt/ersetzt; '+$added.Count+' Regeln kommen hinzu.'
     if($key -ne '*'){

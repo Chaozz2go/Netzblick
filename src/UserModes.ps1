@@ -75,6 +75,7 @@ function Set-NetworkMode([string]$path,[string]$mode,[switch]$NoHistory) {
         while($changes.Count -gt 20){$changes.RemoveAt($changes.Count-1)}
         Save-UserState
     }
+    Add-ProgramTimeline $path 'Ältere Windows-Regeln geändert' ((Network-ModeLabel $beforeMode)+' → '+(Network-ModeLabel $mode)+'. Nur eigene Windows-Regeln bestätigt; Dienstregeln und fremde Filter bleiben unabhängig.')
     Add-Event 'Netzwerkzustand geändert' ([IO.Path]::GetFileName($path)) ((Network-ModeLabel $beforeMode)+' → '+(Network-ModeLabel $mode))
     $ui.UndoNetwork.IsEnabled=$changes.Count -gt 0
     Refresh-Detail;Refresh-Overview

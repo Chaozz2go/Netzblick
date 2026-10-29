@@ -12,7 +12,9 @@ function Block-ReviewProgram([string]$path){
     try{
         if(Is-Protected $path){throw 'System-Sammelprozesse bitte über Einrichten & testen gezielt bewerten.'}
         if(-not $script:setupStatus -or -not $setupStatus.Verified){throw 'Filtersteuerung nicht bestätigt. Keine Sperre als erfolgreich gemeldet.'}
-        Set-PermissionProgram $path 'BlockProgram'
+        $preview=Show-ChangePreview (Get-ChangePreview $path 'BlockProgram')
+        if(-not $preview){return}
+        Set-PermissionProgram $path 'BlockProgram' 10 $preview.ExpectedConfigKey
         Update-AccessMode;Refresh-Overview
         $ui.UserNotice.Text='Externe neue Verbindungen für '+[IO.Path]::GetFileName($path)+' gesperrt. Bereits übertragene Daten werden nicht zurückgenommen.'
         Add-Event 'Programm gesperrt' ([IO.Path]::GetFileName($path)) 'Ein- und ausgehend; Loopback bleibt ausgenommen. Regeln unter Einrichten & testen.'

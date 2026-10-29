@@ -65,6 +65,14 @@ if($dialog.Tag.Minutes -ne 0){throw 'Dauer bis aufgehoben geht in Vorschau verlo
 $previewRoot=$dialog.Content;$dialog.Content=$null;$previewHost=New-Object Windows.Controls.Border;$previewHost.Resources=$window.Resources;$previewHost.Child=$previewRoot;$previewHost.SetResourceReference([Windows.Controls.Border]::BackgroundProperty,'AppBg');$previewHost.Width=850;$previewHost.Height=690
 $previewHost.Measure([Windows.Size]::new(850,690));$previewHost.Arrange([Windows.Rect]::new(0,0,850,690));$previewHost.UpdateLayout()
 $previewImage=New-Object Windows.Media.Imaging.RenderTargetBitmap(850,690,96,96,[Windows.Media.PixelFormats]::Pbgra32);$previewImage.Render($previewHost);$previewEncoder=New-Object Windows.Media.Imaging.PngBitmapEncoder;$previewEncoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($previewImage));$previewFile=[IO.File]::Create((Join-Path $OutputDirectory 'ChangePreview.png'));try{$previewEncoder.Save($previewFile)}finally{$previewFile.Dispose();$dialog.Close()}
+# Cancelling the preview from the new-program notification must not silently block.
+$showPreviewOriginal=(Get-Command Show-ChangePreview).ScriptBlock
+try{
+    Set-Item Function:Show-ChangePreview -Value {param($preview) return $null}
+    $beforeCancel=[Netzblick.SetupChanges]::ConfigKey($setupStatus.Config);$beforeCancelHistory=$programTimeline.Count
+    Block-ReviewProgram $testExe
+    if([Netzblick.SetupChanges]::ConfigKey($setupStatus.Config) -ne $beforeCancel -or $programTimeline.Count -ne $beforeCancelHistory){throw 'Abgebrochene Vorschau sperrt über die Programmbenachrichtigung.'}
+}finally{Set-Item Function:Show-ChangePreview -Value $showPreviewOriginal}
 # Snapshot guarded inside the fake as in the native service; failed command creates no success history.
 $stale=Get-ChangePreview $testExe 'BlockProgram';$setupStatus.Config.Ask=$true
 $historyBeforeFailure=$programTimeline.Count
