@@ -29,13 +29,13 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.16.1'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.17.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -73,6 +73,7 @@ try {
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
     . (Join-Path $appRoot 'src\DesignMode.ps1')
     . (Join-Path $appRoot 'src\DirectionMode.ps1')
+    . (Join-Path $appRoot 'src\HostsMode.ps1')
     . (Join-Path $appRoot 'src\DashboardMode.ps1')
     . (Join-Path $appRoot 'src\DashboardNavigation.ps1')
     . (Join-Path $appRoot 'src\WorkspaceMode.ps1')
@@ -252,18 +253,19 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
-        $compact=$name -in @('DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
+        $compact=$name -in @('HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
         Set-NavigationTheme $name
-        foreach($key in @('DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
         Set-WorkspaceLayout $name
         if($name -eq 'OverviewPanel'){Refresh-Overview}
         if($name -eq 'DashboardPanel'){Update-Dashboard}
+        if($name -eq 'HostsPanel'){Update-HostCapture;Refresh-Hosts}
     }
     $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
     $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
@@ -285,6 +287,7 @@ try {
         if($dialog.ShowDialog($window)) {
             try {
                 if($ui.OverviewPanel.Visibility -eq 'Visible'){$data=@($ui.OverviewPrograms.Items | Select-Object -Property @('Name','Path','Status','Sent','Received','Rate'))}
+                elseif($ui.HostsPanel.Visibility -eq 'Visible'){$data=@($ui.HostsList.Items | Select-Object Title,Path,ServiceNames,Status,Summary)}
                 elseif($ui.HistoryPanel.Visibility -eq 'Visible'){$data=@($events.ToArray())}
                 elseif($ui.RulesPanel.Visibility -eq 'Visible'){$data=@($ownRules)}
                 elseif($ui.WorldPanel.Visibility -eq 'Visible'){$data=@($worldPeers | Select-Object -Property @('Program','Address','Country','Code','Count','Kind'))}
@@ -318,6 +321,7 @@ try {
     Initialize-ReviewMode
     Initialize-DirectionMode
     Initialize-DashboardMode
+    Initialize-HostsMode
     Initialize-QuickActions
     Initialize-BlockDetails
     Initialize-Updates
@@ -330,6 +334,7 @@ try {
     $timer.Add_Tick({
         try {
             if($script:paused){return}
+            Update-HostCapture
             if($null -ne $script:job -and $script:job.IsCompleted){
                 if($script:job.IsFaulted){$failure=$script:job.Exception.GetBaseException().Message;$script:job=$null;throw $failure}
                 $snapshot=$script:job.Result;$script:job=$null
@@ -359,6 +364,7 @@ try {
                 Update-Traffic
                 Refresh-Programs
                 Update-Dashboard
+                Refresh-Hosts
                 if($ui.WorldPanel.Visibility -eq 'Visible'){Refresh-World -Rebuild}
                 if($ui.HistoryPanel.Visibility -eq 'Visible'){$ui.History.ItemsSource=$events.ToArray()}
                 $ui.Status.Text='Aktualisiert '+(Get-Date -Format 'HH:mm:ss')+' · IPv4 + IPv6 · 2-Sekunden-Stichproben · Adapterwerte können VPN/virtuelle Adapter doppelt zählen.'

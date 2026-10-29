@@ -103,3 +103,7 @@ Windows-Builds prüfen unter anderem Oberfläche, native Sperr- und Freigabefunk
 - [Drittanbieter und Datenlizenzen](THIRD-PARTY-NOTICES.txt)
 
 Für Entwickler: `tools/Build-Desktop.ps1` erstellt die Windows-EXE; `installer/Netzblick.iss` baut mit Inno Setup 6 das Setup. Die automatisierten Prüfungen liegen unter `tools` und in den GitHub-Actions-Workflows. Die Windows-Pakete lassen sich direkt nutzen, ohne das Projekt selbst zu kompilieren.
+
+### In Vorbereitung: Hostprozesse & Dienste (0.17.0)
+
+Eigene Übersicht für laufende Windows-Dienstprozesse mit PID, Startzeit, Dienstnamen, aufklappbaren Windows-Beschreibungen und Prozessverbindungen. Sperrgründe und Regeln bleiben klar als gemeinsame Angaben zum Dateipfad gekennzeichnet. Ohne KI und ohne Cloud-Abhängigkeit. Details: [Release 0.17.0](docs/Release-0.17.0.md). Die Downloadlinks oben führen bis zur Veröffentlichung weiterhin zur stabilen Version 0.16.1.

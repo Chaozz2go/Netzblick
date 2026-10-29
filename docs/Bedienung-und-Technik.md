@@ -211,3 +211,11 @@ Windows-Regeln zeigen Programmname, Aktion und Richtung. Eigene ältere, unverä
 Links unten unter **Design** zwischen **Clean** und **Future** wählen. **Hell/Dunkel** bleibt davon unabhängig. Ohne gespeicherte Wahl ist Future aktiv; beide Einstellungen werden gespeichert und bei „Alles neu prüfen“ behalten.
 
 Future zeigt Liste und ausgewähltes Programm nebeneinander, mit App-Symbolen aus den lokalen EXE-Dateien, klaren Statuskarten, einer kompakten Offline-Karte und dem letzten erfassten Blockgrund. Das Vergrößern-Symbol macht bei Bedarf Platz für die Detailtabellen. Alle bisherigen Aktionen bleiben unter „Weitere Aktionen“ erreichbar. Der Designwechsel setzt keine Firewallbefehle ab und verändert keine Regeln. Die Karte markiert grobe Länderzuordnungen und das manuell gewählte Startland; sie belegt keine exakten Serverpositionen oder tatsächlichen Datenwege.
+
+## Hostprozesse & Dienste (ab 0.17.0)
+
+Der Reiter „Hostprozesse“ listet laufende Windows-Dienstprozesse getrennt nach PID und Startzeit. Dienste lassen sich aufklappen; Namen, Status und Beschreibungen stammen lokal aus Windows. Suche berücksichtigt auch Dienstnamen und Beschreibungen. „Netzwerk sichtbar“ bedeutet mindestens ein zugehöriger Socket, einschließlich lauschender TCP-/UDP-Endpunkte, und ist kein Beweis für übertragenen Datenverkehr.
+
+Die Verbindungstabelle gilt für die ausgewählte Prozessinstanz. Einzelne Dienste werden Verbindungen nicht spekulativ zugeordnet. Sperrgründe, Ampel und Prüfstatus gelten dagegen für den gemeinsamen Dateipfad, ebenso die verlinkten Programmdetails und Regeln. Die Ansicht selbst ändert keine Regeln und startet oder beendet keine Dienste. Bei Wiederverwendung einer PID wird die vorherige Auswahl nicht auf den neuen Prozess übertragen.
+
+Die Dienstliste wird beim Öffnen im Hintergrund eingelesen und etwa alle zehn Sekunden erneuert. „Dienste aktualisieren“ fordert eine neue Aufnahme an. Die globale Ansichtspause hält auch die Hostansicht an. Es wird keine KI eingebunden und nichts ins Internet übertragen.
