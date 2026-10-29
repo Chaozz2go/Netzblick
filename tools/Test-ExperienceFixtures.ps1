@@ -32,6 +32,7 @@ if($guideQueue.Count -ne 2 -or $guideSnapshot.Counts[0].Count -ne 3 -or $ui.Guid
 $oldSnapshot=$guideSnapshot;$oldPath=$guideSnapshot.Path
 $guideAttempt.Count=5;$script:trafficPeers+=@([pscustomobject]@{Path=$testExe;Protocol='TCPv4';Address='203.0.113.20';Port=443});Update-ActivityLedger;Refresh-Guide
 if(-not [object]::ReferenceEquals($oldSnapshot,$guideSnapshot) -or $guideSnapshot.Path -ne $oldPath -or $guideSnapshot.Counts[0].Count -ne 3){throw 'Aktualisierung ersetzt den gelesenen Prüfstand.'}
+for($i=0;$i -lt 2000;$i++){$blockBaselines['old-'+$i]=[pscustomobject]@{Epoch='previous-service';Count=1}}
 Complete-GuideSnapshot
 $review=Get-ProgramReviewState $testExe
 if(-not $review.NeedsReview -or $review.NewTargets -ne 1 -or $review.NewBlocks -ne 2 -or $guideIndex -ne 1 -or $guideSnapshot.Path -ne $guideOther){throw 'Prüfung bestätigt unbemerkt neue Ziele/Blockversuche oder springt falsch.'}
@@ -70,6 +71,7 @@ $historyBeforeFailure=$programTimeline.Count
 try{Set-PermissionProgram $testExe 'BlockProgram' 10 $stale.ExpectedConfigKey;throw 'Veraltete Vorschau akzeptiert.'}catch{if($_.Exception.Message -notlike '*Vorschau*'){throw}}
 if($programTimeline.Count -ne $historyBeforeFailure -or $setupStatus.Config.Rules.Count){throw 'Abgelehnte Änderung wird als erfolgreich aufgezeichnet.'}
 $setupStatus.Config.Ask=$false
+if(-not (Test-PreviewLoopback '::ffff:127.0.0.1') -or -not (Test-PreviewLoopback '192.0.2.5' '192.0.2.5:50000') -or (Get-PreviewDecision $setupStatus.Config $guideAttempt $true) -notlike 'Loopback*'){throw 'Vorschau verschweigt Loopback-Ausnahme.'}
 # Round-trip local pins/history and bound the total, without inventing causal events.
 Add-ProgramTimeline $testExe 'Test: beobachtet' 'Beobachtung ohne behauptete Ursache.'
 Save-ExperienceState -ThrowOnError

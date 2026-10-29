@@ -42,7 +42,9 @@ function Complete-GuideSnapshot {
     $s=$script:guideSnapshot;if(-not $s -or $s.RunEpoch -ne $script:guideEpoch){return}
     $targetBefore=@{};$baselineBefore=@{};$newBefore=$newPrograms[$s.Key]
     foreach($t in $s.Targets){$entry=$targetLedger[$t.Key];if($entry -and [datetime]$entry.FirstUtc -eq [datetime]$t.FirstUtc){$targetBefore[$t.Key]=$entry.Reviewed;$entry.Reviewed=$true}}
-    if($script:setupStatus -and $setupStatus.StartedUtc.ToString('o') -eq $s.Epoch){foreach($b in $s.Counts){
+    if($script:setupStatus -and $setupStatus.StartedUtc.ToString('o') -eq $s.Epoch){
+        foreach($staleKey in @($blockBaselines.Keys | Where-Object {$blockBaselines[$_].Epoch -ne $s.Epoch})){$baselineBefore[$staleKey]=$blockBaselines[$staleKey];$blockBaselines.Remove($staleKey)}
+        foreach($b in $s.Counts){
         $baselineBefore[$b.Key]=$blockBaselines[$b.Key];$prior=$blockBaselines[$b.Key]
         $count=if($prior -and $prior.Epoch -eq $s.Epoch){[Math]::Max([long]$prior.Count,[long]$b.Count)}else{[long]$b.Count}
         if($blockBaselines.Count -lt 2000 -or $blockBaselines.ContainsKey($b.Key)){$blockBaselines[$b.Key]=[pscustomobject]@{Key=$b.Key;PathKey=$s.Key;Epoch=$s.Epoch;Count=$count}}

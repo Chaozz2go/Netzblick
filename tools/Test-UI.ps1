@@ -530,6 +530,7 @@ $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
 $renderHost.Resources=$window.Resources;$renderHost.SetResourceReference([Windows.Controls.Border]::BackgroundProperty,'AppBg');$renderHost.Child=$renderRoot
 try{
+ $panelName='Access';Show-RealPanel 'AccessPanel'
  foreach($scenario in @(0,1,2,3)){
   [Netzblick.SetupClient]::Scenario($testExe,$scenario);Update-AccessMode
   if($scenario -eq 0 -and -not $ui.StartAccess.IsEnabled){throw 'Beobachten: Start fehlt.'}

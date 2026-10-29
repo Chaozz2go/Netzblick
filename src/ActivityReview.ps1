@@ -79,6 +79,7 @@ function Mark-ProgramActivityReviewed([string]$path){
     $script:targetReviewCounts=$null
     if($script:setupStatus){
         $epoch=$setupStatus.StartedUtc.ToUniversalTime().ToString('o')
+        foreach($staleKey in @($blockBaselines.Keys | Where-Object {$blockBaselines[$_].Epoch -ne $epoch})){$blockBaselines.Remove($staleKey)}
         foreach($a in @($setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $key})){
             if($blockBaselines.Count -lt 2000 -or $blockBaselines.ContainsKey($a.Key)){$blockBaselines[$a.Key]=[pscustomobject]@{Key=$a.Key;PathKey=$key;Epoch=$epoch;Count=[long]$a.Count}}
         }

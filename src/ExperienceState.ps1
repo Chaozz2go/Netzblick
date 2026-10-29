@@ -142,7 +142,7 @@ function Reset-ExperienceHistory {
     if(-not $script:experienceReady){return}
     $programTimeline.Clear();$script:timelineSockets=@{};$script:timelineBlockCounts=@{};$script:timelineHealth='';$script:timelinePreviousConfig=$null;$script:guideQueue=@();$script:guideSnapshot=$null;$script:guideEpoch=[guid]::NewGuid().ToString('N')
     Add-ProgramTimeline '*' 'Neu begonnen' 'Prüfungen und Zeitstrahl zurückgesetzt. Favoriten bleiben erhalten.'
-    Save-ExperienceState;Update-ProgramTimeline;Refresh-Guide
+    Save-ExperienceState -ThrowOnError;Update-ProgramTimeline;Refresh-Guide
 }
 function Initialize-ExperienceState {
     $script:experienceFile=Join-Path $userStateDirectory 'experience-state.json';$script:experienceReadOnly=$false
