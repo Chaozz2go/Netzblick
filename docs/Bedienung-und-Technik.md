@@ -2,7 +2,7 @@
 
 [Zur Startseite und zu den Downloads](../README.md)
 
-Dieses Handbuch beschreibt die Bedienung, die Wirkung der Regeln und technische Grenzen von Netzblick 0.18.0. Die Überschriften mit Versionsnummern nennen die Einführung einer Funktion. Den aktuellen Umfang der automatisierten Windows-Prüfungen und der noch nötigen Gerätetests beschreibt [PRUEFSTAND.txt](../PRUEFSTAND.txt).
+Dieses Handbuch beschreibt die Bedienung, die Wirkung der Regeln und technische Grenzen von Netzblick 0.19.0. Die Überschriften mit Versionsnummern nennen die Einführung einer Funktion. Den aktuellen Umfang der automatisierten Windows-Prüfungen und der noch nötigen Gerätetests beschreibt [PRUEFSTAND.txt](../PRUEFSTAND.txt).
 
 ## Dashboard und Verbindungsrichtung (0.16.0)
 
