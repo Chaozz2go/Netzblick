@@ -55,3 +55,12 @@ $roundCommand=$method.MakeGenericMethod([Netzblick.SetupCommand]).Invoke([Netzbl
 if($roundCommand.ExpectedConfigKey -ne $previewKey){throw 'Vorschau-Konfigurationsschlüssel geht über JSON verloren.'}
 if([Netzblick.SetupChanges]::ConfigKey($config) -ne [Netzblick.SetupChanges]::ConfigKey($closed.Invoke([Netzblick.SetupWire]::Json(),@([Netzblick.SetupWire]::Json().Serialize($config))))){throw 'Vorschau-Konfigurationsschlüssel ist über JSON nicht stabil.'}
 Write-Output 'PASS: Vorschau-Konfigurationsschlüssel und UTC-Genauigkeit über echten JSON-Vertrag.'
+
+$bundle=New-Object Netzblick.BackupBundle;$bundle.Control=$config;$bundle.Favorites.Add($path)
+$bundle.Validate();$bundleJson=[Netzblick.SetupWire]::Json().Serialize($bundle)
+$bundleRound=$method.MakeGenericMethod([Netzblick.BackupBundle]).Invoke([Netzblick.SetupWire]::Json(),@($bundleJson));$bundleRound.Validate()
+if($bundleRound.CreatedUtc.Kind -ne 'Utc' -or [Netzblick.SetupChanges]::ConfigKey($bundle.Control) -ne [Netzblick.SetupChanges]::ConfigKey($bundleRound.Control)){throw 'Sicherungsformat verliert UTC-Zeit oder Regelzustand.'}
+$groupCommand=[Netzblick.SetupCommand]@{Operation='GroupTemporaryBlock';Paths=[System.Collections.Generic.List[string]]@($path);DurationMinutes=30;ExpectedConfigKey=$previewKey}
+$groupRound=$method.MakeGenericMethod([Netzblick.SetupCommand]).Invoke([Netzblick.SetupWire]::Json(),@([Netzblick.SetupWire]::Json().Serialize($groupCommand)))
+if($groupRound.Paths.Count -ne 1 -or $groupRound.Paths[0] -ne $path -or $groupRound.DurationMinutes -ne 30){throw 'Gruppenvertrag verliert Mitglieder oder Dauer.'}
+Write-Output 'PASS: typisierte lokale Sicherung und bestätigte Gruppenliste über echten Framework-JSON-Vertrag.'

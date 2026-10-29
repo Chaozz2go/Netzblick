@@ -111,3 +111,7 @@ Eigene Übersicht für laufende Windows-Dienstprozesse mit PID, Startzeit, Diens
 ### Prüfen & Favoriten (ab 0.18.0)
 
 Ein geführter Prüfassistent, angeheftete Programme mit Restzeit zeitweiser Sperren, eine Vorschau vor Regeländerungen und ein lokaler Programm-Zeitstrahl erleichtern die Bewertung. Technische Grenzen und Speicherung: [Release 0.18.0](docs/Release-0.18.0.md).
+
+### In Vorbereitung: klare Bereiche, Programmgruppen und Sicherungen (0.19.0)
+
+Eine kompaktere Hauptnavigation, ausdrücklich bestätigte EXE-Gruppen, lokale Sicherungen mit kategorieweiser Wiederherstellung und Hinweise auf Dateiänderungen erleichtern die tägliche Nutzung. Details und Grenzen: [Release 0.19.0](docs/Release-0.19.0.md). Die Downloadlinks oben zeigen bis zur Veröffentlichung weiter auf 0.18.0.

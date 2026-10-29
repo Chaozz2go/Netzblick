@@ -102,3 +102,34 @@ namespace Netzblick {
   public static bool CanRestore(uint original,uint applied,uint current){return Canonical(current)==Canonical(applied) || Canonical(current)==Canonical(original);}
  }
 }
+
+namespace Netzblick {
+ public sealed class ProgramGroup {
+  public string Id {get;set;} public string Name {get;set;} public System.Collections.Generic.List<string> Paths {get;set;}
+  public ProgramGroup(){Paths=new System.Collections.Generic.List<string>();}
+  public void Validate(){
+   Guid id;if(!Guid.TryParse(Id,out id)||String.IsNullOrWhiteSpace(Name)||Name.Length>80)throw new ArgumentException("Gruppe benötigt eine ID und einen Namen mit 1 bis 80 Zeichen.");
+   foreach(char c in Name)if(Char.IsControl(c))throw new ArgumentException("Gruppenname enthält Steuerzeichen.");
+   if(Paths==null||Paths.Count<1||Paths.Count>16)throw new ArgumentException("Gruppe: 1 bis 16 EXE-Pfade bestätigen.");
+   var seen=new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+   foreach(string p in Paths)if(!AccessQueue.CanAllow(p)||p.Length>1024||!seen.Add(ProcessLineage.Normalize(p)))throw new ArgumentException("Ungültiger oder doppelter Gruppenpfad.");
+  }
+ }
+ public sealed class FileReference {
+  public string Path {get;set;} public string Hash {get;set;} public string Company {get;set;} public string FileVersion {get;set;} public string Signer {get;set;}
+  public long Length {get;set;} public DateTime LastWriteUtc {get;set;} public DateTime CapturedUtc {get;set;}
+  public void Validate(){
+   if(!AccessQueue.CanAllow(Path)||Path.Length>1024||String.IsNullOrEmpty(Hash)||!System.Text.RegularExpressions.Regex.IsMatch(Hash,"\\A[0-9A-Fa-f]{64}\\z")||Length<0||CapturedUtc.Kind!=DateTimeKind.Utc||LastWriteUtc.Kind!=DateTimeKind.Utc)throw new ArgumentException("Ungültiger Datei-Vergleichsstand.");
+   if((Company??"").Length>256||(FileVersion??"").Length>128||(Signer??"").Length>1024)throw new ArgumentException("Dateiangaben zu lang.");
+  }
+ }
+ public sealed class WorkspaceSettings {
+  public int Version {get;set;} public System.Collections.Generic.List<ProgramGroup> Groups {get;set;} public System.Collections.Generic.List<FileReference> Files {get;set;}
+  public WorkspaceSettings(){Version=1;Groups=new System.Collections.Generic.List<ProgramGroup>();Files=new System.Collections.Generic.List<FileReference>();}
+  public void Validate(){
+   if(Version!=1||Groups==null||Files==null||Groups.Count>32||Files.Count>512)throw new ArgumentException("Arbeitsbereich ungültig oder Kapazität überschritten.");
+   var ids=new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var g in Groups){if(g==null)throw new ArgumentException("Leere Gruppe.");g.Validate();if(!ids.Add(g.Id))throw new ArgumentException("Doppelte Gruppen-ID.");}
+   var paths=new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);foreach(var f in Files){if(f==null)throw new ArgumentException("Leerer Datei-Vergleichsstand.");f.Validate();if(!paths.Add(ProcessLineage.Normalize(f.Path)))throw new ArgumentException("Doppelter Datei-Vergleichsstand.");}
+  }
+ }
+}

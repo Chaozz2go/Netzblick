@@ -45,4 +45,5 @@ function Set-NavigationTheme([string]$panel){
         $button.SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($name -eq $active){'AccentSoft'}else{'Raised'}))
         $button.SetResourceReference([Windows.Controls.Control]::ForegroundProperty,'Text')
     }
+    if(Get-Command Update-WorkspaceNavigation -ErrorAction SilentlyContinue){Update-WorkspaceNavigation $panel}
 }

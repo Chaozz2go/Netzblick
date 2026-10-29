@@ -213,11 +213,12 @@ function Refresh-Overview {
         $sample=$trafficSamples[$program.Key]
         $reviewActivity=Get-ProgramReviewState $program.Path
         $needsReview=$reviewActivity.NeedsReview
+        $fileChange=Get-FileChangeState $program.Path
         $signal=Get-PermissionStatus $program.Path
         $activity=Get-ProgramActivity $program $sample
         $directionSummary=Get-ProgramDirectionSummary $program
         $mode=try{Get-NetworkMode $program.Path @($ownRules | Where-Object {$_.Path -eq $program.Path})}catch{'Modified'}
-        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;AppIcon=(Get-ApplicationIcon $program.Path);FutureActivity=$(if($program.BlockCount){$program.BlockCount.ToString()+' Blockversuche'}elseif($sample -and $sample.RateReady){'↓ '+(Format-Rate $sample.ReceivedRate)}else{'Nicht gemessen'});Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');DirectionSummary=$directionSummary;NeedsReview=$needsReview;ReviewReason=$reviewActivity.Reason;ReviewColor=$(if($needsReview){Get-ThemeColor '#996000'}else{Get-ThemeColor '#57677B'});NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
+        $items+=[pscustomobject]@{Key=$program.Key;Name=$program.Name;FileChanged=$fileChange.Changed;FileChangeLabel=$(if($fileChange.Changed){$fileChange.Label}else{''});FileChangeVisibility=$(if($fileChange.Changed){'Visible'}else{'Collapsed'});AppIcon=(Get-ApplicationIcon $program.Path);FutureActivity=$(if($program.BlockCount){$program.BlockCount.ToString()+' Blockversuche'}elseif($sample -and $sample.RateReady){'↓ '+(Format-Rate $sample.ReceivedRate)}else{'Nicht gemessen'});Path=$program.Path;SignalColor=$signal.SignalColor;SignalHint=$signal.SignalHint;BlockSummary=$program.BlockSummary;ActivityReview=($reviewActivity.NewTargets.ToString()+' neue Ziele · '+$reviewActivity.NewBlocks+' neue Blockversuche');DirectionSummary=$directionSummary;NeedsReview=$needsReview;ReviewReason=$reviewActivity.Reason;ReviewColor=$(if($needsReview){Get-ThemeColor '#996000'}else{Get-ThemeColor '#57677B'});NewBadge=$(if($newPrograms.ContainsKey($program.Key)){'NEU'}else{''});LastSeen=$activity.Label;Active=$activity.Active;Category=$signal.Category;Status=$(if(Get-Command Get-PermissionStatus -ErrorAction SilentlyContinue){(Get-PermissionStatus $program.Path).Status}else{Network-ModeLabel $mode});Review=$(if($newPrograms.ContainsKey($program.Key)){'Neues Programm'}elseif($needsReview){'Neue Ziele / Versuche'}else{'Keine Neuigkeiten'});Sent=$(if($sample){Format-Bytes $sample.Sent}else{'—'});Received=$(if($sample){Format-Bytes $sample.Received}else{'—'});Rate=$(if($sample -and $sample.RateReady){'↑ '+(Format-Rate $sample.SentRate)+' · ↓ '+(Format-Rate $sample.ReceivedRate)}elseif($sample){'Rate wird ermittelt …'}else{'Nicht gemessen'});Volume=$(if($sample){$sample.Sent+$sample.Received}else{0});New=$newPrograms.ContainsKey($program.Key)}
     }
     $overviewKey=if($ui.OverviewPrograms.SelectedItem){$ui.OverviewPrograms.SelectedItem.Key}else{''}
     $allCount=$items.Count
@@ -225,7 +226,7 @@ function Refresh-Overview {
     $reviewCount=@($items | Where-Object NeedsReview).Count
     $query=$ui.OverviewSearch.Text.Trim()
     $filter=$ui.OverviewFilter.SelectedIndex
-    $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.NeedsReview) -or ($filter -eq 3 -and $_.Active)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
+    $items=@($items | Where-Object {($filter -eq 0 -or ($filter -eq 1 -and $_.Category -eq 'Blocked') -or ($filter -eq 2 -and $_.NeedsReview) -or ($filter -eq 3 -and $_.Active) -or ($filter -eq 4 -and $_.FileChanged)) -and (-not $query -or $_.Name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Path).IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -ge 0)})
     $ui.ProgramListCounts.Text=$items.Count.ToString()+' von '+$allCount+' Programmen'
     $ui.ProgramListEmpty.Visibility=if($items.Count){'Collapsed'}else{'Visible'}
     $ui.ProgramListEmpty.Text=if(-not $items.Count){'Keine Programme in dieser Auswahl. Filter oder Suche ändern.'}else{''}
@@ -243,12 +244,13 @@ function Refresh-Overview {
     $ui.ReviewShow.IsEnabled=$reviewCount -gt 0
     $ui.AcknowledgeNew.IsEnabled=@($items | Where-Object NeedsReview).Count -gt 0
     $ui.ReviewListActions.Visibility=if($filter -eq 2){'Visible'}else{'Collapsed'}
-    $ui.ProgramListTitle.Text=switch($filter){1{'Gesperrte Programme'} 2{'Programme zu prüfen'} 3{'Gerade aktive Programme'} default{'Programme'}}
+    $ui.ProgramListTitle.Text=switch($filter){1{'Gesperrte Programme'} 2{'Programme zu prüfen'} 3{'Gerade aktive Programme'} 4{'Programme mit Dateiänderungen'} default{'Programme'}}
     $ui.ProgramListHint.Text=if($filter -eq 2){'Prüfgrund direkt beim Namen · Auswahl → Prüfdetails ansehen'}else{'Ampel = aktueller Zugriff · App auswählen für Details'}
     $ui.LastNetworkChange.Visibility=if($changes.Count){'Visible'}else{'Collapsed'}
     $ui.UndoNetwork.Visibility=$ui.LastNetworkChange.Visibility
     Update-OverviewFilterChrome
     Update-OverviewReviewActions
+    if($script:programWorkspaceReady){Refresh-Groups;Update-ProgramFileCard}
     if($script:experienceReady){Refresh-Favorites;Update-FavoriteButtons}
     if($script:workflowReady){Refresh-Guide}
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}

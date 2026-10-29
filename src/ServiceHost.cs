@@ -111,6 +111,17 @@ namespace Netzblick {
      if(command.Rule.ExpiresUtc.HasValue&&(command.Rule.ExpiresUtc<=DateTime.UtcNow||command.Rule.ExpiresUtc>DateTime.UtcNow.AddHours(24)))throw new ArgumentException("Temporäre Regel muss innerhalb der nächsten 24 Stunden ablaufen.");
      if(next.Rules.Any(r=>r.Id==command.Rule.Id))throw new InvalidOperationException("Regel-ID ist bereits vorhanden.");
      if(command.Rule.Action=="Block")EnsureWatch();SetupChanges.Upsert(next,command.Rule);break;
+    case "GroupTemporaryBlock":
+    case "GroupEndLeases":
+     if(String.IsNullOrEmpty(command.ExpectedConfigKey))throw new ArgumentException("Bestätigte Gruppenvorschau fehlt.");
+     if(command.Paths==null||command.Paths.Count<1||command.Paths.Count>16)throw new ArgumentException("Bestätigte Gruppenmitglieder fehlen.");
+     var canonical=new List<string>();
+     foreach(string p in command.Paths){if(!AccessQueue.CanAllow(p))throw new ArgumentException("Ungültiger Gruppenpfad.");if(command.Operation=="GroupTemporaryBlock"&&!File.Exists(p))throw new ArgumentException("Gruppendatei fehlt: "+p);canonical.Add(File.Exists(p)?WfpGate.CanonicalPath(p):p);}
+     next=SetupChanges.GroupChange(config,canonical,command.Operation,command.DurationMinutes,DateTime.UtcNow);if(NeedsWatch(next))EnsureWatch();break;
+    case "RestoreOwnedConfig":
+     if(String.IsNullOrEmpty(command.ExpectedConfigKey))throw new ArgumentException("Bestätigte Wiederherstellungsvorschau fehlt.");
+     if(recovery.HasValue)throw new InvalidOperationException("Zuerst die laufende Einrichtung bestätigen oder den Sicherheitsrückweg abwarten.");
+     next=SetupChanges.RestoreOwnedConfig(config,command.RestoreConfig,DateTime.UtcNow);if(NeedsWatch(next))EnsureWatch();break;
     case "BlockProgram":
      if(!AccessQueue.CanAllow(command.Path)||!File.Exists(command.Path))throw new ArgumentException("Vorhandene lokale EXE auswählen.");
      command.Path=WfpGate.CanonicalPath(command.Path);EnsureWatch();SetupChanges.BlockProgram(next,command.Path);break;
@@ -135,6 +146,7 @@ namespace Netzblick {
    }
    try{Apply(next);}catch{if(command.Operation=="Ask"&&verified)ClearRecovery();throw;}
    if(command.Operation=="Ask"&&!command.Enabled)ClearRecovery();
+   if(command.Operation=="GroupTemporaryBlock"||command.Operation=="GroupEndLeases"||command.Operation=="RestoreOwnedConfig"){Log(command.Operation=="RestoreOwnedConfig"?"Eigene Dienstregeln aus Sicherung wiederhergestellt; allgemeiner Modus beibehalten":(command.Operation=="GroupTemporaryBlock"?"Zeitweise Gruppensperre":"Zeitweise Gruppenentscheidungen beendet")+" · "+command.Paths.Count+" bestätigte Pfade");return Status(true,problem);}
    Log(command.Operation=="TemporaryBlockProgram"?"Programm zeitweise gesperrt ("+(command.DurationMinutes==0?"bis aufgehoben":command.DurationMinutes+" Minuten")+"): "+command.Path:command.Operation=="EndProgramLease"?"Zeitweise Entscheidung beendet; vorherige Regeln wiederhergestellt: "+command.Path:command.Operation=="TemporaryAllowProgram"?"Programm für 10 Minuten erlaubt; vorherige Regeln werden wiederhergestellt: "+command.Path:command.Operation=="RestoreProgram"?"Programmänderung rückgängig: "+command.BeforeProgram.Path:command.Operation=="AllowProgram"?"Programm erlaubt: "+command.Path:command.Operation=="ProgramDefault"?"Programm auf Standard zurückgesetzt: "+command.Path:command.Operation=="BlockProgram"?"Programm gesperrt: "+command.Path:command.Operation=="Rule"?"Regel gespeichert: "+command.Rule.Name:command.Operation=="Watch"?"Programm vorab gesperrt: "+command.Path:command.Operation=="Remove"?"Regel zurückgenommen":command.Operation=="Ask"?(command.Enabled?"Nachfragen aktiviert; Rückweg läuft":"Nachfragen deaktiviert; eigene Einzelregeln bleiben aktiv"):"Prüfsperre entfernt");
    return Status(true,problem);
   }

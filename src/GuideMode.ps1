@@ -62,7 +62,7 @@ function Complete-GuideSnapshot {
 }
 function Initialize-WorkflowMode {
     $script:workflowReady=$true;$script:guideQueue=@();$script:guideIndex=0;$script:guideSnapshot=$null;$script:guideEpoch=[guid]::NewGuid().ToString('N')
-    $ui.WorkflowTab.Add_Click({Show-Panel 'WorkflowPanel';Refresh-Guide;Refresh-Favorites})
+    $ui.WorkflowTab.Add_Click({$ui.WorkflowViews.SelectedIndex=0;Show-Panel 'WorkflowPanel';Refresh-Guide;Refresh-Favorites})
     $ui.StartGuide.Add_Click({Start-GuidedReview});$ui.OverviewGuide.Add_Click({Start-GuidedReview})
     $ui.GuideBack.Add_Click({if($guideIndex -gt 0){$script:guideIndex--;Select-GuideItem}})
     $ui.GuideNext.Add_Click({if($guideIndex -lt $guideQueue.Count-1){$script:guideIndex++;Select-GuideItem}})
