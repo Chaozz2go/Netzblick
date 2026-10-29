@@ -38,7 +38,12 @@ try{
     [void]$peer.AddPermit($fixture,$false)
     [void]$peer.AddPermit((Join-Path $env:SystemRoot 'System32\where.exe'),$true)
     if(-not (Connect-Fixture)){Write-Warning 'SKIP: Baseline-TCP zu 1.1.1.1:443 nicht verfügbar. Dienst-/Pipe-Start bestanden; echte Sperr-/Freigabeprüfung nicht durchgeführt.';return}
-    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
+    $guardStatus=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    $stalePreview=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture;ExpectedConfigKey='stale-preview'})
+    if($stalePreview.Ok -or $stalePreview.Error -notlike '*Vorschau*'){throw 'Dienst akzeptiert eine veraltete Vorschau.'}
+    $afterGuard=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    if([Netzblick.SetupChanges]::ConfigKey($guardStatus.Config) -ne [Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)){throw 'Abgelehnte Vorschau verändert Konfiguration.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)}))
     if(Connect-Fixture){throw 'Vorab gesperrte Fixture kann weiterhin verbinden.'}
     $evidence=$null
     for($i=0;$i -lt 20;$i++){$status=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'});$evidence=$status.Attempts | Where-Object {$_.Path -eq $fixture -and $_.OwnBlock -and $_.Address -eq '1.1.1.1'} | Select-Object -First 1;if($evidence){break};Start-Sleep -Milliseconds 500}
@@ -64,7 +69,12 @@ try{
     if($blocks.Count -ne 2 -or @($blocks.Direction | Select-Object -Unique).Count -ne 2){throw 'Schnellsperre hat nicht beide Richtungen gespeichert.'}
     foreach($block in $blocks){[void](Send-Control ([Netzblick.SetupCommand]@{Operation='Remove';RuleId=$block.Id}))}
     if(-not (Connect-Fixture)){throw 'Rücknahme der Schnellsperre stellt die Baseline nicht wieder her.'}
-    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
+    $guardStatus=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    $stalePreview=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture;ExpectedConfigKey='stale-preview'})
+    if($stalePreview.Ok -or $stalePreview.Error -notlike '*Vorschau*'){throw 'Dienst akzeptiert eine veraltete Vorschau.'}
+    $afterGuard=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    if([Netzblick.SetupChanges]::ConfigKey($guardStatus.Config) -ne [Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)){throw 'Abgelehnte Vorschau verändert Konfiguration.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)}))
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture}))
     $allowed=Send-Control ([Netzblick.SetupCommand]@{Operation='AllowProgram';Path=$fixture})
     if($allowed.Config.WatchedPaths.Count -or @($allowed.Config.Rules | Where-Object {$_.Path -eq $fixture -and $_.Action -eq 'Block'}).Count -or -not (Connect-Fixture)){throw 'Programm erlauben hebt Dienst-/Prüfsperren nicht vollständig auf.'}
@@ -116,7 +126,12 @@ try{
     if($rejected.Ok -or $rejected.Error -notlike '*nicht übersteuerbare Freigabe*' -or $rejected.Config.WatchedPaths.Count){throw 'Passende fremde Hard-Permit-Regel wurde nicht vor Installation zurückgewiesen.'}
     $peer.Remove($hard)
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Recheck'}))
-    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture}))
+    $guardStatus=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    $stalePreview=[Netzblick.SetupClient]::Send([Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$fixture;ExpectedConfigKey='stale-preview'})
+    if($stalePreview.Ok -or $stalePreview.Error -notlike '*Vorschau*'){throw 'Dienst akzeptiert eine veraltete Vorschau.'}
+    $afterGuard=Send-Control ([Netzblick.SetupCommand]@{Operation='Status'})
+    if([Netzblick.SetupChanges]::ConfigKey($guardStatus.Config) -ne [Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)){throw 'Abgelehnte Vorschau verändert Konfiguration.'}
+    [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Watch';Path=$fixture;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($afterGuard.Config)}))
     if(Connect-Fixture){throw 'Sperre nach Entfernen des Konflikts wirkt nicht.'}
     [void](Send-Control ([Netzblick.SetupCommand]@{Operation='Reset'}))
     $peer.Verify()

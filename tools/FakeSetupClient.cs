@@ -13,6 +13,7 @@ namespace Netzblick {
   }
   public static SetupStatus Send(SetupCommand command){
    LastOperation=command.Operation;
+   if(command.Operation!="Status"&&command.Operation!="ObserveBlocks")SetupChanges.AssertPreview(status.Config,command.ExpectedConfigKey);
    if(command.Operation=="Status"||command.Operation=="Recheck"||command.Operation=="ObserveBlocks")return status;
    if(command.Operation=="Watch"){if(!status.Verified)throw new InvalidOperationException("Test: Filterprüfung fehlgeschlagen");status.Config.WatchedPaths.Add(command.Path);return status;}
    if(command.Operation=="AllowProgram"){SetupChanges.AllowProgram(status.Config,command.Path);return status;}

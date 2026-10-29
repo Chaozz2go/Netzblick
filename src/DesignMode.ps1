@@ -81,7 +81,7 @@ function Set-DesignAppearance {
     $ui.OverviewPrograms.Columns[1].Width=[Windows.Controls.DataGridLength]::new($(if($future){135}else{155}))
     for($i=2;$i -le 5;$i++){$ui.OverviewPrograms.Columns[$i].Visibility=$cleanVisible}
     $ui.OverviewPrograms.Columns[6].Visibility=$visible
-    foreach($name in @('HostsTab','DashboardTab','OverviewTab','AccessTab','InspectionTab','OpenSetupRules','OpenSetupHistory','UpdatesTab')){
+    foreach($name in @('WorkflowTab','HostsTab','DashboardTab','OverviewTab','AccessTab','InspectionTab','OpenSetupRules','OpenSetupHistory','UpdatesTab')){
         $ui[$name].HorizontalContentAlignment=if($future){'Left'}else{'Center'}
         $ui[$name].FontSize=if($future){13}else{12};$ui[$name].Height=if($future){40}else{[double]::NaN}
     }
@@ -89,6 +89,7 @@ function Set-DesignAppearance {
     Set-WorkspaceLayout $script:activePanel
     if($script:dashboardReady){Draw-Dashboard}
     if($script:hostsReady){Refresh-Hosts}
+    if($script:experienceReady){Refresh-Favorites;Update-FavoriteButtons}
 }
 function Set-DesignStyle([string]$style){
     if($style -notin @('Clean','Future')){throw 'Unbekanntes Design.'}

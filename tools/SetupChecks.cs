@@ -86,6 +86,17 @@ public static class SetupChecks {
   string label=WfpGate.ReadableFilterName(@"C:\Programme\Steam\steam.exe","Gesperrt","Ausgehend",false,"Download-Test");
   check(label.StartsWith("steam.exe · Gesperrt · Ausgehend · IPv4")&&label.Contains("Download-Test"),"filter label shows program, action, direction and family");
   check(WfpGate.ReadableFilterName("*","Erlaubt","Eingehend",true,"Ping").StartsWith("Alle Programme · Erlaubt · Eingehend · IPv6"),"global rules labelled as global");
+
+  var previewSource=new SetupConfig();SetupChanges.BlockProgram(previewSource,app);
+  string fingerprint=SetupChanges.ConfigKey(previewSource);var previewCopy=SetupChanges.CopyConfig(previewSource);
+  SetupChanges.AllowProgram(previewCopy,app);
+  check(SetupChanges.ConfigKey(previewSource)==fingerprint&&ProgramPolicy.Category(previewSource,app)=="Blocked","preview clone never mutates live policy");
+  check(SetupChanges.ConfigKey(previewCopy)!=fingerprint,"preview key detects changed policy");
+  previewSource.Rules.Reverse();check(SetupChanges.ConfigKey(previewSource)==fingerprint,"preview key independent of rule ordering");
+  SetupChanges.AssertPreview(previewSource,fingerprint);count++;
+  try{SetupChanges.AssertPreview(previewCopy,fingerprint);throw new Exception("stale preview accepted");}catch(InvalidOperationException){count++;}
+  SetupChanges.TemporaryBlockProgram(previewCopy,app,10,now);var leaseCopy=SetupChanges.CopyConfig(previewCopy);leaseCopy.ProgramLeases[0].PreviousRules[0].Name="Changed";
+  check(SetupChanges.ConfigKey(previewCopy)!=SetupChanges.ConfigKey(leaseCopy),"preview key includes exact restoration plan and deep clone");
   return count;
  }
 }

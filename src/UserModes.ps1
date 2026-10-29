@@ -75,6 +75,7 @@ function Set-NetworkMode([string]$path,[string]$mode,[switch]$NoHistory) {
         while($changes.Count -gt 20){$changes.RemoveAt($changes.Count-1)}
         Save-UserState
     }
+    Add-ProgramTimeline $path 'Ältere Windows-Regeln geändert' ((Network-ModeLabel $beforeMode)+' → '+(Network-ModeLabel $mode)+'. Nur eigene Windows-Regeln bestätigt; Dienstregeln und fremde Filter bleiben unabhängig.')
     Add-Event 'Netzwerkzustand geändert' ([IO.Path]::GetFileName($path)) ((Network-ModeLabel $beforeMode)+' → '+(Network-ModeLabel $mode))
     $ui.UndoNetwork.IsEnabled=$changes.Count -gt 0
     Refresh-Detail;Refresh-Overview
@@ -198,7 +199,7 @@ function Track-ObservedPrograms($items,[switch]$AlwaysReview) {
     foreach($item in $items){
         if(-not $item.Path){continue};$key=[Netzblick.ProcessLineage]::Normalize($item.Path)
         if(-not $knownPrograms.ContainsKey($key) -and $knownPrograms.Count -lt 10000){
-            $knownPrograms[$key]=$true;$changed=$true
+            $knownPrograms[$key]=$true;$changed=$true;Add-ProgramTimeline $item.Path 'Programm erkannt' 'Erstmals im Netzblick-Netzwerkkatalog beobachtet. Kein Nachweis des tatsächlichen Prozessstarts.'
             if(-not $bootstrap -and $newPrograms.Count -lt 1000){$newPrograms[$key]=[pscustomobject]@{Key=$key;Name=$item.Name;Path=$item.Path;FirstUtc=[datetime]::UtcNow};Add-Event 'Erstmals beobachtet' $item.Name 'Zur Prüfung vorgemerkt';if(Get-Command Show-ObservedNotice -ErrorAction SilentlyContinue){Show-ObservedNotice $newPrograms[$key]}}
         }
     }
@@ -248,6 +249,8 @@ function Refresh-Overview {
     $ui.UndoNetwork.Visibility=$ui.LastNetworkChange.Visibility
     Update-OverviewFilterChrome
     Update-OverviewReviewActions
+    if($script:experienceReady){Refresh-Favorites;Update-FavoriteButtons}
+    if($script:workflowReady){Refresh-Guide}
     $ui.OverviewStatus.Text=if($trafficProblem){'Datenmessung eingeschränkt: '+$trafficProblem}elseif($traffic){'TCP und UDP über IPv4/IPv6 · ETW-Bytes seit diesem Netzblick-Start · keine entschlüsselten Inhalte'}else{'Datenmessung nicht verfügbar.'}
     $ui.OverviewStatus.Foreground=if($trafficProblem){(Get-ThemeColor '#9C650A')}else{(Get-ThemeColor '#57677B')}
     $ui.LastNetworkChange.Text=if($changes.Count -and $changes[0].Version -eq 2){[IO.Path]::GetFileName($changes[0].Path)+': '+$changes[0].Label}elseif($changes.Count){[IO.Path]::GetFileName($changes[0].Path)+': '+(Network-ModeLabel $changes[0].Before)+' → '+(Network-ModeLabel $changes[0].After)}else{'Noch keine aufgezeichnete Änderung.'}

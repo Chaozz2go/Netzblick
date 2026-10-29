@@ -19,6 +19,7 @@ function Update-ActivityLedger {
         $key=Get-TargetKey $p.Path $p.Address $p.Protocol $p.Port
         if(-not $key){continue}
         if(-not $targetLedger.ContainsKey($key) -and $targetLedger.Count -lt 5000){
+            Add-ProgramTimeline $p.Path 'Ziel erstmals erfasst' ($p.Address+' · '+$p.Protocol+' '+$p.Port+'. Beobachtung in Netzblick; nicht der tatsächliche erste Kontakt des Programms.')
             $targetLedger[$key]=[pscustomobject]@{Key=$key;PathKey=[Netzblick.ProcessLineage]::Normalize($p.Path);Address=$p.Address;Protocol=$p.Protocol;Port=[int]$p.Port;Reviewed=$false;FirstUtc=$now};$dirty=$true
         }
     }
@@ -78,6 +79,7 @@ function Mark-ProgramActivityReviewed([string]$path){
     $script:targetReviewCounts=$null
     if($script:setupStatus){
         $epoch=$setupStatus.StartedUtc.ToUniversalTime().ToString('o')
+        foreach($staleKey in @($blockBaselines.Keys | Where-Object {$blockBaselines[$_].Epoch -ne $epoch})){$blockBaselines.Remove($staleKey)}
         foreach($a in @($setupStatus.Attempts | Where-Object {[Netzblick.ProcessLineage]::Normalize($_.Path) -eq $key})){
             if($blockBaselines.Count -lt 2000 -or $blockBaselines.ContainsKey($a.Key)){$blockBaselines[$a.Key]=[pscustomobject]@{Key=$a.Key;PathKey=$key;Epoch=$epoch;Count=[long]$a.Count}}
         }
@@ -92,11 +94,13 @@ function Save-ProgramChange([string]$path,$before,$after,[string]$label){
     $serializer=New-Object System.Web.Script.Serialization.JavaScriptSerializer
     $script:changes.Insert(0,[pscustomobject]@{Version=2;Path=$path;Label=$label;BeforeJson=$serializer.Serialize($before);AfterJson=$serializer.Serialize($after);TimeUtc=[datetime]::UtcNow})
     while($changes.Count -gt 20){$changes.RemoveAt($changes.Count-1)}
+    Add-ProgramTimeline $path 'Programmregeln geändert' ($label+' · Änderung vom Dienst bestätigt. Keine Aussage über danach beobachtete Verbindungserfolge.')
     Save-UserState
 }
 function Undo-ProgramChange($change){
     $before=Read-ProgramSnapshot $change.BeforeJson;$expected=Read-ProgramSnapshot $change.AfterJson
     [void](Send-SetupCommand ([Netzblick.SetupCommand]@{Operation='RestoreProgram';BeforeProgram=$before;ExpectedProgram=$expected}))
+    Add-ProgramTimeline $change.Path 'Änderung rückgängig' 'Vorherige Programmregeln vom Dienst wiederhergestellt.'
     $script:changes.Remove($change);Save-UserState;Update-AccessMode;Refresh-Overview;Refresh-Detail
     $ui.UserNotice.Text='Rückgängig: '+[IO.Path]::GetFileName($change.Path)+' · vorherige Programmregeln wiederhergestellt.'
 }
@@ -152,21 +156,4 @@ function Get-UnreviewedTargetRows([string]$path,$currentRows){
         if($entry.PathKey -ne $pathKey -or $entry.Reviewed -or -not $entry.Address -or $present.ContainsKey($entry.Key)){continue}
         [pscustomobject]@{Key=('REVIEW|'+$entry.Key);Pid='—';Protocol=[Netzblick.SetupRule]::ProtocolName([int]$(switch -Regex ([string]$entry.Protocol){'^TCP'{6;break} '^UDP'{17;break} '^ICMPv6'{58;break} '^ICMP'{1;break} default{[int]$entry.Protocol}}));Local='—';Remote=($entry.Address+':'+$entry.Port);Address=$entry.Address;Port=$entry.Port;State=('Früher beobachtet · '+([datetime]$entry.FirstUtc).ToLocalTime().ToString('dd.MM. HH:mm')+' · aktuell nicht bestätigt')}
     }
-}
-
-function New-TemporaryBlockDialog([string]$path){
-    [xml]$markup=@'
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Zeitweise Netzwerksperre" Width="580" SizeToContent="Height" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI">
- <StackPanel Margin="22"><TextBlock Text="Programm zeitweise vom Netz trennen" FontSize="21" FontWeight="SemiBold"/><TextBlock x:Name="PathLabel" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,10,0,16"/><TextBlock Text="Dauer der Sperre"/><ComboBox x:Name="Duration" SelectedIndex="0" Margin="0,7,0,14"><ComboBoxItem Content="10 Minuten" Tag="10"/><ComboBoxItem Content="30 Minuten" Tag="30"/><ComboBoxItem Content="1 Stunde" Tag="60"/><ComboBoxItem Content="Bis ich die Sperre aufhebe" Tag="0"/></ComboBox><TextBlock Text="Blockiert neue externe Verbindungen dieser EXE zu allen Zielen und Protokollen, ein- und ausgehend – auch im LAN. Localhost bleibt ausgenommen. Hilfsprogramme mit eigenem EXE-Pfad werden nicht mitgesperrt." TextWrapping="Wrap"/><TextBlock Text="Bestehende Verbindungen werden nicht garantiert beendet. Für einen sicheren Offline-Test das Programm nach Setzen der Sperre neu starten." TextWrapping="Wrap" Foreground="{DynamicResource Warning}" Margin="0,12"/><TextBlock Text="Danach oder über „Zeitweise beenden“ werden die vorherigen Programmregeln wiederhergestellt. Die Entscheidung bleibt nach einem Neustart erhalten." TextWrapping="Wrap" Foreground="{DynamicResource Muted}"/><WrapPanel HorizontalAlignment="Right" Margin="0,18,0,0"><Button x:Name="Cancel" Content="Abbrechen" IsCancel="True"/><Button x:Name="Apply" Content="Zeitweise sperren" IsDefault="True" Background="{DynamicResource DangerSoft}"/></WrapPanel></StackPanel>
-</Window>
-'@
-    $dialog=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($markup));$dialog.Resources=$window.Resources;if($window.IsLoaded){$dialog.Owner=$window}
-    $dialog.FindName('PathLabel').Text=$path
-    $dialog.FindName('Apply').Add_Click({param($sender,$e) [Windows.Window]::GetWindow($sender).DialogResult=$true})
-    return $dialog
-}
-function Show-TemporaryBlockDialog([string]$path){
-    $dialog=New-TemporaryBlockDialog $path
-    if($dialog.ShowDialog()){return [int]$dialog.FindName('Duration').SelectedItem.Tag}
-    return $null
 }

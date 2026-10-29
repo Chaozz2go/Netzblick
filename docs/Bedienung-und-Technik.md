@@ -2,7 +2,7 @@
 
 [Zur Startseite und zu den Downloads](../README.md)
 
-Dieses Handbuch beschreibt die Bedienung, die Wirkung der Regeln und technische Grenzen von Netzblick 0.17.0. Die Überschriften mit Versionsnummern nennen die Einführung einer Funktion. Den aktuellen Umfang der automatisierten Windows-Prüfungen und der noch nötigen Gerätetests beschreibt [PRUEFSTAND.txt](../PRUEFSTAND.txt).
+Dieses Handbuch beschreibt die Bedienung, die Wirkung der Regeln und technische Grenzen von Netzblick 0.18.0. Die Überschriften mit Versionsnummern nennen die Einführung einer Funktion. Den aktuellen Umfang der automatisierten Windows-Prüfungen und der noch nötigen Gerätetests beschreibt [PRUEFSTAND.txt](../PRUEFSTAND.txt).
 
 ## Dashboard und Verbindungsrichtung (0.16.0)
 
@@ -97,8 +97,8 @@ Die Fehlerauswertung aus 0.8.1 bleibt enthalten: Unterdrückte PowerShell-Meldun
 
 Windows 10/11 x64, .NET Framework 4.8 und Windows PowerShell 5.1 (auf unterstützten Windows-Systemen vorhanden). Kein zusätzlicher Download beim Start. Die EXE verwendet den Windows-PowerShell-Motor intern; es öffnet sich kein PowerShell-Fenster. Kernkomponenten sind vorkompiliert. Die bisherige Oberfläche und Funktionen bleiben erhalten.
 
-- **Portabel:** `Netzblick-Portable-0.17.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
-- **Installiert:** `Netzblick-Setup-0.17.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
+- **Portabel:** `Netzblick-Portable-0.18.0-win-x64.zip` entpacken, `Netzblick.exe` öffnen. Es werden kein Windows-Dienst und kein Autostart eingerichtet. Regeln, Verlaufseinstellungen und Benachrichtigungen liegen im Ordner `Netzblick-Daten` neben der EXE. Diesen beim Update behalten. Der Ordner benötigt ein lokales Laufwerk mit Windows-Dateiberechtigungen, beispielsweise NTFS. Die portable Filtersteuerung läuft im EXE-Prozess. Beim vollständigen Beenden über das Tray oder einem Prozessabbruch entfallen ihre dynamischen Filter. Gespeicherte Regeln werden beim nächsten Start erneut geladen. Bisherige ausdrücklich gesetzte Windows-Firewallregeln bleiben bestehen.
+- **Installiert:** `Netzblick-Setup-0.18.0-win-x64.exe` öffnen. Der Assistent richtet die App unter `%ProgramFiles%\Netzblick`, den Hintergrunddienst und den Tray-Autostart für das installierende Administratorkonto ein. Start über das Startmenü. Einstellungen liegen weiterhin unter `%ProgramData%\Netzblick` und `%LOCALAPPDATA%\Netzblick`. Updates und Deinstallation erhalten diese Daten. Deinstallieren über Windows → Installierte Apps.
 
 Beide Betriebsarten benötigen Administratorrechte für ETW und Firewallsteuerung. Portabel und installiert dürfen nicht gleichzeitig laufen. Vor Installation/Update die laufende Oberfläche über das Tray vollständig beenden. Die portable Version verändert die Konfiguration einer vorhandenen Installation nicht; ein laufender installierter Dienst wird erkannt und der portable Start abgebrochen.
 
@@ -219,3 +219,13 @@ Der Reiter „Hostprozesse“ listet laufende Windows-Dienstprozesse getrennt na
 Die Verbindungstabelle gilt für die ausgewählte Prozessinstanz. Einzelne Dienste werden Verbindungen nicht spekulativ zugeordnet. Sperrgründe, Ampel und Prüfstatus gelten dagegen für den gemeinsamen Dateipfad, ebenso die verlinkten Programmdetails und Regeln. Die Ansicht selbst ändert keine Regeln und startet oder beendet keine Dienste. Bei Wiederverwendung einer PID wird die vorherige Auswahl nicht auf den neuen Prozess übertragen.
 
 Die Dienstliste wird beim Öffnen im Hintergrund eingelesen und etwa alle zehn Sekunden erneuert. „Dienste aktualisieren“ fordert eine neue Aufnahme an. Die globale Ansichtspause hält auch die Hostansicht an. Es wird keine KI eingebunden und nichts ins Internet übertragen.
+
+## Prüfen & Favoriten (ab 0.18.0)
+
+„Offene Punkte durchgehen“ übernimmt alle offenen Programme in eine feste Reihenfolge. „Später / Weiter“ ändert keine Entscheidung. Die Beobachtungen bleiben bis „Beobachtungen aktualisieren“ oder einem Programmwechsel auf dem angezeigten Stand; „Geprüft & weiter“ bestätigt nur diesen Stand. Neue Ziele und weitere Blockversuche bleiben offen. „Geprüft“ verändert keine Firewallregel.
+
+Mit ☆ in Programmliste/Details lassen sich bis zu 50 lokale Programmpfade merken. Favoriten bleiben ohne aktive Verbindung sichtbar. Zeitweise Sperre und Beenden einer zeitweisen Entscheidung verwenden dieselbe Regelsteuerung wie die Programmansicht; die Restzeit ist keine Garantie für bestätigte Filterwirkung.
+
+Vor Programm- und Einzelregeländerungen zeigt die Vorschau passende Socket-Stichproben und historische Blockereignisse. Die Anzahl zählt Beobachtungseinträge, keine aktuell offenen Verbindungen. Nur sicher beobachtete Aufbaurichtungen werden ausgewertet. Eingehend ist der lokale Dienstport entscheidend. Keine Treffer belegen keine Wirkungslosigkeit. Die Vorschau benutzt Kopien der Konfiguration. Ein mitgesendeter Konfigurationsschlüssel schützt vor Anwendung nach zwischenzeitlichen Regeländerungen; dann erneut prüfen.
+
+Der Programm-Zeitstrahl enthält maximal 400 lokal gespeicherte Ereignisse über alle Programme. Er ist keine lückenlose Erfassung und kein Nachweis einer Ursache. Erfassungsbeginn/-ende, Ansichtspausen und Fehler werden gekennzeichnet, soweit die Oberfläche sie beobachten kann. Ein Absturz kann die letzten noch nicht gespeicherten Sekunden verlieren. Abgelegte Netzwerkziele können sensible Daten darstellen; sie verlassen den Rechner nicht. „Alles neu prüfen“ sichert den Zustand und löscht den Zeitstrahl; Favoriten bleiben erhalten.

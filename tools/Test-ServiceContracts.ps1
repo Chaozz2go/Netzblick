@@ -48,3 +48,10 @@ foreach($minutes in @(30,0)){
  if(-not [Netzblick.SetupChanges]::SameProgram($prior,[Netzblick.SetupChanges]::CaptureProgram($reloaded,$path))){throw 'Zeitweise Sperre verliert vorherige Regeln über JSON.'}
 }
 Write-Output 'PASS: zeitweise und manuelle Sperre über echten JSON-/Neustart-Vertrag mit exakter Wiederherstellung.'
+
+$previewKey=[Netzblick.SetupChanges]::ConfigKey($config)
+$command=[Netzblick.SetupCommand]@{Operation='BlockProgram';Path=$path;ExpectedConfigKey=$previewKey}
+$roundCommand=$method.MakeGenericMethod([Netzblick.SetupCommand]).Invoke([Netzblick.SetupWire]::Json(),@([Netzblick.SetupWire]::Json().Serialize($command)))
+if($roundCommand.ExpectedConfigKey -ne $previewKey){throw 'Vorschau-Konfigurationsschlüssel geht über JSON verloren.'}
+if([Netzblick.SetupChanges]::ConfigKey($config) -ne [Netzblick.SetupChanges]::ConfigKey($closed.Invoke([Netzblick.SetupWire]::Json(),@([Netzblick.SetupWire]::Json().Serialize($config))))){throw 'Vorschau-Konfigurationsschlüssel ist über JSON nicht stabil.'}
+Write-Output 'PASS: Vorschau-Konfigurationsschlüssel und UTC-Genauigkeit über echten JSON-Vertrag.'

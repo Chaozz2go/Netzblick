@@ -29,13 +29,13 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.17.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.18.0'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -73,6 +73,9 @@ try {
     . (Join-Path $appRoot 'src\ThemeMode.ps1')
     . (Join-Path $appRoot 'src\DesignMode.ps1')
     . (Join-Path $appRoot 'src\DirectionMode.ps1')
+    . (Join-Path $appRoot 'src\ExperienceState.ps1')
+    . (Join-Path $appRoot 'src\GuideMode.ps1')
+    . (Join-Path $appRoot 'src\ChangePreview.ps1')
     . (Join-Path $appRoot 'src\HostsMode.ps1')
     . (Join-Path $appRoot 'src\DashboardMode.ps1')
     . (Join-Path $appRoot 'src\DashboardNavigation.ps1')
@@ -176,6 +179,7 @@ try {
         if ($peers.Count -gt $limit) { Map-Label ('+ '+($peers.Count-$limit)+' weitere Gegenstellen in der Tabelle') 230 225 360 (Get-ThemeColor '#57677B') 11 }
     }
     function Refresh-Detail {
+        Update-ProgramTimeline;Update-FavoriteButtons
         $program=$ui.Programs.SelectedItem
         foreach($key in @('ModeDefault','ModePrivate','ModeBlocked')){$ui[$key].IsEnabled=$false}
         if($null -eq $program){$ui.ProgramTitle.Text='Programm auswählen';$ui.ProgramPath.Text='';$ui.ProgramStatus.Text='';$ui.ProgramTraffic.Text='';$ui.ProgramSignal.Fill=(Get-ThemeColor '#57677B');$ui.ProgramAccessRules.IsEnabled=$false;$ui.Connections.ItemsSource=@();$ui.BlockReasonText.Text='Programm auswählen.';$ui.ProgramExplanation.Text='Programm auswählen.';$ui.ProgramShortState.Text='';$ui.ProgramActivityReview.Text='';$ui.ProgramReviewDetails.Visibility='Collapsed';$ui.ProgramRules.ItemsSource=@();Update-FutureProgramPresentation $null $null $null;Update-QuickActions;Draw-Map $null @();return}
@@ -218,7 +222,7 @@ try {
     }
     function Refresh-Programs {
         $selected=$ui.Programs.SelectedItem;$selectedKey=if($selected){$selected.Key}else{''}
-        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) (@($script:newPrograms.Values)+@(Get-ReviewCatalogEntries)) $script:setupStatus $script:ownRules | Sort-Object Name)
+        $script:allProgramItems=@(Get-ProgramCatalog $rows @($trafficSamples.Values) (@($script:newPrograms.Values)+@(Get-ReviewCatalogEntries)+@(Get-FavoriteCatalogEntries)) $script:setupStatus $script:ownRules | Sort-Object Name)
         foreach($p in $allProgramItems){Set-ProgramSignal $p}
         Track-ObservedPrograms @($allProgramItems | Where-Object Observed)
         $term=$ui.Search.Text.Trim()
@@ -253,12 +257,12 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
-        $compact=$name -in @('HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
+        $compact=$name -in @('WorkflowPanel','HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
         Set-NavigationTheme $name
-        foreach($key in @('HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('WorkflowPanel','HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}
@@ -266,6 +270,7 @@ try {
         if($name -eq 'OverviewPanel'){Refresh-Overview}
         if($name -eq 'DashboardPanel'){Update-Dashboard}
         if($name -eq 'HostsPanel'){Update-HostCapture;Refresh-Hosts}
+        if($name -eq 'WorkflowPanel'){Refresh-Guide;Refresh-Favorites}
     }
     $ui.OpenSetupRules.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=1})
     $ui.OpenSetupHistory.Add_Click({Show-Panel 'AccessPanel';$ui.AccessViews.SelectedIndex=2})
@@ -277,6 +282,8 @@ try {
     $ui.InspectionTab.Add_Click({Show-Panel 'InspectionPanel'})
     $ui.Pause.Add_Click({
         $script:paused=-not $script:paused
+        Add-ProgramTimeline '*' $(if($paused){'Ansicht pausiert'}else{'Ansicht fortgesetzt'}) 'Socket-Stichproben und Datenansicht sind während der Pause angehalten. Der Filterdienst arbeitet unabhängig weiter.'
+        Save-ExperienceState
         $ui.Pause.Content=if($paused){'▶ Ansicht fortsetzen'}else{'Ⅱ Ansicht pausieren'}
         if($paused){$ui.Status.Text='Aktivitätsansicht pausiert · Kontrollmodus und Prüfansicht aktualisieren weiter.'}
         else{$script:previous=$null;$script:seen.Clear()}
@@ -287,6 +294,7 @@ try {
         if($dialog.ShowDialog($window)) {
             try {
                 if($ui.OverviewPanel.Visibility -eq 'Visible'){$data=@($ui.OverviewPrograms.Items | Select-Object -Property @('Name','Path','Status','Sent','Received','Rate'))}
+                elseif($ui.WorkflowPanel.Visibility -eq 'Visible'){$data=if($ui.WorkflowViews.SelectedIndex -eq 1){@($ui.FavoritesList.Items | Select-Object Name,Path,Status,LeaseText,Activity)}else{@($ui.GuideEvidence.Items | Select-Object Kind,Target,Detail)}}
                 elseif($ui.HostsPanel.Visibility -eq 'Visible'){$data=@($ui.HostsList.Items | Select-Object Title,Path,ServiceNames,Status,Summary)}
                 elseif($ui.HistoryPanel.Visibility -eq 'Visible'){$data=@($events.ToArray())}
                 elseif($ui.RulesPanel.Visibility -eq 'Visible'){$data=@($ownRules)}
@@ -325,6 +333,9 @@ try {
     Initialize-QuickActions
     Initialize-BlockDetails
     Initialize-Updates
+    Initialize-ExperienceState
+    Initialize-WorkflowMode
+    Refresh-Programs
     $ui.ResetNetzblick.Add_Click({Reset-NetzblickSession})
     Initialize-TrayMode
     Show-Panel 'DashboardPanel'
@@ -365,15 +376,16 @@ try {
                 Refresh-Programs
                 Update-Dashboard
                 Refresh-Hosts
+                Update-ExperienceObservations $snapshot.Time
                 if($ui.WorldPanel.Visibility -eq 'Visible'){Refresh-World -Rebuild}
                 if($ui.HistoryPanel.Visibility -eq 'Visible'){$ui.History.ItemsSource=$events.ToArray()}
                 $ui.Status.Text='Aktualisiert '+(Get-Date -Format 'HH:mm:ss')+' · IPv4 + IPv6 · 2-Sekunden-Stichproben · Adapterwerte können VPN/virtuelle Adapter doppelt zählen.'
-                if($snapshot.Errors.Count){$ui.Status.Text+=' Teilfehler: '+($snapshot.Errors -join '; ')}
+                if($snapshot.Errors.Count){$ui.Status.Text+=' Teilfehler: '+($snapshot.Errors -join '; ');if($script:lastTimelineCaptureError -ne ($snapshot.Errors -join '; ')){$script:lastTimelineCaptureError=$snapshot.Errors -join '; ';Add-ProgramTimeline '*' 'Erfassung unvollständig' $lastTimelineCaptureError}}else{$script:lastTimelineCaptureError=''}
                 if($ruleError){$ui.Status.Text+=' Firewall: '+$ruleError}
                 $script:nextSample=(Get-Date).AddSeconds(2)
             }
             if($null -eq $script:job -and (Get-Date) -ge $nextSample){$script:job=[Netzblick.Reader]::Start()}
-        }catch{$ui.Status.Text='Erfassungsfehler: '+$_.Exception.Message;$script:nextSample=(Get-Date).AddSeconds(5)}
+        }catch{Add-ProgramTimeline '*' 'Erfassungsfehler' $_.Exception.Message;$ui.Status.Text='Erfassungsfehler: '+$_.Exception.Message;$script:nextSample=(Get-Date).AddSeconds(5)}
     })
     $window.Add_Closed({if($script:uiMutex){$uiMutex.ReleaseMutex();$uiMutex.Dispose()};$timer.Stop();$probeTimer.Stop();if($null -ne $script:probe){$script:probe.Cancel()}})
     $timer.Start()

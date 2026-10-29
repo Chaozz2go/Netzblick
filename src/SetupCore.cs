@@ -9,6 +9,26 @@ namespace Netzblick {
   public SetupChangeFailure(string text,bool restored,Exception inner):base(text,inner){Restored=restored;}
  }
  public static class SetupChanges {
+  public static SetupConfig CopyConfig(SetupConfig c){
+   return new SetupConfig{Version=c.Version,Ask=c.Ask,WatchedPaths=new List<string>(c.WatchedPaths),Rules=c.Rules.Select(CopyRule).ToList(),ProgramLeases=c.ProgramLeases.Select(CopyLease).ToList()};
+  }
+  static void WriteRules(System.IO.BinaryWriter w,IEnumerable<SetupRule> rules){
+   var sorted=rules.OrderBy(r=>r.Id,StringComparer.Ordinal).ToList();w.Write(sorted.Count);
+   foreach(var r in sorted){w.Write(r.Id??"");w.Write(r.Name??"");w.Write(ProcessLineage.Normalize(r.Path));w.Write(r.Direction??"");w.Write(r.Address??"");w.Write(r.Action??"");w.Write(r.Protocol);w.Write(r.Port);w.Write(r.ExpiresUtc.HasValue);if(r.ExpiresUtc.HasValue)w.Write(r.ExpiresUtc.Value.ToUniversalTime().Ticks/TimeSpan.TicksPerMillisecond);}
+  }
+  public static string ConfigKey(SetupConfig c){
+   using(var stream=new System.IO.MemoryStream()){
+    using(var w=new System.IO.BinaryWriter(stream,System.Text.Encoding.UTF8,true)){
+     w.Write(c.Version);w.Write(c.Ask);var paths=c.WatchedPaths.Select(ProcessLineage.Normalize).OrderBy(p=>p,StringComparer.Ordinal).ToList();w.Write(paths.Count);foreach(string p in paths)w.Write(p);WriteRules(w,c.Rules);
+     var leases=c.ProgramLeases.OrderBy(l=>ProcessLineage.Normalize(l.Path),StringComparer.Ordinal).ToList();w.Write(leases.Count);
+     foreach(var l in leases){w.Write(ProcessLineage.Normalize(l.Path));w.Write(l.EffectiveAction);w.Write(l.UntilResumed);w.Write(l.WasWatched);w.Write(l.ExpiresUtc.ToUniversalTime().Ticks/TimeSpan.TicksPerMillisecond);WriteRules(w,l.PreviousRules);}
+    }
+    using(var hash=System.Security.Cryptography.SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(stream.ToArray()));
+   }
+  }
+  public static void AssertPreview(SetupConfig config,string expectedKey){
+   if(!String.IsNullOrEmpty(expectedKey)&&!String.Equals(ConfigKey(config),expectedKey,StringComparison.Ordinal))throw new InvalidOperationException("Regeln wurden seit der Vorschau verändert. Bitte Auswirkung erneut ansehen.");
+  }
   public static void BlockProgram(SetupConfig config,string path){
    if(!AccessQueue.CanAllow(path))throw new ArgumentException("Ein vollständiger lokaler EXE-Pfad wird benötigt.");
    config.ProgramLeases.RemoveAll(l=>ProcessLineage.Normalize(l.Path)==ProcessLineage.Normalize(path));
@@ -211,7 +231,7 @@ namespace Netzblick {
  }
  public sealed class SetupCommand {
   public string Operation {get;set;} public bool Enabled {get;set;} public string Path {get;set;}
-  public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
+  public string ExpectedConfigKey {get;set;} public string RuleId {get;set;} public SetupRule Rule {get;set;} public int RecoveryMinutes {get;set;}
   public int DurationMinutes {get;set;} public SetupProgramState BeforeProgram {get;set;} public SetupProgramState ExpectedProgram {get;set;}
  }
 }
