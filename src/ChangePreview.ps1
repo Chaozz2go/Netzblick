@@ -64,6 +64,12 @@ function Get-ChangePreview([string]$path,[string]$operation,$rule=$null,[int]$mi
     if(-not $rule -and $operation -ne 'ProgramDefault' -and -not [IO.File]::Exists($path)){$error='Programmdatei nicht mehr vorhanden.'}
     $scope=if($rule){$rule.Scope+' · '+$rule.Lifetime}else{$path+' · alle Ziele / Protokolle · ein- und ausgehend · Loopback ausgenommen'}
     $footprint=$removed.Count.ToString()+' bisherige Dienstregeln werden entfernt/ersetzt; '+$added.Count+' Regeln kommen hinzu.'
+    if($key -ne '*'){
+        $k=[Netzblick.ProcessLineage]::Normalize($key)
+        $wasWatched=@($before.WatchedPaths | Where-Object {[Netzblick.ProcessLineage]::Normalize($_) -eq $k}).Count -gt 0
+        $willWatch=@($after.WatchedPaths | Where-Object {[Netzblick.ProcessLineage]::Normalize($_) -eq $k}).Count -gt 0
+        $footprint+=' Programm-Prüfsperre: '+$(if($wasWatched){'aktiv'}else{'keine'})+' → '+$(if($willWatch){'aktiv'}else{'keine'})+'.'
+    }
     if($operation -in @('TemporaryAllowProgram','TemporaryBlockProgram')){$footprint+=' Vorherige Programmregeln werden für den Rückweg gespeichert.'}
     if($operation -eq 'EndProgramLease'){$footprint+=' Der vorherige Zustand wird wiederhergestellt; er kann ebenfalls eingeschränkt sein.'}
     [pscustomobject]@{Path=$key;Operation=$operation;Rule=$rule;Minutes=$minutes;ExpectedConfigKey=[Netzblick.SetupChanges]::ConfigKey($before);Matches=$matches;Unknown=$observations.Unknown;Scope=$scope;Footprint=$footprint;Warning=$warning;Problem=$error;TimeUtc=$now;CanApply=(-not [bool]$error)}

@@ -53,7 +53,8 @@ function Update-FavoriteButtons {
         $p=if($prefix -eq 'Program'){$ui.Programs.SelectedItem}else{$ui.OverviewPrograms.SelectedItem}
         $valid=$p -and $p.Path -and $p.Path.Length -le 1024 -and [Netzblick.AccessQueue]::CanAllow($p.Path)
         $ui[$prefix+'Favorite'].IsEnabled=[bool]($valid -and -not $script:experienceReadOnly)
-        $ui[$prefix+'Favorite'].Content=if($valid -and $favoritePrograms.ContainsKey([Netzblick.ProcessLineage]::Normalize($p.Path))){'★ Favorit entfernen'}else{'☆ Als Favorit merken'}
+        $marked=$valid -and $favoritePrograms.ContainsKey([Netzblick.ProcessLineage]::Normalize($p.Path))
+        $ui[$prefix+'Favorite'].Content=if($prefix -eq 'Overview'){$(if($marked){'★ Gemerkt'}else{'☆ Merken'})}else{$(if($marked){'★ Favorit entfernen'}else{'☆ Als Favorit merken'})}
     }
 }
 function Get-ProgramLeaseText([string]$path){
