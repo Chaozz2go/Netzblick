@@ -60,7 +60,9 @@ if(-not [IO.File]::Exists($rescuePath) -or $favoritePrograms.Count -ne $loaded.F
 # A stale local preview cannot overwrite a later explicit change.
 $staleLocal=Get-RestorePreview $loaded 2;$other=New-Object Netzblick.ProgramGroup;$other.Id=[guid]::NewGuid().ToString();$other.Name='Später angelegt';$other.Paths.Add($testExe);Save-ProgramGroup $other
 $rejected=$false;try{[void](Apply-RestorePreview $staleLocal)}catch{$rejected=$true};if(-not $rejected -or $workspaceSettings.Groups.Count -ne 2){throw 'Veraltete Gruppen-Wiederherstellung überschreibt spätere Änderungen.'}
-[void](Apply-RestorePreview (Get-RestorePreview $loaded 2))
+$freshGroupRestore=Get-RestorePreview $loaded 2
+if(-not $freshGroupRestore.CanApply){throw ('Frische Gruppenvorschau: '+($freshGroupRestore | ConvertTo-Json -Depth 2 -Compress))}
+[void](Apply-RestorePreview $freshGroupRestore)
 # Disk failure rolls local restore back, while preserving the rescue backup and firewall state.
 Set-ProgramFavorite (Join-Path $env:SystemRoot 'System32\cmd.exe') $true;$favoriteCountBefore=$favoritePrograms.Count;$failPreview=Get-RestorePreview $loaded 1
 $experiencePathBefore=$experienceFile;$badExperience=Join-Path $userStateDirectory 'Backup-Not-A-File';[void][IO.Directory]::CreateDirectory($badExperience);$script:experienceFile=$badExperience

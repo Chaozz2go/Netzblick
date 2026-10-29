@@ -46,7 +46,8 @@ function Get-RestorePreview($bundle,[int]$category){
     [pscustomobject]@{Bundle=$bundle;Category=$category;ExpectedKey=$key;Title=$title;Effect=$effect;Counts=$counts;Rows=$rows;Problem=$problem;CanApply=(-not [bool]$problem)}
 }
 function Apply-RestorePreview($preview){
-    if(-not $preview.CanApply){throw $preview.Problem}
+    if($null -eq $preview -or $preview -is [array] -or $null -eq $preview.PSObject.Properties['CanApply']){throw ('Ungültige Wiederherstellungsvorschau: '+$(if($null -eq $preview){'leer'}else{$preview.GetType().FullName}))}
+    if(-not $preview.CanApply){throw ('Wiederherstellung nicht anwendbar: '+$preview.Problem)}
     if((Get-RestoreCategoryKey $preview.Category) -ne $preview.ExpectedKey){throw 'Diese Kategorie hat sich seit der Vorschau verändert. Vorschau erneut öffnen.'}
     $preview.Bundle.Validate()
     $rescue=Join-Path (Join-Path $userStateDirectory 'backups') ('Vor-Wiederherstellung-'+[datetime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8)+'.netzblick.json')
