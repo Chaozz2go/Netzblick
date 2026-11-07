@@ -12,7 +12,7 @@ Add-Type -ReferencedAssemblies @('System.dll','System.Core.dll','System.Xml.dll'
 $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($xaml)))
 $ui=@{}
 $xaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$control=$window.FindName($name);if($control){$ui[$name]=$control}}}
-foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup')){
+foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup','Notifications')){
  [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
  $panel=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader($panelXaml)));$ui[$panelName+'Panel'].Content=$panel
  $panelXaml.GetElementsByTagName('*') | ForEach-Object {$name=$_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml');if($name){$ui[$name]=$panel.FindName($name)}}
@@ -533,6 +533,63 @@ Write-Output 'PASS: Hostprozesse mit Dienstsuche, PID-/Startzeit-Isolation, Rich
 . (Join-Path $PSScriptRoot 'Test-ExperienceFixtures.ps1')
 . (Join-Path $PSScriptRoot 'Test-WorkspaceFixtures.ps1')
 
+# Mute must survive a restart, suppress both producers and discard delayed tray alerts.
+$previousNotificationPath=$script:setupPreferencesPath
+$previousObservedPreference=$script:notifyObserved
+$notificationClick=[Windows.RoutedEventArgs]::new([Windows.Controls.Primitives.ButtonBase]::ClickEvent)
+try{
+    $script:setupPreferencesPath=Join-Path $userStateDirectory 'notifications-fixture.json'
+    [IO.File]::WriteAllText($setupPreferencesPath,'{"Enabled":true,"Targets":true}')
+    Read-SetupPreferences
+    if(-not ($ui.EnableNotificationPopups.IsChecked -and $ui.NotifyAttempts.IsChecked -and $ui.NotifyTargets.IsChecked)){
+        throw 'Bisherige Benachrichtigungsoptionen werden nicht übernommen.'
+    }
+
+    $script:tray=[pscustomobject]@{BalloonTipTitle='';BalloonTipText='';Count=0}
+    $tray | Add-Member ScriptMethod ShowBalloonTip {param($duration) $this.Count++}
+    $notificationAttempt=[Netzblick.SetupAttempt]@{Key='notification-fixture';Path=$testExe;Program='Test';Direction='Ausgehend';Address='198.51.100.99';Protocol=6;Port=443}
+    $script:setupPendingNotice=$notificationAttempt
+    $ui.EnableNotificationPopups.IsChecked=$false
+    $ui.EnableNotificationPopups.RaiseEvent($notificationClick)
+    if($script:setupPendingNotice -or $ui.NotifyAttempts.IsEnabled -or $ui.NotifyObservedPrograms.IsEnabled){
+        throw 'Stummschalten lässt wartende Meldungen oder Einzeloptionen aktiv.'
+    }
+    Read-SetupPreferences
+    if($ui.EnableNotificationPopups.IsChecked -or -not $ui.NotifyTargets.IsChecked){
+        throw 'Stummschaltung oder einzelne Einstellungen gehen beim Laden verloren.'
+    }
+
+    $script:SmokeTest=$false
+    $script:notifyObserved=$true
+    Show-ObservedNotice ([pscustomobject]@{Path=$testExe;Name='Test'})
+    if($script:reviewToast){throw 'Stummschaltung lässt ein Programm-Pop-up erscheinen.'}
+    $setupStatus.Attempts.Add($notificationAttempt)
+    Update-SetupNotifications
+    if($tray.Count -or $script:setupPendingNotice -or -not $setupNotifiedTargets.Contains($notificationAttempt.Key)){
+        throw 'Stummschaltung unterdrückt Tray-Meldung nicht oder merkt den Versuch nicht.'
+    }
+
+    $ui.EnableNotificationPopups.IsChecked=$true
+    $ui.EnableNotificationPopups.RaiseEvent($notificationClick)
+    Update-SetupNotifications
+    if($tray.Count){throw 'Stummschaltung aufgehoben: alter Versuch erzeugt nachträglich ein Pop-up.'}
+    $notificationAttempt.Key='notification-after-unmute'
+    Update-SetupNotifications
+    if($tray.Count -ne 1){throw 'Nach dem Einschalten fehlt die Meldung eines neuen Ziels.'}
+}finally{
+    if($script:reviewToast){$reviewToast.Close()}
+    if($notificationAttempt){[void]$setupStatus.Attempts.Remove($notificationAttempt)}
+    $script:tray=$null
+    $script:setupPendingNotice=$null
+    $script:setupNoticeTarget=$null
+    $script:setupLastNotice=[datetime]::MinValue
+    $script:SmokeTest=$true
+    $script:notifyObserved=$previousObservedPreference
+    $script:setupPreferencesPath=$previousNotificationPath
+    Read-SetupPreferences
+}
+Write-Output 'PASS: zentraler Pop-up-Schalter, gespeicherte Einzeloptionen und keine nachträgliche Meldung.'
+
 # Render the real WPF content independently of the runner's screen resolution.
 $renderRoot=$window.Content;$window.Content=$null
 $renderHost=New-Object Windows.Controls.Border
@@ -563,7 +620,7 @@ try{
  Set-NetzblickTheme $darkPreview
  if($window.Background.Color.ToString() -ne $window.Resources['AppBg'].Color.ToString() -or $renderHost.Background.Color.ToString() -ne $window.Background.Color.ToString()){throw 'Fenster und Vorschau übernehmen die Hintergrundfarbe nicht.'}
  Refresh-ProgramSignals;Refresh-Overview
- foreach($panelName in @('Groups','Backup','Workflow','Favorites','Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules','LiveTimeline')){
+ foreach($panelName in @('Groups','Backup','Notifications','Workflow','Favorites','Hosts','Dashboard','DashboardFocus','Overview','Review','Updates','World','Inspection','Access','Live','LiveOverview','LiveRules','LiveTimeline')){
   $renderPanel=if($panelName -like 'Live*'){'Live'}elseif($panelName -eq 'Review'){'Overview'}elseif($panelName -eq 'Favorites'){'Workflow'}elseif($panelName -like 'Dashboard*'){'Dashboard'}else{$panelName}
   $ui.OverviewFilter.SelectedIndex=if($panelName -eq 'Review'){2}else{0};Refresh-Overview
   if($panelName -eq 'Review'){Set-OverviewFilter 2}

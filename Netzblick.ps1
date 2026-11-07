@@ -29,13 +29,13 @@ try {
     [xml]$xaml = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\MainWindow.xaml') -Raw -Encoding UTF8
     $reader = New-Object System.Xml.XmlNodeReader($xaml)
     $script:window = [Windows.Markup.XamlReader]::Load($reader)
-    $window.Title='Netzblick 0.19.0'+$(if($Portable){' · Portabel'}else{''})
+    $window.Title='Netzblick 0.19.1'+$(if($Portable){' · Portabel'}else{''})
     $script:ui = @{}
     $xaml.GetElementsByTagName('*') | ForEach-Object {
         $name = $_.GetAttribute('Name','http://schemas.microsoft.com/winfx/2006/xaml')
         if ($name) { $control=$window.FindName($name);if($null -ne $control){$script:ui[$name]=$control} }
     }
-    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup')){
+    foreach($panelName in @('World','Terminal','Inspection','Overview','Access','Updates','Dashboard','Hosts','Workflow','Groups','Backup','Notifications')){
         [xml]$panelXaml=Get-Content -LiteralPath (Join-Path $appRoot ('src\'+$panelName+'Panel.xaml')) -Raw -Encoding UTF8
         $panelReader=New-Object System.Xml.XmlNodeReader($panelXaml)
         $panel=[Windows.Markup.XamlReader]::Load($panelReader)
@@ -261,12 +261,12 @@ try {
     $ui.Connections.Add_SelectionChanged({Show-ConnectionDetails})
     function Show-Panel([string]$name) {
         $script:activePanel=$name;if($name -eq 'OverviewPanel'){$script:futureDetailFocused=$false}
-        $compact=$name -in @('GroupsPanel','BackupPanel','WorkflowPanel','HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
+        $compact=$name -in @('GroupsPanel','BackupPanel','NotificationsPanel','WorkflowPanel','HostsPanel','DashboardPanel','AccessPanel','OverviewPanel','UpdatesPanel','InspectionPanel','WorldPanel')
         $ui.MainShell.RowDefinitions[1].Height=[Windows.GridLength]::new(0)
         $ui.MainShell.RowDefinitions[2].Height=if($compact){[Windows.GridLength]::new(0)}else{[Windows.GridLength]::new(32)}
         $ui.SummaryMetrics.Visibility='Collapsed'
         Set-NavigationTheme $name
-        foreach($key in @('GroupsPanel','BackupPanel','WorkflowPanel','HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
+        foreach($key in @('GroupsPanel','BackupPanel','NotificationsPanel','WorkflowPanel','HostsPanel','DashboardPanel','OverviewPanel','LivePanel','WorldPanel','TerminalPanel','InspectionPanel','RulesPanel','HistoryPanel','AccessPanel','UpdatesPanel')){$ui[$key].Visibility=if($key -eq $name){'Visible'}else{'Collapsed'}}
         $ui.Search.Visibility='Collapsed'
         $ui.History.ItemsSource=$events.ToArray()
         if($name -eq 'WorldPanel'){Refresh-World -Rebuild}

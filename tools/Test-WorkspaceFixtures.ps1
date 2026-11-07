@@ -2,15 +2,15 @@
 $programsBeforeWorkspace=$script:allProgramItems;$rowsBeforeWorkspace=$script:rows;$peersBeforeWorkspace=$script:trafficPeers
 [Netzblick.SetupClient]::Scenario($testExe,0);Update-AccessMode
 # Six visible primary areas; context navigation is independent of the old internal panel names.
-foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','History','Backups','Updates')){
+foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','History','Notifications','Backups','Updates')){
  Navigate-Workspace $page
- $panel=switch($page){'Programs'{'OverviewPanel'} 'Favorites'{'WorkflowPanel'} 'Hosts'{'HostsPanel'} 'Groups'{'GroupsPanel'} 'Guide'{'WorkflowPanel'} 'BeforeStart'{'InspectionPanel'} 'Connections'{'AccessPanel'} 'Rules'{'AccessPanel'} 'History'{'AccessPanel'} 'Backups'{'BackupPanel'} 'Updates'{'UpdatesPanel'}}
+ $panel=switch($page){'Programs'{'OverviewPanel'} 'Favorites'{'WorkflowPanel'} 'Hosts'{'HostsPanel'} 'Groups'{'GroupsPanel'} 'Guide'{'WorkflowPanel'} 'BeforeStart'{'InspectionPanel'} 'Connections'{'AccessPanel'} 'Rules'{'AccessPanel'} 'History'{'AccessPanel'} 'Notifications'{'NotificationsPanel'} 'Backups'{'BackupPanel'} 'Updates'{'UpdatesPanel'}}
  Show-RealPanel $panel
- $expected=switch($page){'Guide'{'Review'} 'BeforeStart'{'Review'} 'Connections'{'Review'} 'Rules'{'Rules'} 'History'{'History'} 'Backups'{'Settings'} 'Updates'{'Settings'} default{'Programs'}}
+ $expected=switch($page){'Guide'{'Review'} 'BeforeStart'{'Review'} 'Connections'{'Review'} 'Rules'{'Rules'} 'History'{'History'} 'Notifications'{'Settings'} 'Backups'{'Settings'} 'Updates'{'Settings'} default{'Programs'}}
  if((Get-WorkspaceArea $panel) -ne $expected){throw ('Falscher Navigationsbereich: '+$page)}
 }
 if($ui.HostsTab.Visibility -ne 'Collapsed' -or $ui.AccessTab.Visibility -ne 'Collapsed' -or $ui.InspectionTab.Visibility -ne 'Collapsed' -or $ui.UpdatesTab.Visibility -ne 'Collapsed'){throw 'Alte doppelte Hauptnavigation bleibt sichtbar.'}
-if(@($ui.WorkspaceNavigation.Children | Where-Object Visibility -eq 'Visible').Count -ne 2){throw 'Einstellungen enthalten fremde Navigationspunkte.'}
+if(@($ui.WorkspaceNavigation.Children | Where-Object Visibility -eq 'Visible').Count -ne 3){throw 'Einstellungen enthalten fremde Navigationspunkte.'}
 # Explicit membership is saved locally, including inactive paths, and never changes policy.
 $group=New-Object Netzblick.ProgramGroup;$group.Id=[guid]::NewGuid().ToString();$group.Name='Browser & Hilfsprogramm';$group.Paths.Add($testExe);$group.Paths.Add((Join-Path $env:SystemRoot 'System32\cmd.exe'))
 $policyBeforeGroups=[Netzblick.SetupChanges]::ConfigKey($setupStatus.Config)

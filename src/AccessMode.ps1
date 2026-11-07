@@ -8,8 +8,14 @@ function Initialize-AccessMode {
     $script:setupNotifiedTargets=New-Object 'System.Collections.Generic.HashSet[string]';$script:setupLastNotice=[datetime]::MinValue
     $script:setupPreferencesPath=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Netzblick\notifications.json'
     if($StateDirectory){$script:setupPreferencesPath=Join-Path $StateDirectory 'notifications.json'}
-    try{if(Test-Path -LiteralPath $setupPreferencesPath){$p=Get-Content -LiteralPath $setupPreferencesPath -Raw | ConvertFrom-Json;$ui.NotifyAttempts.IsChecked=[bool]$p.Enabled;$ui.NotifyTargets.IsChecked=[bool]$p.Targets}}catch{}
-    foreach($n in @('NotifyAttempts','NotifyTargets')){$ui[$n].Add_Click({Save-SetupPreferences})}
+    Read-SetupPreferences
+    foreach($name in @('EnableNotificationPopups','NotifyAttempts','NotifyTargets')){
+        $ui[$name].Add_Click({
+            $script:setupPendingNotice=$null
+            Update-NotificationControls
+            Save-SetupPreferences
+        })
+    }
     $ui.StartAccess.Add_Click({Start-AccessMode});$ui.StopAccess.Add_Click({[void](Stop-AccessMode)})
     $ui.InstallControlService.Add_Click({try{Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $appRoot 'Install-Netzblick.ps1')+'"')}catch{Show-Error $_.Exception.Message}})
     if($Embedded){$ui.InstallControlService.Visibility='Collapsed'}
@@ -25,8 +31,39 @@ function Initialize-AccessMode {
     $script:accessTimer=New-Object Windows.Threading.DispatcherTimer;$accessTimer.Interval=[timespan]::FromSeconds(2)
     $accessTimer.Add_Tick({Update-AccessMode});$accessTimer.Start();$window.Add_Closed({$accessTimer.Stop()});Update-AccessMode
 }
+function Read-SetupPreferences {
+    $ui.EnableNotificationPopups.IsChecked=$true
+    $ui.NotifyAttempts.IsChecked=$true
+    $ui.NotifyTargets.IsChecked=$false
+    try{
+        if([IO.File]::Exists($setupPreferencesPath)){
+            $preferences=Get-Content -LiteralPath $setupPreferencesPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if($preferences.Popups -is [bool]){$ui.EnableNotificationPopups.IsChecked=$preferences.Popups}
+            if($preferences.Enabled -is [bool]){$ui.NotifyAttempts.IsChecked=$preferences.Enabled}
+            if($preferences.Targets -is [bool]){$ui.NotifyTargets.IsChecked=$preferences.Targets}
+        }
+    }catch{}
+    Update-NotificationControls
+}
+function Update-NotificationControls {
+    $enabled=[bool]$ui.EnableNotificationPopups.IsChecked
+    $ui.NotifyObservedPrograms.IsEnabled=$enabled
+    $ui.NotifyAttempts.IsEnabled=$enabled
+    $ui.NotifyTargets.IsEnabled=$enabled -and [bool]$ui.NotifyAttempts.IsChecked
+    if(-not $enabled -and $script:reviewToast){$script:reviewToast.Close()}
+}
 function Save-SetupPreferences {
-    try{[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($setupPreferencesPath)) | Out-Null;[IO.File]::WriteAllText($setupPreferencesPath,(@{Enabled=[bool]$ui.NotifyAttempts.IsChecked;Targets=[bool]$ui.NotifyTargets.IsChecked} | ConvertTo-Json))}catch{$ui.UserNotice.Text='Benachrichtigungsoptionen konnten nicht gespeichert werden.'}
+    $preferences=@{
+        Popups=[bool]$ui.EnableNotificationPopups.IsChecked
+        Enabled=[bool]$ui.NotifyAttempts.IsChecked
+        Targets=[bool]$ui.NotifyTargets.IsChecked
+    }
+    try{
+        Write-LocalAtomic $setupPreferencesPath ($preferences | ConvertTo-Json)
+        $ui.NotificationSaveError.Text=''
+    }catch{
+        $ui.NotificationSaveError.Text='Die Einstellung gilt für diese Sitzung. Speichern fehlgeschlagen: '+$_.Exception.GetBaseException().Message
+    }
 }
 function Start-AccessMode {
     if(-not $setupStatus -or -not $setupStatus.Verified){Show-Error 'Der Hintergrunddienst muss bereit sein.';return}
@@ -95,7 +132,11 @@ function Update-AccessMode {
 function Update-SetupNotifications {
     if(-not $script:tray){return};$fresh=@()
     foreach($a in $setupStatus.Attempts){$path=[Netzblick.ProcessLineage]::Normalize($a.Path);$newProgram=$setupNotifiedPrograms.Add($path);$newTarget=$setupNotifiedTargets.Add($a.Key);$decided=@($setupStatus.Config.Rules | Where-Object {$_.Matches($a)}).Count -gt 0;if(-not $decided -and ($newProgram -or ($ui.NotifyTargets.IsChecked -and $newTarget))){$fresh+=$a}}
-    if($fresh.Count -and $ui.NotifyAttempts.IsChecked){$script:setupPendingNotice=$fresh[-1]}
-    if($script:setupPendingNotice -and $ui.NotifyAttempts.IsChecked -and ([datetime]::UtcNow-$setupLastNotice).TotalSeconds -ge 15){$a=$script:setupPendingNotice;$tray.BalloonTipTitle='Netzblick · blockierter Verbindungsversuch';$tray.BalloonTipText=$a.Program+' → '+$a.Target+'. Zum Prüfen anklicken.';$script:setupNoticeTarget=$a;$tray.ShowBalloonTip(6000);$script:setupLastNotice=[datetime]::UtcNow;$script:setupPendingNotice=$null}
+    if(-not $ui.EnableNotificationPopups.IsChecked -or -not $ui.NotifyAttempts.IsChecked){
+        $script:setupPendingNotice=$null
+        return
+    }
+    if($fresh.Count){$script:setupPendingNotice=$fresh[-1]}
+    if($script:setupPendingNotice -and ([datetime]::UtcNow-$setupLastNotice).TotalSeconds -ge 15){$a=$script:setupPendingNotice;$tray.BalloonTipTitle='Netzblick · blockierter Verbindungsversuch';$tray.BalloonTipText=$a.Program+' → '+$a.Target+'. Zum Prüfen anklicken.';$script:setupNoticeTarget=$a;$tray.ShowBalloonTip(6000);$script:setupLastNotice=[datetime]::UtcNow;$script:setupPendingNotice=$null}
 }
 
