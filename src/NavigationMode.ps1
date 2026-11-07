@@ -6,7 +6,7 @@
         'AccessPanel'{switch($ui.AccessViews.SelectedIndex){1{'Rules'} 2{'History'} default{'Review'}}}
         'RulesPanel'{'Rules'}
         'HistoryPanel'{'History'}
-        {$_ -in @('UpdatesPanel','BackupPanel')}{'Settings'}
+        {$_ -in @('UpdatesPanel','BackupPanel','NotificationsPanel')}{'Settings'}
         default{'Programs'}
     }
 }
@@ -23,6 +23,7 @@ function Navigate-Workspace([string]$page){
         'LegacyRules'{Show-Panel 'RulesPanel'}
         'Activities'{Show-Panel 'HistoryPanel'}
         'History'{$ui.AccessViews.SelectedIndex=2;Show-Panel 'AccessPanel'}
+        'Notifications'{Show-Panel 'NotificationsPanel'}
         'Backups'{Show-Panel 'BackupPanel';Refresh-BackupView}
         'Updates'{Show-Panel 'UpdatesPanel'}
     }
@@ -36,9 +37,9 @@ function Update-WorkspaceNavigation([string]$panel){
         $ui[$name].SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($name -eq $primary){'AccentSoft'}else{'Raised'}))
         $ui[$name].SetResourceReference([Windows.Controls.Control]::ForegroundProperty,'Text')
     }
-    $pages=switch($area){'Programs'{@('Programs','Favorites','Hosts','Groups')} 'Review'{@('Guide','BeforeStart','Connections')} 'Rules'{@('Rules','LegacyRules')} 'History'{@('History','Activities')} 'Settings'{@('Backups','Updates')} default{@()}}
-    $current=switch($panel){'OverviewPanel'{'Programs'} 'LivePanel'{'Programs'} 'HostsPanel'{'Hosts'} 'GroupsPanel'{'Groups'} 'InspectionPanel'{'BeforeStart'} 'AccessPanel'{$(switch($ui.AccessViews.SelectedIndex){1{'Rules'} 2{'History'} default{'Connections'}})} 'RulesPanel'{'LegacyRules'} 'HistoryPanel'{'Activities'} 'UpdatesPanel'{'Updates'} 'BackupPanel'{'Backups'} 'WorkflowPanel'{$(if($ui.WorkflowViews.SelectedIndex -eq 1){'Favorites'}else{'Guide'})} default{''}}
-    foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','LegacyRules','History','Activities','Backups','Updates')){
+    $pages=switch($area){'Programs'{@('Programs','Favorites','Hosts','Groups')} 'Review'{@('Guide','BeforeStart','Connections')} 'Rules'{@('Rules','LegacyRules')} 'History'{@('History','Activities')} 'Settings'{@('Notifications','Backups','Updates')} default{@()}}
+    $current=switch($panel){'OverviewPanel'{'Programs'} 'LivePanel'{'Programs'} 'HostsPanel'{'Hosts'} 'GroupsPanel'{'Groups'} 'InspectionPanel'{'BeforeStart'} 'AccessPanel'{$(switch($ui.AccessViews.SelectedIndex){1{'Rules'} 2{'History'} default{'Connections'}})} 'RulesPanel'{'LegacyRules'} 'HistoryPanel'{'Activities'} 'UpdatesPanel'{'Updates'} 'BackupPanel'{'Backups'} 'NotificationsPanel'{'Notifications'} 'WorkflowPanel'{$(if($ui.WorkflowViews.SelectedIndex -eq 1){'Favorites'}else{'Guide'})} default{''}}
+    foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','LegacyRules','History','Activities','Notifications','Backups','Updates')){
         $button=$ui['Nav'+$page];$button.Visibility=if($page -in $pages){'Visible'}else{'Collapsed'}
         $button.SetResourceReference([Windows.Controls.Control]::BackgroundProperty,$(if($page -eq $current){'AccentSoft'}else{'Raised'}))
     }
@@ -48,8 +49,8 @@ function Update-WorkspaceNavigation([string]$panel){
     $ui.MainShell.RowDefinitions[1].Height=if($pages.Count){[Windows.GridLength]::Auto}else{[Windows.GridLength]::new(0)}
 }
 function Initialize-NavigationMode {
-    foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','LegacyRules','History','Activities','Backups','Updates')){$ui['Nav'+$page].Tag=$page;$ui['Nav'+$page].Add_Click({param($sender,$e) Navigate-Workspace $sender.Tag})}
-    $ui.SettingsTab.Add_Click({Navigate-Workspace 'Backups'})
+    foreach($page in @('Programs','Favorites','Hosts','Groups','Guide','BeforeStart','Connections','Rules','LegacyRules','History','Activities','Notifications','Backups','Updates')){$ui['Nav'+$page].Tag=$page;$ui['Nav'+$page].Add_Click({param($sender,$e) Navigate-Workspace $sender.Tag})}
+    $ui.SettingsTab.Add_Click({Navigate-Workspace 'Notifications'})
     $ui.AccessViews.Add_SelectionChanged({if($script:activePanel -eq 'AccessPanel'){Update-WorkspaceNavigation 'AccessPanel'}})
     $ui.WorkflowViews.Add_SelectionChanged({if($script:activePanel -eq 'WorkflowPanel'){Update-WorkspaceNavigation 'WorkflowPanel'}})
 }

@@ -50,7 +50,7 @@ function Refresh-ReviewPolicy {
     }finally{$script:reviewPolicyRefreshing=$false}
 }
 function Show-ObservedNotice($entry){
-    if(-not $script:reviewReady -or -not $script:notifyObserved -or $script:reviewToast -or $script:SmokeTest){return}
+    if(-not $script:reviewReady -or -not $ui.EnableNotificationPopups.IsChecked -or -not $script:notifyObserved -or $script:reviewToast -or $script:SmokeTest){return}
     $script:reviewToastPath=$entry.Path
     $toast=New-Object Windows.Window;$toast.Title='Netzblick · neues Programm';$toast.Width=440;$toast.SizeToContent='Height';$toast.ResizeMode='NoResize';$toast.WindowStyle='ToolWindow';$toast.ShowInTaskbar=$false;$toast.ShowActivated=$false;$toast.Topmost=$true;$toast.Resources=$window.Resources;$toast.Foreground=(Get-ThemeColor '#19283C');$toast.Background=(Get-ThemeColor '#F4F7FA')
     $stack=New-Object Windows.Controls.StackPanel;$stack.Margin='18'
